@@ -5,11 +5,16 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "zod": "^4.4.3"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
   }
 }
