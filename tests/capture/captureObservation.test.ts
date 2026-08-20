@@ -86,4 +86,117 @@ describe("captureObservation", () => {
 
     expect(stored?.title).toBe("First observation");
   });
+
+	it("rejects an empty source name", async () => {
+		const repository = new InMemorySourceObservationRepository();
+
+		await expect(
+			captureObservation(
+				{
+					source: {
+						sourceType: "JOB_BOARD",
+						sourceName: "",
+					},
+				},
+				{ repository },
+			),
+		).rejects.toThrow();
+	});
+
+	it("rejects an unsupported source type", async () => {
+		const repository = new InMemorySourceObservationRepository();
+
+		await expect(
+			captureObservation(
+				{
+					source: {
+						sourceType: "SOCIAL_NETWORK",
+						sourceName: "Example",
+					},
+				},
+				{ repository },
+			),
+		).rejects.toThrow();
+	});
+
+	it("rejects an invalid source URL", async () => {
+		const repository = new InMemorySourceObservationRepository();
+
+		await expect(
+			captureObservation(
+				{
+					source: {
+						sourceType: "JOB_BOARD",
+						sourceName: "Example",
+						sourceUrl: "not a URL",
+					},
+				},
+				{ repository },
+			),
+		).rejects.toThrow();
+	});
+
+	it("rejects an invalid publication date", async () => {
+		const repository = new InMemorySourceObservationRepository();
+
+		await expect(
+			captureObservation(
+				{
+					source: {
+						sourceType: "JOB_BOARD",
+						sourceName: "Example",
+					},
+					publishedAt: "2026-08-20",
+				},
+				{ repository },
+			),
+		).rejects.toThrow();
+	});
+
+	it("does not persist an observation when validation fails", async () => {
+		const repository = new InMemorySourceObservationRepository();
+
+		await expect(
+			captureObservation(
+				{
+					source: {
+						sourceType: "INVALID",
+						sourceName: "Example",
+					},
+				},
+				{
+					repository,
+					generateId: () => "invalid-observation",
+				},
+			),
+		).rejects.toThrow();
+
+		const stored = await repository.findById("invalid-observation");
+
+		expect(stored).toBeNull();
+	});
+
+	it("normalizes optional whitespace-only text to absence", async () => {
+		const repository = new InMemorySourceObservationRepository();
+
+		const observation = await captureObservation(
+			{
+				source: {
+					sourceType: "JOB_BOARD",
+					sourceName: "  Meteojob  ",
+				},
+				title: "   ",
+				locationText: "  Strasbourg  ",
+			},
+			{
+				repository,
+				generateId: () => "observation-normalized",
+				now: () => new Date("2026-08-20T18:00:00Z"),
+			},
+		);
+
+		expect(observation.source.sourceName).toBe("Meteojob");
+		expect(observation.locationText).toBe("Strasbourg");
+		expect("title" in observation).toBe(false);
+	});
 });

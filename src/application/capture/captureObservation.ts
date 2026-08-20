@@ -7,25 +7,9 @@ import type {
 
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
 
+import { captureObservationInputSchema } from "./CaptureObservationSchema.js";
+
 import type { SourceReference } from "../../domain/capture/SourceReference.js";
-
-export interface CaptureObservationInput {
-  source: SourceReference;
-
-  publishedAt?: Date;
-
-  title?: string;
-  displayedCompanyName?: string;
-  locationText?: string;
-  description?: string;
-  salaryText?: string;
-  contractText?: string;
-  contactText?: string;
-
-  rawContent?: string;
-
-  metadata?: Readonly<Record<string, unknown>>;
-}
 
 export interface CaptureObservationDependencies {
   repository: SourceObservationRepository;
@@ -34,42 +18,63 @@ export interface CaptureObservationDependencies {
 }
 
 export async function captureObservation(
-  input: CaptureObservationInput,
+  input: unknown,
   dependencies: CaptureObservationDependencies,
 ): Promise<SourceObservation> {
+  const validatedInput = captureObservationInputSchema.parse(input);
+
+	const source: SourceReference = {
+		sourceType: validatedInput.source.sourceType,
+		sourceName: validatedInput.source.sourceName,
+
+		...(validatedInput.source.sourceUrl !== undefined
+			? { sourceUrl: validatedInput.source.sourceUrl }
+			: {}),
+
+		...(validatedInput.source.externalId !== undefined
+			? { externalId: validatedInput.source.externalId }
+			: {}),
+
+		...(validatedInput.source.providerMetadata !== undefined
+			? { providerMetadata: validatedInput.source.providerMetadata }
+			: {}),
+	};
+
   const now = dependencies.now ?? (() => new Date());
   const generateId = dependencies.generateId ?? randomUUID;
 
   const observation: SourceObservation = {
     id: generateId(),
-    source: input.source,
+  	source,
     observedAt: now(),
-    metadata: input.metadata ?? {},
+    metadata: validatedInput.metadata ?? {},
 
-    ...(input.publishedAt !== undefined
-      ? { publishedAt: input.publishedAt }
+    ...(validatedInput.publishedAt !== undefined
+      ? { publishedAt: validatedInput.publishedAt }
       : {}),
-    ...(input.title !== undefined ? { title: input.title } : {}),
-    ...(input.displayedCompanyName !== undefined
-      ? { displayedCompanyName: input.displayedCompanyName }
+    ...(validatedInput.title !== undefined
+      ? { title: validatedInput.title }
       : {}),
-    ...(input.locationText !== undefined
-      ? { locationText: input.locationText }
+    ...(validatedInput.displayedCompanyName !== undefined
+      ? { displayedCompanyName: validatedInput.displayedCompanyName }
       : {}),
-    ...(input.description !== undefined
-      ? { description: input.description }
+    ...(validatedInput.locationText !== undefined
+      ? { locationText: validatedInput.locationText }
       : {}),
-    ...(input.salaryText !== undefined
-      ? { salaryText: input.salaryText }
+    ...(validatedInput.description !== undefined
+      ? { description: validatedInput.description }
       : {}),
-    ...(input.contractText !== undefined
-      ? { contractText: input.contractText }
+    ...(validatedInput.salaryText !== undefined
+      ? { salaryText: validatedInput.salaryText }
       : {}),
-    ...(input.contactText !== undefined
-      ? { contactText: input.contactText }
+    ...(validatedInput.contractText !== undefined
+      ? { contractText: validatedInput.contractText }
       : {}),
-    ...(input.rawContent !== undefined
-      ? { rawContent: input.rawContent }
+    ...(validatedInput.contactText !== undefined
+      ? { contactText: validatedInput.contactText }
+      : {}),
+    ...(validatedInput.rawContent !== undefined
+      ? { rawContent: validatedInput.rawContent }
       : {}),
   };
 
