@@ -1450,6 +1450,11 @@ very high confidence or human confirmation
 
 This is safer than one global threshold.
 
+Recognition confidence and assignment policy are separate concerns. Matchers
+estimate candidate confidence without knowing action thresholds; user-configurable
+review and automatic-assignment thresholds determine whether an observation is
+automatically assigned, proposed for review, or treated as having no useful match.
+
 ---
 
 # 49. Initial Recognition Features

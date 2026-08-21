@@ -74,4 +74,25 @@ describe("InMemoryEmployerClusterRepository", () => {
       "First cluster",
     );
   });
+
+  it("finds candidates using case-insensitive location and name hints", async () => {
+    const repository = new InMemoryEmployerClusterRepository();
+    const matching = createEmployerCluster(
+      { displayLabel: "Acme Industries", primaryLocationHint: "Strasbourg" },
+      { generateId: () => "matching" },
+    );
+    const other = createEmployerCluster(
+      { displayLabel: "Other Company", primaryLocationHint: "Colmar" },
+      { generateId: () => "other" },
+    );
+    await repository.save(matching);
+    await repository.save(other);
+
+    await expect(
+      repository.findCandidates({
+        locationHint: "strasbourg",
+        displayedCompanyNameHint: "ACME",
+      }),
+    ).resolves.toEqual([matching]);
+  });
 });
