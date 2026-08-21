@@ -4,6 +4,7 @@ import type { EmployerClusterDecision } from "../../domain/recognition/EmployerC
 import type { EmployerClusterMatcher } from "../../domain/recognition/EmployerClusterMatcher.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import type { ObservationClusterAssignmentRepository } from "../../domain/recognition/ObservationClusterAssignmentRepository.js";
+import type { ObservationClusterAssignment } from "../../domain/recognition/ObservationClusterAssignment.js";
 import { decideEmployerClusterAssignment } from "../../domain/recognition/decideEmployerClusterAssignment.js";
 import { recordObservationClusterAssignment } from "./recordObservationClusterAssignment.js";
 
@@ -18,10 +19,19 @@ export interface EvaluateObservationEmployerClusterDependencies {
   readonly generateAssignmentId?: () => string;
 }
 
+export type EvaluateObservationEmployerClusterResult =
+  | (Extract<EmployerClusterDecision, { outcome: "AUTO_MATCH" }> & {
+      readonly assignment: ObservationClusterAssignment;
+    })
+  | (Extract<EmployerClusterDecision, { outcome: "REVIEW_REQUIRED" }> & {
+      readonly proposal: ObservationClusterAssignment;
+    })
+  | Extract<EmployerClusterDecision, { outcome: "NO_MATCH" }>;
+
 export async function evaluateObservationEmployerCluster(
   observation: SourceObservation,
   dependencies: EvaluateObservationEmployerClusterDependencies,
-): Promise<EmployerClusterDecision> {
+): Promise<EvaluateObservationEmployerClusterResult> {
   const criteria = {
     ...(observation.locationText !== undefined
       ? { locationHint: observation.locationText }
@@ -47,7 +57,7 @@ export async function evaluateObservationEmployerCluster(
         ? decision.cluster
         : decision.candidateCluster;
 
-    await recordObservationClusterAssignment(
+    const assignment = await recordObservationClusterAssignment(
       {
         sourceObservationId: observation.id,
         employerClusterId: cluster.id,
@@ -68,6 +78,10 @@ export async function evaluateObservationEmployerCluster(
           : {}),
       },
     );
+
+    return decision.outcome === "AUTO_MATCH"
+      ? { ...decision, assignment }
+      : { ...decision, proposal: assignment };
   }
 
   return decision;

@@ -1455,6 +1455,15 @@ estimate candidate confidence without knowing action thresholds; user-configurab
 review and automatic-assignment thresholds determine whether an observation is
 automatically assigned, proposed for review, or treated as having no useful match.
 
+When no existing employer cluster reaches the review threshold, Job Nearby creates
+a new unresolved employer cluster and attaches the observation to it. Assignment
+confidence `1` in this case means certain membership by construction—the cluster
+was created for that observation—not certainty about the employer's identity.
+
+The in-memory workflow saves the cluster before its initial assignment and does not
+simulate rollback. When recognition persistence moves to SQLite, these two writes
+should occur in one database transaction.
+
 ---
 
 # 49. Initial Recognition Features
