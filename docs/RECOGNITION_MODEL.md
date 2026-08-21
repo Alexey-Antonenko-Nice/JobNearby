@@ -147,6 +147,29 @@ Inference
 
 An inference must never silently replace the evidence from which it was derived.
 
+## 4.1 Vacancy Evidence Extraction
+
+The first transformation after capture is provider-independent evidence extraction:
+
+```text
+SourceObservation
+        ↓
+VacancyEvidenceExtractor
+        ↓
+ExtractedVacancyEvidence
+```
+
+The extracted result may contain several organizations, locations, people,
+provider-specific identifiers, and employer characteristics. Their roles remain
+explicit: a displayed organization need not be the employer, and a displayed
+location need not be the workplace. Every item retains its originating observation,
+extraction method, value, and extraction confidence.
+
+Extraction confidence answers whether information was correctly extracted or
+interpreted. Employer-cluster match confidence answers whether an observation
+belongs to a cluster. Employer-identity confidence answers whether the real employer
+is known. These are separate confidence values and must not share decision policy.
+
 ---
 
 # 5. Evidence
