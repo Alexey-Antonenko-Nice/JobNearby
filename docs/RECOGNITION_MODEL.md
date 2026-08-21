@@ -170,6 +170,12 @@ interpreted. Employer-cluster match confidence answers whether an observation
 belongs to a cluster. Employer-identity confidence answers whether the real employer
 is known. These are separate confidence values and must not share decision policy.
 
+Evidence extraction proceeds in deliberately separate layers: direct-field
+extraction preserves structured source fields; explicit-text extraction recognizes
+only narrowly stated facts such as named clients, recruiters, and workplaces;
+semantic employer-characteristic and fingerprint extraction is deferred to a later
+stage. Explicit-text rules remain deterministic and provider-independent.
+
 ---
 
 # 5. Evidence
