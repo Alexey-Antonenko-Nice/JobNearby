@@ -9,16 +9,25 @@ export type EmployerCharacteristicCategory =
   | "PRODUCT"
   | "PROCESS"
   | "EQUIPMENT"
+  | "INFRASTRUCTURE"
   | "COMPANY_SIZE"
   | "ORGANIZATION"
   | "MARKET"
-  | "LANGUAGE"
   | "WORK_PATTERN"
+  | "DISTINCTIVE_FACT"
   | "OTHER";
+
+export type EvidenceSpecificity =
+  | "VERY_LOW"
+  | "LOW"
+  | "MEDIUM"
+  | "HIGH"
+  | "VERY_HIGH";
 
 export interface EmployerCharacteristicEvidence {
   readonly value: string;
   readonly category: EmployerCharacteristicCategory;
+  readonly specificity: EvidenceSpecificity;
   readonly provenance: EvidenceProvenance;
 }
 
@@ -31,6 +40,7 @@ export function createEmployerCharacteristicEvidence(
       "Employer characteristic evidence value",
     ),
     category: evidence.category,
+    specificity: evidence.specificity,
     provenance: createEvidenceProvenance(evidence.provenance),
   };
 }

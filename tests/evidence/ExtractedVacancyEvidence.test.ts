@@ -107,9 +107,9 @@ describe("ExtractedVacancyEvidence", () => {
     const result = createExtractedVacancyEvidence({
       sourceObservationId: "observation-1",
       employerCharacteristics: [
-        { value: "Paper manufacturing", category: "INDUSTRY", provenance: extracted },
-        { value: "Biomass boiler", category: "EQUIPMENT", provenance: extracted },
-        { value: "Approximately 160 employees", category: "COMPANY_SIZE", provenance: extracted },
+        { value: "Paper manufacturing", category: "INDUSTRY", specificity: "HIGH", provenance: extracted },
+        { value: "Biomass boiler", category: "EQUIPMENT", specificity: "VERY_HIGH", provenance: extracted },
+        { value: "Approximately 160 employees", category: "COMPANY_SIZE", specificity: "HIGH", provenance: extracted },
       ],
     });
 

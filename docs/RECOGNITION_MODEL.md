@@ -176,6 +176,13 @@ only narrowly stated facts such as named clients, recruiters, and workplaces;
 semantic employer-characteristic and fingerprint extraction is deferred to a later
 stage. Explicit-text rules remain deterministic and provider-independent.
 
+Employer-characteristic evidence carries an ordinal specificity level describing
+how distinctive the explicit fact is for recognition. Specificity is independent
+from extraction confidence: a broadly shared fact can be extracted with high
+confidence while remaining low-specificity. Characteristic contradictions and
+their effect on candidate matching will be evaluated by a future matcher rather
+than by the extractor.
+
 ---
 
 # 5. Evidence
