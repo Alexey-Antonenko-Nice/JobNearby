@@ -183,6 +183,30 @@ confidence while remaining low-specificity. Characteristic contradictions and
 their effect on candidate matching will be evaluated by a future matcher rather
 than by the extractor.
 
+Employer evidence comparison follows extraction and produces separate explainable
+positive signals and contradictions. It preserves the evidence behind each result
+without calculating a final score:
+
+```text
+evidence extraction
+        ↓
+evidence comparison
+        ↓
+dimension aggregation
+        ↓
+future confidence calculation
+        ↓
+assignment policy
+```
+
+Missing evidence is neutral, intermediaries are not employer identity, and only a
+small explicit set of incompatible concrete facts is contradictory at this stage.
+Dimension aggregation summarizes correlated evidence using qualitative strengths
+without losing the underlying signals, contradictions, or evidence references.
+Exact characteristic evidence pairs are deduplicated, while distinct normalized
+values may reinforce a dimension even when they share a category. Detecting semantic
+correlation between different values is intentionally deferred to a later matcher.
+
 ---
 
 # 5. Evidence

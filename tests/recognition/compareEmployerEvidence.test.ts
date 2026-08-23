@@ -1,0 +1,228 @@
+import { describe, expect, it } from "vitest";
+
+import type { CreateExtractedVacancyEvidenceInput } from "../../src/domain/evidence/ExtractedVacancyEvidence.js";
+import { createExtractedVacancyEvidence } from "../../src/domain/evidence/ExtractedVacancyEvidence.js";
+import { compareEmployerEvidence } from "../../src/domain/recognition/compareEmployerEvidence.js";
+
+function evidence(
+  side: "left" | "right",
+  input: Omit<CreateExtractedVacancyEvidenceInput, "sourceObservationId">,
+) {
+  const sourceObservationId = `${side}-observation`;
+  const withProvenance = <T extends object>(item: T) => ({
+    ...item,
+    provenance: {
+      sourceObservationId,
+      extractionMethod: "TEXT_EXTRACTION" as const,
+      confidence: 0.98,
+    },
+  });
+  return createExtractedVacancyEvidence({
+    sourceObservationId,
+    ...(input.organizations !== undefined
+      ? { organizations: input.organizations.map(withProvenance) }
+      : {}),
+    ...(input.locations !== undefined
+      ? { locations: input.locations.map(withProvenance) }
+      : {}),
+    ...(input.employerCharacteristics !== undefined
+      ? {
+          employerCharacteristics:
+            input.employerCharacteristics.map(withProvenance),
+        }
+      : {}),
+  });
+}
+
+describe("compareEmployerEvidence", () => {
+  it("returns a very strong signal for the same explicit employer", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        organizations: [{ value: " LOXAM ", role: "EMPLOYER" } as never],
+      }),
+      evidence("right", {
+        organizations: [{ value: "loxam", role: "EMPLOYER" } as never],
+      }),
+    );
+
+    expect(comparison.positiveSignals).toContainEqual(
+      expect.objectContaining({
+        kind: "EMPLOYER_IDENTITY",
+        strength: "VERY_STRONG",
+        explanation: expect.stringContaining("LOXAM"),
+        leftEvidence: expect.objectContaining({ value: "LOXAM" }),
+        rightEvidence: expect.objectContaining({ value: "loxam" }),
+      }),
+    );
+    expect(comparison.contradictions).toEqual([]);
+  });
+
+  it("returns a decisive contradiction for different explicit employers", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        organizations: [{ value: "SOLINA FRANCE", role: "EMPLOYER" } as never],
+      }),
+      evidence("right", {
+        organizations: [{ value: "ALSTOM TRANSPORT SA", role: "EMPLOYER" } as never],
+      }),
+    );
+
+    expect(comparison.contradictions).toContainEqual(
+      expect.objectContaining({
+        kind: "EMPLOYER_IDENTITY",
+        strength: "DECISIVE",
+        leftEvidence: expect.objectContaining({ value: "SOLINA FRANCE" }),
+        rightEvidence: expect.objectContaining({ value: "ALSTOM TRANSPORT SA" }),
+      }),
+    );
+  });
+
+  it("preserves a geographic positive alongside a strong industry contradiction", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        locations: [{ value: "Weyersheim", role: "WORKPLACE" } as never],
+        employerCharacteristics: [
+          {
+            value: "food manufacturing",
+            category: "INDUSTRY",
+            specificity: "MEDIUM",
+          } as never,
+        ],
+      }),
+      evidence("right", {
+        locations: [{ value: "Weyersheim", role: "WORKPLACE" } as never],
+        employerCharacteristics: [
+          {
+            value: "concrete manufacturing",
+            category: "INDUSTRY",
+            specificity: "MEDIUM",
+          } as never,
+        ],
+      }),
+    );
+
+    expect(comparison.positiveSignals).toContainEqual(
+      expect.objectContaining({ kind: "LOCATION", strength: "MEDIUM" }),
+    );
+    expect(comparison.contradictions).toContainEqual(
+      expect.objectContaining({ kind: "CHARACTERISTIC", strength: "STRONG" }),
+    );
+  });
+
+  it("treats the same recruitment agency as weak context, not employer identity", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        organizations: [{ value: "ACTUA", role: "RECRUITMENT_AGENCY" } as never],
+      }),
+      evidence("right", {
+        organizations: [{ value: "actua", role: "RECRUITMENT_AGENCY" } as never],
+      }),
+    );
+
+    expect(comparison.positiveSignals).toEqual([
+      expect.objectContaining({ kind: "INTERMEDIARY_CONTEXT", strength: "WEAK" }),
+    ]);
+    expect(comparison.contradictions).toEqual([]);
+  });
+
+  it("does not contradict different recruitment agencies", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        organizations: [{ value: "SUPPLAY", role: "RECRUITMENT_AGENCY" } as never],
+      }),
+      evidence("right", {
+        organizations: [{ value: "ADSEARCH", role: "RECRUITMENT_AGENCY" } as never],
+      }),
+    );
+
+    expect(comparison).toEqual({ positiveSignals: [], contradictions: [] });
+  });
+
+  it("maps a matching very-high-specificity characteristic to a very strong signal", () => {
+    const characteristic = {
+      value: "ROBOPAC distributor",
+      category: "DISTINCTIVE_FACT" as const,
+      specificity: "VERY_HIGH" as const,
+    };
+    const comparison = compareEmployerEvidence(
+      evidence("left", { employerCharacteristics: [characteristic as never] }),
+      evidence("right", { employerCharacteristics: [characteristic as never] }),
+    );
+
+    expect(comparison.positiveSignals).toContainEqual(
+      expect.objectContaining({ kind: "CHARACTERISTIC", strength: "VERY_STRONG" }),
+    );
+  });
+
+  it("treats missing evidence as neutral", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        employerCharacteristics: [
+          {
+            value: "1,150 employees",
+            category: "COMPANY_SIZE",
+            specificity: "HIGH",
+          } as never,
+        ],
+      }),
+      evidence("right", {}),
+    );
+
+    expect(comparison).toEqual({ positiveSignals: [], contradictions: [] });
+  });
+
+  it("does not contradict different complementary characteristics", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        employerCharacteristics: [
+          { value: "17 sites", category: "ORGANIZATION", specificity: "HIGH" } as never,
+        ],
+      }),
+      evidence("right", {
+        employerCharacteristics: [
+          {
+            value: "1,150 employees",
+            category: "COMPANY_SIZE",
+            specificity: "HIGH",
+          } as never,
+        ],
+      }),
+    );
+
+    expect(comparison).toEqual({ positiveSignals: [], contradictions: [] });
+  });
+
+  it.each([
+    ["VERY_LOW", "WEAK"],
+    ["LOW", "WEAK"],
+    ["MEDIUM", "MEDIUM"],
+    ["HIGH", "STRONG"],
+    ["VERY_HIGH", "VERY_STRONG"],
+  ] as const)("maps %s specificity to %s signal strength", (specificity, strength) => {
+    const characteristic = {
+      value: "shared fact",
+      category: "OTHER" as const,
+      specificity,
+    };
+    const comparison = compareEmployerEvidence(
+      evidence("left", { employerCharacteristics: [characteristic as never] }),
+      evidence("right", { employerCharacteristics: [characteristic as never] }),
+    );
+    expect(comparison.positiveSignals[0]?.strength).toBe(strength);
+  });
+
+  it("treats the same displayed location alone as weak evidence", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        locations: [{ value: "Strasbourg", role: "DISPLAYED_LOCATION" } as never],
+      }),
+      evidence("right", {
+        locations: [{ value: "strasbourg", role: "DISPLAYED_LOCATION" } as never],
+      }),
+    );
+    expect(comparison.positiveSignals[0]).toMatchObject({
+      kind: "LOCATION",
+      strength: "WEAK",
+    });
+  });
+});
