@@ -213,6 +213,13 @@ two observations belong to the same employer cluster, but it is not an empirical
 calibrated probability. Assignment thresholds remain a separate, user-configurable
 policy applied after confidence calculation.
 
+For a candidate employer cluster, matching currently compares the new observation
+against each historical observation assigned to that cluster. The cluster confidence
+is the maximum supported historical-observation confidence, not an average and not
+a synthesized cluster fingerprint. Candidate and historical order provide stable
+tie-breaking. A derived cluster-level fingerprint may later optimize this process,
+but historical source observations remain the canonical comparison scope.
+
 ---
 
 # 5. Evidence
