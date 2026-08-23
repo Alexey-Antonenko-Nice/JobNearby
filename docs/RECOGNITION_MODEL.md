@@ -194,7 +194,7 @@ evidence comparison
         ↓
 dimension aggregation
         ↓
-future confidence calculation
+deterministic confidence calibration
         ↓
 assignment policy
 ```
@@ -206,6 +206,12 @@ without losing the underlying signals, contradictions, or evidence references.
 Exact characteristic evidence pairs are deduplicated, while distinct normalized
 values may reinforce a dimension even when they share a category. Detecting semantic
 correlation between different values is intentionally deferred to a later matcher.
+
+The current employer-match confidence is a deterministic, policy-calibrated value
+derived only from qualitative dimension assessments. It expresses confidence that
+two observations belong to the same employer cluster, but it is not an empirically
+calibrated probability. Assignment thresholds remain a separate, user-configurable
+policy applied after confidence calculation.
 
 ---
 
