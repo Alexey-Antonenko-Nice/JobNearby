@@ -71,3 +71,9 @@ dimension assessments, confidence, and expected/actual zones for diagnosis. An
 `INSUFFICIENT_EVIDENCE`/`UNSCORED` case is reported but excluded from pass/fail
 totals. Current failures are measurements of engine behavior; they must not be
 hidden by changing labels or recognition rules during validation.
+
+M3.3.3 renders those structured results as deterministic Markdown. The report keeps
+observed evidence, comparison output, dimensions, confidence, and benchmark outcome
+separate from a conservative diagnostic hypothesis. Diagnostic categories are
+engineering hypotheses derived from current matcher output, not human-labelled
+ground truth.

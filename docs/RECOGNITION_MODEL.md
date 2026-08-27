@@ -245,6 +245,11 @@ future recognition improvements
 The validation harness measures the current production pipeline without feeding
 benchmark labels into runtime recognition or modifying failed outcomes.
 
+M3.3.3 adds a reproducible human-readable explainability report over structured
+validation results. It separates observed facts from conservative engineering
+hypotheses; diagnostic categories are not benchmark truth. M3.3.4 may use those
+observations for targeted recognition improvements.
+
 ---
 
 # 5. Evidence

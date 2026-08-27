@@ -27,6 +27,7 @@ export interface RecognitionValidationResult {
   readonly caseId: string;
   readonly expectedRelationship: ExpectedEmployerRelationship;
   readonly expectedConfidenceZone: ExpectedConfidenceZone;
+  readonly humanExplanation: string;
   readonly confidence: number;
   readonly actualConfidenceZone: ActualConfidenceZone;
   readonly outcome: RecognitionValidationOutcome;
@@ -144,6 +145,7 @@ async function executeRecognitionValidationCase(
     caseId: validationCase.caseId,
     expectedRelationship: validationCase.expectedRelationship,
     expectedConfidenceZone: validationCase.expectedConfidenceZone,
+    humanExplanation: validationCase.humanExplanation,
     confidence,
     actualConfidenceZone,
     outcome: scoreRecognitionValidationOutcome(
