@@ -230,6 +230,21 @@ production truth. Exact numeric confidence is deliberately not a benchmark label
 The validation roadmap is M3.3.1 corpus integrity, M3.3.2 automated matcher
 evaluation, M3.3.3 explainability reporting, and M3.3.4 evidence-led improvements.
 
+```text
+Benchmark Corpus
+        ↓
+Validation Harness
+        ↓
+Observed failures
+        ↓
+future explainability report
+        ↓
+future recognition improvements
+```
+
+The validation harness measures the current production pipeline without feeding
+benchmark labels into runtime recognition or modifying failed outcomes.
+
 ---
 
 # 5. Evidence

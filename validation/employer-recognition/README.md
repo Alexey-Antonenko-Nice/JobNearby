@@ -59,3 +59,15 @@ The roadmap is:
 2. M3.3.2 — automated validation harness;
 3. M3.3.3 — explainability report;
 4. M3.3.4 — evidence-led recognition improvements.
+
+## Automated execution
+
+M3.3.1 established the human-labelled corpus and its integrity rules. M3.3.2
+executes every pair through the current production extractors, evidence comparison,
+dimension aggregation, confidence calculation, and default assignment policy.
+
+The structured harness result retains extracted evidence, signals, contradictions,
+dimension assessments, confidence, and expected/actual zones for diagnosis. An
+`INSUFFICIENT_EVIDENCE`/`UNSCORED` case is reported but excluded from pass/fail
+totals. Current failures are measurements of engine behavior; they must not be
+hidden by changing labels or recognition rules during validation.
