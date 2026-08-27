@@ -264,6 +264,12 @@ labels are established before evaluation, and M3.4.1 intentionally stores only t
 data and integrity rules without running recognition against it. After results are
 observed, those cases are no longer pristine unseen data for later model changes.
 
+The M3.4 sequence is: M3.4.1 freezes the unseen corpus; M3.4.2 preserves the first
+independent evaluation (5 of 9 scored cases passed, 55.6%); and M3.4.3 traces each
+failure to the earliest pipeline stage where human-visible information stops
+contributing. Failure diagnoses separate observed pipeline facts from engineering
+hypotheses and do not represent implemented fixes or recognition-model changes.
+
 ---
 
 # 5. Evidence
