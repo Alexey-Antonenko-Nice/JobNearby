@@ -220,6 +220,16 @@ a synthesized cluster fingerprint. Candidate and historical order provide stable
 tie-breaking. A derived cluster-level fingerprint may later optimize this process,
 but historical source observations remain the canonical comparison scope.
 
+## Recognition Benchmark Corpus
+
+Job Nearby maintains a validation-only, human-labelled employer-recognition corpus
+under `validation/employer-recognition`. Its compact sanitized vacancy excerpts and
+expected relationship/action labels support reproducible evaluation without becoming
+production truth. Exact numeric confidence is deliberately not a benchmark label.
+
+The validation roadmap is M3.3.1 corpus integrity, M3.3.2 automated matcher
+evaluation, M3.3.3 explainability reporting, and M3.3.4 evidence-led improvements.
+
 ---
 
 # 5. Evidence
