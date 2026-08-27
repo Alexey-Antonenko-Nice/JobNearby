@@ -51,8 +51,17 @@ export interface RecognitionValidationRun {
   readonly summary: RecognitionValidationSummary;
 }
 
+export type RecognitionValidationCaseInput = Pick<
+  RecognitionValidationCase,
+  | "caseId"
+  | "observationIds"
+  | "expectedRelationship"
+  | "expectedConfidenceZone"
+  | "humanExplanation"
+>;
+
 export async function runEmployerRecognitionValidation(
-  cases: readonly RecognitionValidationCase[] = employerRecognitionCases,
+  cases: readonly RecognitionValidationCaseInput[] = employerRecognitionCases,
   fixtures: readonly RecognitionValidationFixture[] = employerRecognitionFixtures,
 ): Promise<RecognitionValidationRun> {
   const fixturesById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
@@ -73,7 +82,7 @@ export async function runEmployerRecognitionValidation(
 }
 
 export function scoreRecognitionValidationOutcome(
-  validationCase: RecognitionValidationCase,
+  validationCase: RecognitionValidationCaseInput,
   actualConfidenceZone: ActualConfidenceZone,
 ): RecognitionValidationOutcome {
   if (
@@ -108,7 +117,7 @@ export function summarizeRecognitionValidation(
 }
 
 async function executeRecognitionValidationCase(
-  validationCase: RecognitionValidationCase,
+  validationCase: RecognitionValidationCaseInput,
   fixturesById: ReadonlyMap<string, RecognitionValidationFixture>,
   extractor: VacancyEvidenceExtractor,
 ): Promise<RecognitionValidationResult> {

@@ -35,3 +35,13 @@ evaluation.
 Integrity tests may load the corpus to validate its shape, separation, and data
 hygiene. They must not invoke extraction, comparison, matching, scoring, assignment,
 the regression harness, or any other recognition implementation.
+
+## First evaluation
+
+M3.4.2 evaluates this frozen data through the unchanged production pipeline using
+`runEvaluation.ts`. Its result and Markdown renderer are holdout-specific; the
+regression fixtures and labels remain outside the evaluation. An `UNSCORED` case is
+recorded but excluded from the pass rate. Observed failures are classified for
+diagnosis only and must not trigger recognition changes within this milestone.
+`BASELINE_REPORT.md` preserves the complete first independent result. A test requires
+the unchanged engine and frozen corpus to reproduce it byte for byte.
