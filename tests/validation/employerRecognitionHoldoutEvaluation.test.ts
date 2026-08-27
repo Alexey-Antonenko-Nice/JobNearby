@@ -108,9 +108,9 @@ describe("independent employer recognition holdout evaluation", () => {
     expect(h02.actualConfidenceZone).toBe("REVIEW_REQUIRED");
   });
 
-  it("limits holdout changes to the rule-justified H02 and unscored H08 cases", () => {
+  it("limits holdout changes to the documented comparison and extraction rules", () => {
     const expectedCurrent = new Map<string, readonly [string, number]>([
-      ["H01", ["NO_MATCH", 0.24]],
+      ["H01", ["REVIEW_REQUIRED", 0.72]],
       ["H02", ["REVIEW_REQUIRED", 0.85]],
       ["H03", ["NO_MATCH", 0.24]],
       ["H04", ["NO_MATCH", 0.1]],
@@ -118,7 +118,7 @@ describe("independent employer recognition holdout evaluation", () => {
       ["H06", ["NO_MATCH", 0.1]],
       ["H07", ["NO_MATCH", 0.24]],
       ["H08", ["REVIEW_REQUIRED", 0.85]],
-      ["H09", ["NO_MATCH", 0.1]],
+      ["H09", ["NO_MATCH", 0.45]],
       ["H10", ["NO_MATCH", 0.1]],
     ] as const);
     for (const result of run.results) {
@@ -126,6 +126,29 @@ describe("independent employer recognition holdout evaluation", () => {
         expectedCurrent.get(result.caseId),
       );
     }
+  });
+
+  it("extracts only employer-attributed known-case characteristics", () => {
+    const h01 = run.results.find(({ caseId }) => caseId === "H01")!;
+    for (const evidence of [h01.leftEvidence, h01.rightEvidence]) {
+      expect(evidence.employerCharacteristics).toContainEqual(
+        expect.objectContaining({ value: "pharmaceutical manufacturing", category: "INDUSTRY", specificity: "HIGH" }),
+      );
+    }
+    expect(h01.assessment.characteristics.assessment).toBe("STRONG_POSITIVE");
+
+    const h07 = run.results.find(({ caseId }) => caseId === "H07")!;
+    expect(h07.leftEvidence.employerCharacteristics).toEqual([]);
+    expect(h07.rightEvidence.employerCharacteristics).toEqual([]);
+    expect(h07.assessment.characteristics.assessment).toBe("UNKNOWN");
+
+    const h09 = run.results.find(({ caseId }) => caseId === "H09")!;
+    for (const evidence of [h09.leftEvidence, h09.rightEvidence]) {
+      expect(evidence.employerCharacteristics).toContainEqual(
+        expect.objectContaining({ value: "industrial production site", category: "INFRASTRUCTURE", specificity: "MEDIUM" }),
+      );
+    }
+    expect(h09.assessment.characteristics.assessment).toBe("MEDIUM_POSITIVE");
   });
 
   it("keeps holdout and regression records separate", () => {

@@ -251,4 +251,78 @@ describe("ExplicitEmployerCharacteristicExtractor", () => {
     );
     expect(result.employerCharacteristics).toEqual([]);
   });
+
+  it.each([
+    "Our client operates a pharmaceutical manufacturing site.",
+    "The company is a pharmaceutical manufacturing organization.",
+    "Notre client exploite un site industriel pharmaceutique.",
+    "L'entreprise travaille dans l'industrie pharmaceutique.",
+  ])("extracts employer-attributed pharmaceutical manufacturing: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toContainEqual(
+      expect.objectContaining({
+        value: "pharmaceutical manufacturing",
+        category: "INDUSTRY",
+        specificity: "HIGH",
+      }),
+    );
+  });
+
+  it.each([
+    "Candidate experience in a pharmaceutical manufacturing site is required.",
+    "Vous devez avoir une expérience dans l'industrie pharmaceutique.",
+  ])("rejects candidate pharmaceutical experience: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toEqual([]);
+  });
+
+  it.each([
+    "Our client is a lifting-equipment company.",
+    "The business specializes in lifting equipment activity.",
+    "L'entreprise est spécialisée dans les matériels de levage.",
+    "Notre client exerce une activité liée aux appareils de levage.",
+  ])("extracts employer-attributed lifting-equipment business: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toContainEqual(
+      expect.objectContaining({
+        value: "lifting-equipment business",
+        category: "PRODUCT",
+        specificity: "HIGH",
+      }),
+    );
+  });
+
+  it.each([
+    "Your duties include repair lifting equipment.",
+    "You will perform maintenance on lifting equipment.",
+    "Vos missions : réparer les matériels de levage.",
+  ])("rejects lifting-equipment job duties: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toEqual([]);
+  });
+
+  it.each([
+    "Our client operates an industrial production site.",
+    "The company runs a production facility.",
+    "Notre client exploite un site de production industrielle.",
+    "L'entreprise possède une usine de production.",
+  ])("extracts an employer-attributed industrial production site: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toContainEqual(
+      expect.objectContaining({
+        value: "industrial production site",
+        category: "INFRASTRUCTURE",
+        specificity: "MEDIUM",
+      }),
+    );
+  });
+
+  it.each([
+    "You will work on production equipment.",
+    "Vos missions consistent à intervenir sur les équipements de production.",
+    "Experience on an industrial production site is required.",
+  ])("rejects production duties and requirements: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toEqual([]);
+  });
 });

@@ -20,6 +20,30 @@ interface CharacteristicRule {
 
 const rules: readonly CharacteristicRule[] = [
   {
+    pattern:
+      /\b(?:pharmaceutical\s+(?:manufacturing\s+(?:organization|organisation|site)|industrial\s+site|production\s+environment)|regulated\s+pharmaceutical\s+production\s+environment|site\s+industriel\s+pharmaceutique|environnement\s+de\s+production\s+pharmaceutique|industrie\s+pharmaceutique)\b/giu,
+    category: "INDUSTRY",
+    specificity: "HIGH",
+    canonicalValue: "pharmaceutical manufacturing",
+    requiresEmployerContext: true,
+  },
+  {
+    pattern:
+      /\b(?:lifting[- ]equipment\s+(?:company|business|activity)|(?:company|business)\s+(?:specializing|operating|specializes|operates)\s+in\s+lifting[- ]equipment(?:\s+activity)?|activit[eé]\s+li[eé]e\s+aux?\s+(?:appareils?|mat[eé]riels?)\s+de\s+levage|entreprise\s+(?:est\s+)?sp[eé]cialis[eé]e\s+dans\s+(?:les?\s+)?(?:appareils?|mat[eé]riels?)\s+de\s+levage)\b/giu,
+    category: "PRODUCT",
+    specificity: "HIGH",
+    canonicalValue: "lifting-equipment business",
+    requiresEmployerContext: true,
+  },
+  {
+    pattern:
+      /\b(?:industrial\s+production\s+site|manufacturing\s+production\s+site|production\s+facility|site\s+(?:industriel\s+)?de\s+production(?:\s+industrielle)?|usine\s+de\s+production)\b/giu,
+    category: "INFRASTRUCTURE",
+    specificity: "MEDIUM",
+    canonicalValue: "industrial production site",
+    requiresEmployerContext: true,
+  },
+  {
     pattern: /\bindependent\s+Alsatian\s+SME\b/giu,
     category: "ORGANIZATION",
     specificity: "HIGH",
@@ -154,13 +178,13 @@ export class ExplicitEmployerCharacteristicExtractor
 function isCandidateRequirementContext(text: string, matchIndex: number): boolean {
   const sentence = sentenceAt(text, matchIndex);
 
-  return /\b(?:required|preferred|experience|qualification|candidate|you\s+(?:have|are)|must|bac\s*\+?\s*\d|autonomous|proficien(?:t|cy)|knowledge\s+of|exp[eé]rience|requis(?:e)?|exig[eé]e?|souhait[eé]e?|candidat(?:e)?|vous|comp[eé]tences?|ma[iî]trise|connaissance|autonome)\b/iu.test(
+  return /\b(?:required|preferred|experience|qualification|candidate|your\s+(?:responsibilities|duties)|you\s+(?:have|are|will)|must|bac\s*\+?\s*\d|autonomous|proficien(?:t|cy)|knowledge\s+of|exp[eé]rience|requis(?:e)?|exig[eé]e?|souhait[eé]e?|candidat(?:e)?|vous|vos\s+missions|missions?|comp[eé]tences?|ma[iî]trise|connaissance|autonome|charg[eé]e?\s+de)\b/iu.test(
     sentence,
   );
 }
 
 function isEmployerAttributedContext(text: string, matchIndex: number): boolean {
-  return /\b(?:client|company|business|group|employer|entreprise|soci[eé]t[eé]|groupe|employeur)\b/iu.test(
+  return /\b(?:client|company|business|group|employer|site|facility|factory|environment|organisation|organization|entreprise|soci[eé]t[eé]|groupe|employeur|usine|environnement)\b/iu.test(
     sentenceAt(text, matchIndex),
   );
 }

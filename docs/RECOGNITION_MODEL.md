@@ -2058,6 +2058,18 @@ intermediaries remain weak contextual evidence, and different unknown-role names
 remain neutral. Publication-provider equality does not suppress unknown-role
 organization comparison; suppression requires explicit intermediary-role evidence.
 
+M3.4.4b adds conservative, benchmark-driven extraction for explicit employer,
+client, business, and industrial-site characteristics, including pharmaceutical
+manufacturing, lifting-equipment business, and industrial production sites. These
+rules require employer/site attribution and explicitly exclude generic similarity
+in maintenance duties, repair, commissioning, GMAO use, equipment installation,
+and continuous-improvement work.
+
+After M3.4 diagnosis and these targeted improvements, the original corpus is no
+longer pristine unseen holdout data. Its first independent 55.6% result remains a
+historical baseline; subsequent runs are regression and diagnostic measurements,
+not out-of-sample accuracy estimates.
+
 ---
 
 # 61. Next Document

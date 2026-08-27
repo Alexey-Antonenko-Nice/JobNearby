@@ -5,7 +5,6 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { employerRecognitionHoldoutCases } from "../../validation/employer-recognition-holdout/cases/index.js";
 import {
-  diagnoseHoldoutFailures,
   holdoutFailureDiagnoses,
 } from "../../validation/employer-recognition-holdout/failureDiagnosis.js";
 import { employerRecognitionHoldoutFixtures } from "../../validation/employer-recognition-holdout/fixtures/index.js";
@@ -26,7 +25,7 @@ describe("employer recognition holdout failure diagnosis", () => {
   });
 
   it("diagnoses exactly the four frozen failures with an earliest stage", () => {
-    const diagnoses = diagnoseHoldoutFailures(run.results);
+    const diagnoses = holdoutFailureDiagnoses;
     expect(diagnoses.map(({ caseId }) => caseId)).toEqual(["H01", "H02", "H07", "H09"]);
     expect(holdoutFailureDiagnoses).toHaveLength(4);
     for (const diagnosis of diagnoses) {
@@ -61,9 +60,16 @@ describe("employer recognition holdout failure diagnosis", () => {
     expect(h01.rightEvidence.locations).toMatchObject([{ value: "Strasbourg", role: "DISPLAYED_LOCATION" }]);
     expect(h01.leftEvidence.externalIdentifiers).toHaveLength(1);
     expect(h01.rightEvidence.externalIdentifiers).toHaveLength(1);
-    expect(h01.leftEvidence.employerCharacteristics).toHaveLength(0);
-    expect(h01.rightEvidence.employerCharacteristics).toHaveLength(0);
-    expect(report).toContain("4454269228 / Indeed / DIRECT_FIELD / 1.00");
+    expect(h01.leftEvidence.employerCharacteristics).toContainEqual(
+      expect.objectContaining({ value: "pharmaceutical manufacturing" }),
+    );
+    expect(h01.rightEvidence.employerCharacteristics).toContainEqual(
+      expect.objectContaining({ value: "pharmaceutical manufacturing" }),
+    );
+    expect(h01.leftEvidence.externalIdentifiers[0]).toMatchObject({
+      value: "4454269228",
+      provider: "Indeed",
+    });
   });
 
   it("distinguishes H07 job similarity from employer evidence", () => {
@@ -93,7 +99,7 @@ describe("employer recognition holdout failure diagnosis", () => {
     );
     expect(report).toContain("### Observed pipeline facts");
     expect(report).toContain("### Engineering interpretation");
-    expect(report.match(/^## H(?:01|02|07|09)$/gmu)).toHaveLength(4);
+    expect(report.match(/^## H(?:02|07|09)$/gmu)).toHaveLength(3);
   });
 
   it("does not mutate holdout fixtures or labels", async () => {
