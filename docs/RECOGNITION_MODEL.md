@@ -2070,6 +2070,35 @@ longer pristine unseen holdout data. Its first independent 55.6% result remains 
 historical baseline; subsequent runs are regression and diagnostic measurements,
 not out-of-sample accuracy estimates.
 
+## Vacancy identity
+
+Vacancy identity is distinct from both a captured source observation and employer
+identity:
+
+```text
+SourceObservation (one immutable capture) ─┐
+                                           ├─ Vacancy identity
+SourceObservation (another capture) ───────┘
+                                                  │
+                                                  └─ concerns an EmployerCluster
+```
+
+The relationships are not one-to-one. Multiple observations may describe one
+vacancy and must remain available as separate historical captures. One employer may
+have many vacancies, so same employer does not imply same vacancy.
+
+M3.5.1 establishes only one decisive vacancy-identity rule: an exact non-empty
+external vacancy ID in the same provider namespace proves `SAME_VACANCY`. Provider
+names are normalized conservatively by trimming, collapsing whitespace, and case
+folding; no fuzzy provider matching is performed. External ID equality across
+different providers, differing IDs within one provider, or missing ID evidence all
+remain `UNRESOLVED`. Failure to prove sameness does not prove different vacancies.
+
+This rule assumes an exact external ID is stable within its provider namespace.
+Provider ID recycling is a known future uncertainty and is not handled in M3.5.1.
+Vacancy matching does not reuse employer-match confidence and does not merge or
+delete source observations.
+
 ---
 
 # 61. Next Document
