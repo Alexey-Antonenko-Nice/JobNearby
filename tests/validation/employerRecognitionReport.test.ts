@@ -31,24 +31,44 @@ describe("employer recognition explainability report", () => {
   it("derives the current summary and failed case IDs", () => {
     expect(report).toContain("- Total cases: 12");
     expect(report).toContain("- Scored cases: 11");
-    expect(report).toContain("- Passed: 9");
-    expect(report).toContain("- Failed: 2");
+    expect(report).toContain("- Passed: 11");
+    expect(report).toContain("- Failed: 0");
     expect(report).toContain("- Unscored: 1");
-    expect(report).toContain("- Pass rate: 81.8%");
-    expect(report).toContain("`possible-anonymous-wood-energy`");
-    expect(report).toContain("`possible-anonymous-precision-machining`");
+    expect(report).toContain("- Pass rate: 100.0%");
+    expect(report).toContain("- Failed case IDs: None.");
   });
 
-  it("renders PASS, FAIL, and UNSCORED cases", () => {
+  it("renders PASS and UNSCORED cases from the improved corpus", () => {
     expect(report).toMatch(
       /## Case: `same-loxam-business-units`[\s\S]*?- Outcome: `PASS`/u,
     );
     expect(report).toMatch(
-      /## Case: `possible-anonymous-wood-energy`[\s\S]*?- Outcome: `FAIL`/u,
+      /## Case: `possible-anonymous-wood-energy`[\s\S]*?- Outcome: `PASS`/u,
     );
     expect(report).toMatch(
       /## Case: `insufficient-generic-maintenance`[\s\S]*?- Outcome: `UNSCORED`/u,
     );
+  });
+
+  it("continues to render a structured FAIL result", () => {
+    const failedResult = {
+      ...run.results[0]!,
+      outcome: "FAIL" as const,
+      expectedConfidenceZone: "REVIEW_REQUIRED" as const,
+      actualConfidenceZone: "NO_MATCH" as const,
+    };
+    const failedReport = renderEmployerRecognitionValidationReport({
+      results: [failedResult],
+      summary: {
+        totalCases: 1,
+        scoredCases: 1,
+        passedCases: 0,
+        failedCases: 1,
+        unscoredCases: 0,
+        passRate: 0,
+      },
+    });
+    expect(failedReport).toContain("- Outcome: `FAIL`");
   });
 
   it("renders evidence groups, semantic metadata, and empty states", () => {
@@ -77,18 +97,20 @@ describe("employer recognition explainability report", () => {
     expect(report).toContain("- Intermediary: `");
   });
 
-  it("classifies the two current failures as likely extraction gaps", () => {
-    const failures = run.results.filter(({ outcome }) => outcome === "FAIL");
-    expect(failures.map(({ caseId }) => caseId)).toEqual([
+  it("shows both formerly failing extraction-gap cases as expected behavior", () => {
+    const targets = run.results.filter(({ caseId }) =>
+      [
       "possible-anonymous-wood-energy",
       "possible-anonymous-precision-machining",
-    ]);
-    for (const failure of failures) {
-      expect(classifyValidationDiagnostic(failure).category).toBe(
-        "LIKELY_EXTRACTION_GAP",
+      ].includes(caseId),
+    );
+    expect(targets).toHaveLength(2);
+    for (const target of targets) {
+      expect(target.outcome).toBe("PASS");
+      expect(classifyValidationDiagnostic(target).category).toBe(
+        "EXPECTED_BEHAVIOR",
       );
     }
-    expect(report.match(/Category: `LIKELY_EXTRACTION_GAP`/gu)).toHaveLength(2);
   });
 
   it("classifies overconfidence and underconfidence conservatively", () => {

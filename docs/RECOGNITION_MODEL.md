@@ -250,6 +250,12 @@ validation results. It separates observed facts from conservative engineering
 hypotheses; diagnostic categories are not benchmark truth. M3.3.4 may use those
 observations for targeted recognition improvements.
 
+M3.3.4 expands deterministic employer-characteristic extraction only in response
+to observed benchmark gaps, initially covering explicit family ownership, company
+scale, wood/energy/heavy-industry activity, and precision machining. Benchmark
+labels and downstream comparison, aggregation, calibration, and policy remain fixed;
+recognition improvements must be measured against the unchanged corpus.
+
 ---
 
 # 5. Evidence

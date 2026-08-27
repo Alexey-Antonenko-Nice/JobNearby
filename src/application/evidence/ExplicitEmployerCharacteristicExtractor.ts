@@ -14,6 +14,8 @@ interface CharacteristicRule {
   readonly pattern: RegExp;
   readonly category: EmployerCharacteristicCategory;
   readonly specificity: EvidenceSpecificity;
+  readonly canonicalValue?: string;
+  readonly requiresEmployerContext?: boolean;
 }
 
 const rules: readonly CharacteristicRule[] = [
@@ -57,6 +59,56 @@ const rules: readonly CharacteristicRule[] = [
     category: "INDUSTRY",
     specificity: "HIGH",
   },
+  {
+    pattern:
+      /\b(?:family[- ]owned(?:\s+independent)?\s+company|independent\s+family(?:[- ]owned)?\s+(?:company|industrial\s+business)|entreprise\s+(?:familiale\s+ind[eé]pendante|ind[eé]pendante\s+familiale))\b/giu,
+    category: "ORGANIZATION",
+    specificity: "HIGH",
+    canonicalValue: "independent family-owned company",
+  },
+  {
+    pattern:
+      /\b(?:(?:more\s+than|over)\s+400\s+(?:employees|people)|plus\s+de\s+400\s+salari[eé]s)\b/giu,
+    category: "COMPANY_SIZE",
+    specificity: "HIGH",
+    canonicalValue: "more than 400 employees",
+    requiresEmployerContext: true,
+  },
+  {
+    pattern: /\b(?:wood|bois)\b/giu,
+    category: "INDUSTRY",
+    specificity: "MEDIUM",
+    canonicalValue: "wood activities",
+    requiresEmployerContext: true,
+  },
+  {
+    pattern: /(?<![\p{L}\p{N}])(?:energy|[eé]nergie)(?![\p{L}\p{N}])/giu,
+    category: "INDUSTRY",
+    specificity: "MEDIUM",
+    canonicalValue: "energy activities",
+    requiresEmployerContext: true,
+  },
+  {
+    pattern: /\b(?:heavy\s+industry|industrie\s+lourde)\b/giu,
+    category: "INDUSTRY",
+    specificity: "MEDIUM",
+    canonicalValue: "heavy industry",
+    requiresEmployerContext: true,
+  },
+  {
+    pattern:
+      /\b(?:high[- ]precision\s+machining|precision[- ]machining|usinage\s+(?:de\s+)?(?:haute\s+)?pr[eé]cision)\b/giu,
+    category: "PROCESS",
+    specificity: "HIGH",
+    canonicalValue: "precision machining",
+  },
+  {
+    pattern:
+      /\b(?:small\s+precision\s+parts|small[- ]size\s+parts|pi[eè]ces\s+de\s+petite\s+taille)\b/giu,
+    category: "PRODUCT",
+    specificity: "HIGH",
+    canonicalValue: "small precision parts",
+  },
 ];
 
 export class ExplicitEmployerCharacteristicExtractor
@@ -77,9 +129,13 @@ export class ExplicitEmployerCharacteristicExtractor
 
     for (const rule of rules) {
       for (const match of text.matchAll(rule.pattern)) {
-        if (!isCandidateRequirementContext(text, match.index)) {
+        if (
+          !isCandidateRequirementContext(text, match.index) &&
+          (!rule.requiresEmployerContext ||
+            isEmployerAttributedContext(text, match.index))
+        ) {
           employerCharacteristics.push({
-            value: normalizeValue(match[0]),
+            value: rule.canonicalValue ?? normalizeValue(match[0]),
             category: rule.category,
             specificity: rule.specificity,
             provenance,
@@ -96,6 +152,20 @@ export class ExplicitEmployerCharacteristicExtractor
 }
 
 function isCandidateRequirementContext(text: string, matchIndex: number): boolean {
+  const sentence = sentenceAt(text, matchIndex);
+
+  return /\b(?:required|preferred|experience|qualification|candidate|you\s+(?:have|are)|must|bac\s*\+?\s*\d|autonomous|proficien(?:t|cy)|knowledge\s+of|exp[eé]rience|requis(?:e)?|exig[eé]e?|souhait[eé]e?|candidat(?:e)?|vous|comp[eé]tences?|ma[iî]trise|connaissance|autonome)\b/iu.test(
+    sentence,
+  );
+}
+
+function isEmployerAttributedContext(text: string, matchIndex: number): boolean {
+  return /\b(?:client|company|business|group|employer|entreprise|soci[eé]t[eé]|groupe|employeur)\b/iu.test(
+    sentenceAt(text, matchIndex),
+  );
+}
+
+function sentenceAt(text: string, matchIndex: number): string {
   const sentenceStart = Math.max(
     text.lastIndexOf(".", matchIndex - 1),
     text.lastIndexOf("!", matchIndex - 1),
@@ -110,10 +180,7 @@ function isCandidateRequirementContext(text: string, matchIndex: number): boolea
       ? text.length
       : Math.min(...followingBoundaries);
   const sentence = text.slice(sentenceStart + 1, sentenceEnd);
-
-  return /\b(?:required|preferred|experience|qualification|candidate|you\s+(?:have|are)|must|bac\s*\+?\s*\d|autonomous|proficien(?:t|cy)|knowledge\s+of)\b/iu.test(
-    sentence,
-  );
+  return sentence;
 }
 
 function normalizeValue(value: string): string {

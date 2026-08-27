@@ -133,6 +133,15 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
     );
   });
 
+  it("extracts a clearly stated Wasselonne workplace", async () => {
+    const result = await extractor.extract(
+      observation({ description: "Le poste est situé à Wasselonne." }),
+    );
+    expect(result.locations).toEqual([
+      expect.objectContaining({ value: "Wasselonne", role: "WORKPLACE" }),
+    ]);
+  });
+
   it("does not extract unrelated city mentions as workplaces", async () => {
     const result = await extractor.extract(
       observation({

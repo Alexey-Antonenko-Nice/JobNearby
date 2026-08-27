@@ -153,4 +153,102 @@ describe("ExplicitEmployerCharacteristicExtractor", () => {
     });
     expect(result.employerCharacteristics).toEqual([]);
   });
+
+  it("extracts French independent-family and employee-scale facts", async () => {
+    const result = await extractor.extract(
+      observation(
+        "Notre client est une entreprise familiale indépendante avec plus de 400 salariés.",
+      ),
+    );
+
+    expect(result.employerCharacteristics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: "independent family-owned company",
+          category: "ORGANIZATION",
+          specificity: "HIGH",
+        }),
+        expect.objectContaining({
+          value: "more than 400 employees",
+          category: "COMPANY_SIZE",
+          specificity: "HIGH",
+        }),
+      ]),
+    );
+  });
+
+  it("extracts employer-attributed French wood, energy, and heavy-industry facts", async () => {
+    const result = await extractor.extract(
+      observation(
+        "L'entreprise exerce dans les métiers du bois et de l'énergie, au sein de l'industrie lourde.",
+      ),
+    );
+
+    expect(result.employerCharacteristics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: "wood activities",
+          category: "INDUSTRY",
+          specificity: "MEDIUM",
+        }),
+        expect.objectContaining({
+          value: "energy activities",
+          category: "INDUSTRY",
+          specificity: "MEDIUM",
+        }),
+        expect.objectContaining({
+          value: "heavy industry",
+          category: "INDUSTRY",
+          specificity: "MEDIUM",
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    "The company specializes in high-precision machining.",
+    "Anonymous precision-machining company.",
+    "L'entreprise réalise de l'usinage de haute précision.",
+  ])("extracts explicit precision machining: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toContainEqual(
+      expect.objectContaining({
+        value: "precision machining",
+        category: "PROCESS",
+        specificity: "HIGH",
+      }),
+    );
+  });
+
+  it.each([
+    "The company manufactures small precision parts.",
+    "The business produces small-size parts.",
+    "L'entreprise fabrique des pièces de petite taille.",
+  ])("extracts explicit small precision parts: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toContainEqual(
+      expect.objectContaining({
+        value: "small precision parts",
+        category: "PRODUCT",
+        specificity: "HIGH",
+      }),
+    );
+  });
+
+  it.each([
+    "The company requires candidates with experience in precision machining.",
+    "Le candidat doit avoir une expérience en usinage de haute précision.",
+    "Experience in wood and energy preferred.",
+    "L'entreprise recherche un candidat avec une expérience dans les métiers du bois et de l'énergie.",
+  ])("does not turn targeted candidate requirements into employer facts: %s", async (description) => {
+    const result = await extractor.extract(observation(description));
+    expect(result.employerCharacteristics).toEqual([]);
+  });
+
+  it("keeps a generic industrial-company description conservative", async () => {
+    const result = await extractor.extract(
+      observation("Our client is a dynamic industrial company."),
+    );
+    expect(result.employerCharacteristics).toEqual([]);
+  });
 });
