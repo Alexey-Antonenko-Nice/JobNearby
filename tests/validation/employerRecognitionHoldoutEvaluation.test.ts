@@ -94,6 +94,40 @@ describe("independent employer recognition holdout evaluation", () => {
     }
   });
 
+  it("maps H02's same unknown organization to strong identity without recalibration", () => {
+    const h02 = run.results.find(({ caseId }) => caseId === "H02")!;
+    expect(h02.comparison.positiveSignals).toContainEqual(
+      expect.objectContaining({
+        kind: "EMPLOYER_IDENTITY",
+        strength: "STRONG",
+        explanation: "Same organization with unknown role: LOXAM.",
+      }),
+    );
+    expect(h02.assessment.identity.assessment).toBe("STRONG_POSITIVE");
+    expect(h02.confidence).toBe(0.85);
+    expect(h02.actualConfidenceZone).toBe("REVIEW_REQUIRED");
+  });
+
+  it("limits holdout changes to the rule-justified H02 and unscored H08 cases", () => {
+    const expectedCurrent = new Map<string, readonly [string, number]>([
+      ["H01", ["NO_MATCH", 0.24]],
+      ["H02", ["REVIEW_REQUIRED", 0.85]],
+      ["H03", ["NO_MATCH", 0.24]],
+      ["H04", ["NO_MATCH", 0.1]],
+      ["H05", ["NO_MATCH", 0.24]],
+      ["H06", ["NO_MATCH", 0.1]],
+      ["H07", ["NO_MATCH", 0.24]],
+      ["H08", ["REVIEW_REQUIRED", 0.85]],
+      ["H09", ["NO_MATCH", 0.1]],
+      ["H10", ["NO_MATCH", 0.1]],
+    ] as const);
+    for (const result of run.results) {
+      expect([result.actualConfidenceZone, result.confidence]).toEqual(
+        expectedCurrent.get(result.caseId),
+      );
+    }
+  });
+
   it("keeps holdout and regression records separate", () => {
     const regressionCaseIds = new Set(employerRecognitionCases.map(({ caseId }) => caseId));
     const regressionFixtureIds = new Set(employerRecognitionFixtures.map(({ id }) => id));

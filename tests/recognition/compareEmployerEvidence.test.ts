@@ -31,6 +31,9 @@ function evidence(
             input.employerCharacteristics.map(withProvenance),
         }
       : {}),
+    ...(input.externalIdentifiers !== undefined
+      ? { externalIdentifiers: input.externalIdentifiers.map(withProvenance) }
+      : {}),
   });
 }
 
@@ -74,6 +77,109 @@ describe("compareEmployerEvidence", () => {
         leftEvidence: expect.objectContaining({ value: "SOLINA FRANCE" }),
         rightEvidence: expect.objectContaining({ value: "ALSTOM TRANSPORT SA" }),
       }),
+    );
+  });
+
+  it("returns a strong identity signal for the same unknown-role organization", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", { organizations: [{ value: " LOXAM ", role: "UNKNOWN" } as never] }),
+      evidence("right", { organizations: [{ value: "loxam", role: "UNKNOWN" } as never] }),
+    );
+
+    expect(comparison.positiveSignals).toEqual([
+      expect.objectContaining({
+        kind: "EMPLOYER_IDENTITY",
+        strength: "STRONG",
+        leftEvidence: expect.objectContaining({ value: "LOXAM", role: "UNKNOWN" }),
+        rightEvidence: expect.objectContaining({ value: "loxam", role: "UNKNOWN" }),
+      }),
+    ]);
+    expect(comparison.contradictions).toEqual([]);
+  });
+
+  it("returns a strong identity signal across matching employer and unknown roles", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", { organizations: [{ value: "ACME", role: "EMPLOYER" } as never] }),
+      evidence("right", { organizations: [{ value: "acme", role: "UNKNOWN" } as never] }),
+    );
+
+    expect(comparison.positiveSignals).toEqual([
+      expect.objectContaining({ kind: "EMPLOYER_IDENTITY", strength: "STRONG" }),
+    ]);
+  });
+
+  it("keeps different unknown-role organizations neutral", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", { organizations: [{ value: "Agency A", role: "UNKNOWN" } as never] }),
+      evidence("right", { organizations: [{ value: "Agency B", role: "UNKNOWN" } as never] }),
+    );
+
+    expect(comparison).toEqual({ positiveSignals: [], contradictions: [] });
+  });
+
+  it.each(["RECRUITMENT_AGENCY", "STAFFING_AGENCY"] as const)(
+    "suppresses unknown identity inference when %s explicitly classifies the same name",
+    (intermediaryRole) => {
+      const organizations = [
+        { value: "ACTUA", role: "UNKNOWN" },
+        { value: "ACTUA", role: intermediaryRole },
+      ] as never;
+      const comparison = compareEmployerEvidence(
+        evidence("left", { organizations }),
+        evidence("right", { organizations }),
+      );
+
+      expect(comparison.positiveSignals).toEqual([
+        expect.objectContaining({ kind: "INTERMEDIARY_CONTEXT", strength: "WEAK" }),
+      ]);
+      expect(comparison.positiveSignals).not.toContainEqual(
+        expect.objectContaining({ kind: "EMPLOYER_IDENTITY" }),
+      );
+    },
+  );
+
+  it("does not treat an explicit intermediary matching an employer name as employer identity", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", { organizations: [{ value: "ACME", role: "EMPLOYER" } as never] }),
+      evidence("right", { organizations: [{ value: "ACME", role: "RECRUITMENT_AGENCY" } as never] }),
+    );
+
+    expect(comparison).toEqual({ positiveSignals: [], contradictions: [] });
+  });
+
+  it("promotes the same unknown organization even when the publication provider is the same", () => {
+    const unknownOrganization = [{ value: "ACME", role: "UNKNOWN" } as never];
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        organizations: unknownOrganization,
+        externalIdentifiers: [{ value: "left-id", provider: "Board A", identifierType: "SOURCE_EXTERNAL_ID" } as never],
+      }),
+      evidence("right", {
+        organizations: unknownOrganization,
+        externalIdentifiers: [{ value: "right-id", provider: "Board A", identifierType: "SOURCE_EXTERNAL_ID" } as never],
+      }),
+    );
+
+    expect(comparison.positiveSignals).toContainEqual(
+      expect.objectContaining({ kind: "EMPLOYER_IDENTITY", strength: "STRONG" }),
+    );
+  });
+
+  it("promotes the same unknown organization across different publication providers", () => {
+    const unknownOrganization = [{ value: "ACME", role: "UNKNOWN" } as never];
+    const comparison = compareEmployerEvidence(
+      evidence("left", {
+        organizations: unknownOrganization,
+        externalIdentifiers: [{ value: "left-id", provider: "Board A", identifierType: "SOURCE_EXTERNAL_ID" } as never],
+      }),
+      evidence("right", {
+        organizations: unknownOrganization,
+        externalIdentifiers: [{ value: "right-id", provider: "Board B", identifierType: "SOURCE_EXTERNAL_ID" } as never],
+      }),
+    );
+
+    expect(comparison.positiveSignals).toContainEqual(
+      expect.objectContaining({ kind: "EMPLOYER_IDENTITY", strength: "STRONG" }),
     );
   });
 

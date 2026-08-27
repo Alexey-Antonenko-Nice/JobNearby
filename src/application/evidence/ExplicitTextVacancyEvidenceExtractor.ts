@@ -86,8 +86,21 @@ function classifyDisplayedIntermediary(
   displayedCompanyName: string | undefined,
   sourceName: string,
 ): "RECRUITMENT_AGENCY" | "STAFFING_AGENCY" | null {
+  if (displayedCompanyName === undefined) {
+    return null;
+  }
+
+  const escapedDisplayedName = escapeRegExp(displayedCompanyName.trim());
   if (
-    displayedCompanyName === undefined ||
+    new RegExp(
+      `${escapedDisplayedName}\\s+is\\s+an?\\s+employment\\s+agency\\b`,
+      "iu",
+    ).test(text)
+  ) {
+    return "STAFFING_AGENCY";
+  }
+
+  if (
     normalizeForComparison(displayedCompanyName) === normalizeForComparison(sourceName)
   ) {
     return null;
@@ -95,7 +108,7 @@ function classifyDisplayedIntermediary(
 
   const nameRanges = findRanges(
     text,
-    new RegExp(escapeRegExp(displayedCompanyName.trim()), "giu"),
+    new RegExp(escapedDisplayedName, "giu"),
   );
   const descriptions = [
     ...findRanges(

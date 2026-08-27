@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -34,7 +35,7 @@ describe("independent employer recognition holdout report", () => {
     }
   });
 
-  it("preserves the first independent evaluation as an exact baseline report", () => {
+  it("preserves the first independent evaluation as an immutable historical report", () => {
     const baseline = readFileSync(
       join(
         process.cwd(),
@@ -44,7 +45,11 @@ describe("independent employer recognition holdout report", () => {
       ),
       "utf8",
     );
-    expect(report).toBe(baseline);
+    expect(createHash("sha256").update(baseline).digest("hex")).toBe(
+      "a368470caabf097194263fb7fde47aa0758a4878a1a13e2ade4f35fc1823b4b2",
+    );
+    expect(baseline).toContain("- Passed: 5");
+    expect(baseline).toContain("- Pass rate: 55.6%");
   });
 
   it("renders every case with evidence, comparison, dimensions, and diagnostics", () => {

@@ -20,7 +20,12 @@ export function compareEmployerEvidence(
   const positiveSignals: EmployerMatchSignal[] = [];
   const contradictions: EmployerMatchContradiction[] = [];
 
-  compareOrganizations(left.organizations, right.organizations, positiveSignals, contradictions);
+  compareOrganizations(
+    left.organizations,
+    right.organizations,
+    positiveSignals,
+    contradictions,
+  );
   compareLocations(left.locations, right.locations, positiveSignals);
   compareCharacteristics(
     left.employerCharacteristics,
@@ -70,6 +75,8 @@ function compareOrganizations(
     });
   }
 
+  compareAmbiguousOrganizations(left, right, signals);
+
   const intermediaryRoles = ["RECRUITMENT_AGENCY", "STAFFING_AGENCY"] as const;
   for (const role of intermediaryRoles) {
     const leftIntermediaries = uniqueOrganizations(left.filter((item) => item.role === role));
@@ -89,6 +96,73 @@ function compareOrganizations(
       }
     }
   }
+}
+
+function compareAmbiguousOrganizations(
+  left: readonly OrganizationEvidence[],
+  right: readonly OrganizationEvidence[],
+  signals: EmployerMatchSignal[],
+): void {
+  const eligibleRoles = new Set(["EMPLOYER", "UNKNOWN"]);
+  const leftEligible = preferExplicitEmployer(
+    left.filter(({ role }) => eligibleRoles.has(role)),
+  );
+  const rightEligible = preferExplicitEmployer(
+    right.filter(({ role }) => eligibleRoles.has(role)),
+  );
+
+  for (const leftOrganization of leftEligible) {
+    const rightOrganization = rightEligible.find(
+      ({ value }) => normalize(value) === normalize(leftOrganization.value),
+    );
+    if (
+      rightOrganization === undefined ||
+      (leftOrganization.role === "EMPLOYER" &&
+        rightOrganization.role === "EMPLOYER") ||
+      hasExplicitIntermediaryRole(left, leftOrganization.value) ||
+      hasExplicitIntermediaryRole(right, rightOrganization.value)
+    ) {
+      continue;
+    }
+
+    signals.push({
+      kind: "EMPLOYER_IDENTITY",
+      strength: "STRONG",
+      explanation:
+        leftOrganization.role === "UNKNOWN" &&
+        rightOrganization.role === "UNKNOWN"
+          ? `Same organization with unknown role: ${leftOrganization.value}.`
+          : `Same organization across employer and unknown roles: ${leftOrganization.value}.`,
+      leftEvidence: leftOrganization,
+      rightEvidence: rightOrganization,
+    });
+  }
+}
+
+function preferExplicitEmployer(
+  organizations: readonly OrganizationEvidence[],
+): OrganizationEvidence[] {
+  const values = new Map<string, OrganizationEvidence>();
+  for (const organization of organizations) {
+    const key = normalize(organization.value);
+    const current = values.get(key);
+    if (current === undefined || organization.role === "EMPLOYER") {
+      values.set(key, organization);
+    }
+  }
+  return [...values.values()];
+}
+
+function hasExplicitIntermediaryRole(
+  organizations: readonly OrganizationEvidence[],
+  value: string,
+): boolean {
+  return organizations.some(
+    (organization) =>
+      (organization.role === "RECRUITMENT_AGENCY" ||
+        organization.role === "STAFFING_AGENCY") &&
+      normalize(organization.value) === normalize(value),
+  );
 }
 
 function compareLocations(

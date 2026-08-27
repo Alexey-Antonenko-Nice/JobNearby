@@ -99,6 +99,40 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
     },
   );
 
+  it("classifies an explicitly named employment agency as staffing", async () => {
+    const result = await extractor.extract(
+      observation({
+        displayedCompanyName: "Agency Alpha",
+        description: "Agency Alpha is an employment agency.",
+      }),
+    );
+    expect(result.organizations).toContainEqual(
+      expect.objectContaining({
+        value: "Agency Alpha",
+        role: "STAFFING_AGENCY",
+      }),
+    );
+  });
+
+  it("accepts an explicit employment-agency self-description even when source and display names match", async () => {
+    const result = await extractor.extract({
+      ...observation({
+        displayedCompanyName: "Agency Alpha",
+        description: "Agency Alpha is an employment agency.",
+      }),
+      source: {
+        sourceType: "RECRUITMENT_AGENCY",
+        sourceName: "Agency Alpha",
+      },
+    });
+    expect(result.organizations).toContainEqual(
+      expect.objectContaining({
+        value: "Agency Alpha",
+        role: "STAFFING_AGENCY",
+      }),
+    );
+  });
+
   it("extracts and normalizes the named recruiter Emma MICHEL", async () => {
     const result = await extractor.extract(
       observation({

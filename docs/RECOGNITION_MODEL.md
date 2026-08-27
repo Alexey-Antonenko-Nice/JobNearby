@@ -2046,6 +2046,18 @@ Recognition conclusions must be based on preserved observations.
 
 **R17 — Unknown is a valid and useful recognition state.**
 
+Exact equality between two `UNKNOWN`-role organization values is meaningful
+identity evidence, but remains weaker than equality between two explicit employers:
+it produces a strong rather than very-strong signal. Exact equality across one
+`EMPLOYER` role and one `UNKNOWN` role is treated at the same strong level. This
+does not reinterpret unknown evidence as employer evidence.
+
+An explicit `RECRUITMENT_AGENCY` or `STAFFING_AGENCY` classification for the same
+normalized organization name suppresses this strong identity inference. Shared
+intermediaries remain weak contextual evidence, and different unknown-role names
+remain neutral. Publication-provider equality does not suppress unknown-role
+organization comparison; suppression requires explicit intermediary-role evidence.
+
 ---
 
 # 61. Next Document

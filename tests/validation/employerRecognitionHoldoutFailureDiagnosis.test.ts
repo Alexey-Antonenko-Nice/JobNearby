@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -45,8 +46,10 @@ describe("employer recognition holdout failure diagnosis", () => {
     expect(h02.rightEvidence.organizations).toMatchObject([
       { value: "LOXAM", role: "UNKNOWN", provenance: { extractionMethod: "DIRECT_FIELD", confidence: 1 } },
     ]);
-    expect(h02.comparison.positiveSignals).toHaveLength(0);
-    expect(h02.assessment.identity.assessment).toBe("UNKNOWN");
+    expect(h02.comparison.positiveSignals).toContainEqual(
+      expect.objectContaining({ kind: "EMPLOYER_IDENTITY", strength: "STRONG" }),
+    );
+    expect(h02.assessment.identity.assessment).toBe("STRONG_POSITIVE");
     expect(diagnosis.earliestFailureStage).toBe("COMPARISON");
     expect(diagnosis.engineeringHypothesis).toContain("not a normalization, alias, or parent-brand/business-unit failure");
     expect(report).not.toMatch(/shared LOXAM parent (?:is|was|exists)/iu);
@@ -81,12 +84,13 @@ describe("employer recognition holdout failure diagnosis", () => {
 
   it("generates the diagnosis deterministically and separates facts from interpretation", () => {
     expect(renderHoldoutFailureDiagnosisReport(run)).toBe(report);
-    expect(
-      readFileSync(
-        join(process.cwd(), "validation", "employer-recognition-holdout", "FAILURE_DIAGNOSIS.md"),
-        "utf8",
-      ),
-    ).toBe(report);
+    const preservedDiagnosis = readFileSync(
+      join(process.cwd(), "validation", "employer-recognition-holdout", "FAILURE_DIAGNOSIS.md"),
+      "utf8",
+    );
+    expect(createHash("sha256").update(preservedDiagnosis).digest("hex")).toBe(
+      "99eb8dccb7bf84db2ed2165eed16e595eb141e226d38479accd5c169cb604faa",
+    );
     expect(report).toContain("### Observed pipeline facts");
     expect(report).toContain("### Engineering interpretation");
     expect(report.match(/^## H(?:01|02|07|09)$/gmu)).toHaveLength(4);
@@ -98,11 +102,13 @@ describe("employer recognition holdout failure diagnosis", () => {
     expect(JSON.stringify({ employerRecognitionHoldoutCases, employerRecognitionHoldoutFixtures })).toBe(snapshot);
   });
 
-  it("keeps the preserved baseline report byte-for-byte reproducible", () => {
+  it("keeps the preserved baseline report byte-for-byte unchanged", () => {
     const baseline = readFileSync(
       join(process.cwd(), "validation", "employer-recognition-holdout", "BASELINE_REPORT.md"),
       "utf8",
     );
-    expect(renderEmployerRecognitionHoldoutReport(run)).toBe(baseline);
+    expect(createHash("sha256").update(baseline).digest("hex")).toBe(
+      "a368470caabf097194263fb7fde47aa0758a4878a1a13e2ade4f35fc1823b4b2",
+    );
   });
 });

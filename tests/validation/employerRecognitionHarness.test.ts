@@ -114,6 +114,27 @@ describe("employer recognition validation harness", () => {
     }
   });
 
+  it("keeps explicitly described ACTUA and SUPPLAY intermediaries out of employer identity", async () => {
+    const run = await runEmployerRecognitionValidation();
+    for (const caseId of [
+      "different-actua-anonymous-clients",
+      "different-supplay-anonymous-clients",
+    ]) {
+      const result = run.results.find((candidate) => candidate.caseId === caseId)!;
+      expect(result.actualConfidenceZone).toBe("NO_MATCH");
+      expect(result.outcome).toBe("PASS");
+      expect(result.comparison.positiveSignals).toContainEqual(
+        expect.objectContaining({
+          kind: "INTERMEDIARY_CONTEXT",
+          strength: "WEAK",
+        }),
+      );
+      expect(result.comparison.positiveSignals).not.toContainEqual(
+        expect.objectContaining({ kind: "EMPLOYER_IDENTITY" }),
+      );
+    }
+  });
+
   it("does not mutate corpus fixtures or cases and is deterministic", async () => {
     const snapshot = JSON.stringify({
       employerRecognitionCases,
