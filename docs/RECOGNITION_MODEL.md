@@ -256,6 +256,14 @@ scale, wood/energy/heavy-industry activity, and precision machining. Benchmark
 labels and downstream comparison, aggregation, calibration, and policy remain fixed;
 recognition improvements must be measured against the unchanged corpus.
 
+M3.3 is the regression-validation asset: its known cases may reveal gaps, and it
+must remain green after recognition changes made in response to those gaps. M3.4
+uses a separate, frozen holdout under `validation/employer-recognition-holdout` to
+measure the frozen engine on cases that did not influence its design. Holdout
+labels are established before evaluation, and M3.4.1 intentionally stores only the
+data and integrity rules without running recognition against it. After results are
+observed, those cases are no longer pristine unseen data for later model changes.
+
 ---
 
 # 5. Evidence
