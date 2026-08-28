@@ -102,3 +102,36 @@ Persistence, repositories, acquisition, adapters, richer resolvers, publication
 grouping, enrichment, shortage analysis, CRM/application status, user notes, UI
 cards, and AI-assisted processing are outside M4.1. Later adapters may translate
 existing evidence and recognition results into normalized canonicalization input.
+
+## Current Pipeline Adapter
+
+M4.2 adds `ExistingPipelineCanonicalVacancyAdapter` in the application layer. The
+caller supplies observations already believed to represent one vacancy, their
+existing extracted-evidence aggregates, an optional employer cluster, a Job Nearby
+canonical ID, and derivation metadata. The adapter builds M4.1 normalized candidates
+and delegates resolution to the existing canonicalizer; it performs no grouping,
+extraction, matching, persistence, enrichment, or CRM work.
+
+Current mappings are deliberately narrow:
+
+- source titles become role candidates;
+- explicit employer, recruitment-agency, staffing-agency, publisher, and unknown
+  organization evidence become conservative organization relationships;
+- a supplied employer cluster adds a separate employer relationship, including
+  when unresolved;
+- workplace location is preferred, followed by employer location and then raw
+  displayed location; recruiter locations and service territories are excluded;
+- employer `INDUSTRY` characteristics become industry-context candidates;
+- raw contract and salary fields are retained without term or numeric parsing.
+
+Provider external IDs remain traceability evidence and never become canonical
+vacancy identity. Publication language, work mode, remote eligibility, travel,
+requirements, functional context, position count, and lifecycle remain `UNKNOWN`
+because the current pipeline does not supply reliable normalized values for them.
+Richer coverage requires future extraction/normalization work and must not be
+invented inside this adapter.
+
+Evidence-reference IDs are deterministic SHA-256 identifiers derived from source
+observation ID, evidence kind, role/category qualifier, and normalized evidence
+value. They are not array positions or persistent database IDs, and every reference
+continues to trace to a supplied observation.
