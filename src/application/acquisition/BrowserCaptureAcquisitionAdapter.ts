@@ -4,11 +4,18 @@ import {
   type AcquisitionPackage,
 } from "../../domain/acquisition/AcquisitionPackage.js";
 import type { BrowserCapturePayload } from "./BrowserCapturePayload.js";
+import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
+import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
+import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BROWSER_HTML_BYTES = 5 * 1024 * 1024;
 
 export class BrowserCaptureAcquisitionAdapter {
+  private readonly jsonLdExtractor = new LiteralJsonLdDocumentExtractor();
+  private readonly jobPostingExtractor = new SchemaOrgJobPostingExtractor();
+  private readonly jobPostingProjector = new SchemaOrgJobPostingProjector();
+
   toAcquisitionPackage(
     payload: BrowserCapturePayload,
     acquisitionId: AcquisitionId,
@@ -23,6 +30,12 @@ export class BrowserCaptureAcquisitionAdapter {
       ? undefined
       : validateContent(payload.html, "Page HTML", MAX_BROWSER_HTML_BYTES);
     const acquiredAt = parseCapturedAt(payload.capturedAt);
+    const jobPostings = html === undefined
+      ? []
+      : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(html));
+    const structuredFields = jobPostings.length === 1
+      ? this.jobPostingProjector.project(jobPostings[0]!)
+      : undefined;
 
     return createAcquisitionPackage({
       acquisitionId,
@@ -36,7 +49,16 @@ export class BrowserCaptureAcquisitionAdapter {
       content: {
         text: normalizeVisibleText(visibleText),
         ...(html !== undefined ? { html } : {}),
+        ...(jobPostings.length > 0
+          ? {
+              structuredPayload: {
+                format: "SCHEMA_ORG_JOB_POSTING_JSON_LD",
+                jobPostings,
+              },
+            }
+          : {}),
       },
+      ...(structuredFields !== undefined ? { structuredFields } : {}),
       metadata: payload.browserMetadata === undefined
         ? {}
         : structuredClone(payload.browserMetadata),
