@@ -180,3 +180,39 @@ Likewise, `JobPosting.identifier` remains structured source data and never becom
 `SourceReference.externalId`; provider listing identity and recruiter references
 can use different namespaces. No provider-specific hostname rule, DOM selector,
 recognition behavior, or historical backfill is part of this enrichment.
+
+## Provider vacancy external IDs
+
+M5.4 conservatively records a provider-owned listing identifier when a future
+browser capture URL matches one of the URL forms established by the real corpus:
+
+| Provider namespace | Recognized URL state |
+| --- | --- |
+| `hellowork.com` | locale `/emplois/<numeric-id>[.html]` route |
+| `meteojob.com` | exact `/jobs/<numeric-id>` route |
+| `indeed.com` | non-empty `vjk` query parameter |
+| `linkedin.com` | non-empty `currentJobId` on a `/jobs/` route |
+| `jobleads.com` | exact `/job/<id>` route |
+
+Extraction uses the parsed URL, requires the URL hostname to match the normalized
+source namespace, preserves the identifier as a string, and is non-fatal. Unknown,
+unrecognized, empty, mismatched, or malformed inputs simply produce no external ID.
+Indeed and LinkedIn split-view state may be stale relative to visible content; M5.4
+records the explicit browser URL state without claiming body verification.
+
+Jooble is intentionally unsupported. Its `/desc/<id>` page value has not proven to
+be stable vacancy identity: apparently repeated vacancies appeared under different
+values in the real corpus. A provider page identifier is not automatically
+equivalent to stable vacancy identity.
+
+`SourceReference.externalId` means an identifier believed to belong to the source
+provider's vacancy/listing namespace. It is not a universal vacancy ID, employer or
+recruiter reference, visible reference, campaign/session value, or Schema.org
+`JobPosting.identifier`. URL identity and JSON-LD identifiers remain preserved
+side-by-side without reconciliation.
+
+The browser adapter places a recognized value in `AcquisitionPackage.externalId`;
+the unchanged M5.1 mapper then places it in `SourceReference.externalId`. Existing
+M3.5 behavior can consequently recognize repeated captures with the same provider
+namespace and exact ID. M5.4 does not change that comparator, inspect DOM content,
+deduplicate captures, migrate the schema, or backfill historical observations.
