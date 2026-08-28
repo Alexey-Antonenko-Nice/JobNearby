@@ -308,6 +308,7 @@ Future synchronization must not assume that private user history can be uploaded
 The initial domain/application modules should be:
 
 ```text
+acquisition
 capture
 recognition
 employers
@@ -329,6 +330,11 @@ Responsibility:
 
 > Convert incoming vacancy material into preserved source observations.
 
+The upstream acquisition module defines the transient, transport-neutral
+`AcquisitionPackage`. A pure mapper converts that package into the capture domain's
+immutable `SourceObservation`; evidence extraction and interpretation remain
+downstream. See `ACQUISITION.md`.
+
 Inputs may eventually include:
 
 ```text
@@ -345,11 +351,11 @@ The capture module should not perform employer resolution itself.
 Conceptually:
 
 ```text
-Incoming Capture
+External mechanism
       ↓
-Source Adapter
+AcquisitionPackage
       ↓
-Capture Normalization
+Acquisition boundary
       ↓
 SourceObservation
       ↓
