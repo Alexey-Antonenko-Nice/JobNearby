@@ -2476,6 +2476,8 @@ The following rules are established by Architecture v0.1.
 
 **A20 — Avoid premature infrastructure, generalization, and distributed architecture.**
 
+**A21 — Canonical vacancy persistence is accessed through a domain repository port. The SQLite adapter stores a replaceable current projection with explicit evidence links; source observations remain immutable, and projection history is deferred.**
+
 ---
 
 # 104. Architecture Baseline

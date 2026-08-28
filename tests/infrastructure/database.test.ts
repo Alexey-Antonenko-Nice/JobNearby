@@ -50,8 +50,39 @@ describe("database migrations", () => {
       `)
       .all();
 
-    expect(rows).toHaveLength(1);
+    expect(rows).toEqual([{ version: 1 }, { version: 2 }]);
 
+    db.close();
+  });
+
+  it("creates the structured canonical vacancy schema and lookup indexes", () => {
+    const db = createDatabase(":memory:");
+    const migration = db.prepare(`
+      SELECT version, name FROM schema_migrations WHERE version = 2
+    `).get();
+    expect(migration).toEqual({
+      version: 2,
+      name: "create_canonical_vacancies",
+    });
+
+    const objects = db.prepare(`
+      SELECT type, name FROM sqlite_master
+      WHERE name LIKE 'canonical_vacanc%'
+         OR name LIKE 'idx_canonical_vacancy%'
+    `).all() as Array<{ type: string; name: string }>;
+    const names = new Set(objects.map(({ name }) => name));
+    for (const expectedName of [
+      "canonical_vacancies",
+      "canonical_vacancy_fields",
+      "canonical_vacancy_field_alternatives",
+      "canonical_vacancy_organization_relationships",
+      "canonical_vacancy_evidence_references",
+      "idx_canonical_vacancy_source_observation",
+      "idx_canonical_vacancy_relationship_employer_cluster",
+      "idx_canonical_vacancy_relationship_organization",
+    ]) {
+      expect(names).toContain(expectedName);
+    }
     db.close();
   });
 });

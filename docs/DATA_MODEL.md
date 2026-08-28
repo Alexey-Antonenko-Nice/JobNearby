@@ -124,6 +124,11 @@ evidence references, uncertainty, and conflicts without replacing observations o
 becoming private CRM state. Its Job Nearby identity is independent of provider IDs
 and employer-cluster identity. See `CANONICAL_VACANCY.md`.
 
+The durable canonical-vacancy projection stores observation membership, evidence
+references, field states and alternatives, and organization relationships as
+structured relational data. Re-saving atomically replaces that current projection;
+it does not mutate observations or yet retain projection history.
+
 It represents what Job Nearby captured from one source at one moment.
 
 Conceptual structure:

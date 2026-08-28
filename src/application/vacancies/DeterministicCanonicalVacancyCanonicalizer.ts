@@ -61,6 +61,9 @@ export class DeterministicCanonicalVacancyCanonicalizer
     return {
       id,
       sourceObservationIds,
+      evidenceReferences: input.evidenceReferences.map((reference) => ({
+        ...reference,
+      })),
       ...fields,
       organizationRelationships,
       canonicalizationStatus: Object.values(fields).some(

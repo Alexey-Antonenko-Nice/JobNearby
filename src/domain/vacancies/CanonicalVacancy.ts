@@ -1,6 +1,9 @@
 import type { SourceObservationId } from "../capture/SourceObservation.js";
 import type { EmployerClusterId } from "../recognition/EmployerCluster.js";
-import type { CanonicalEvidenceRefId } from "./CanonicalEvidenceReference.js";
+import type {
+  CanonicalEvidenceReference,
+  CanonicalEvidenceRefId,
+} from "./CanonicalEvidenceReference.js";
 import type { CanonicalDerivationMetadata, CanonicalField } from "./CanonicalField.js";
 
 export type CanonicalVacancyId = string;
@@ -99,6 +102,7 @@ export type VacancyLifecycleStatus = "OPEN" | "CLOSED" | "EXPIRED";
 export interface CanonicalVacancy {
   readonly id: CanonicalVacancyId;
   readonly sourceObservationIds: readonly SourceObservationId[];
+  readonly evidenceReferences: readonly CanonicalEvidenceReference[];
   readonly role: CanonicalField<VacancyRole>;
   readonly organizationRelationships: readonly VacancyOrganizationRelationship[];
   readonly publicationLanguages: CanonicalField<readonly PublicationLanguage[]>;

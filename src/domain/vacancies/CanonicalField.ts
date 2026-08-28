@@ -46,6 +46,16 @@ export function createCanonicalDerivationMetadata(
 }
 
 export function createCanonicalField<T>(field: CanonicalField<T>): CanonicalField<T> {
+  const validStatuses: readonly CanonicalFieldStatus[] = [
+    "RESOLVED",
+    "PARTIAL",
+    "AMBIGUOUS",
+    "CONFLICTED",
+    "UNKNOWN",
+  ];
+  if (!validStatuses.includes(field.status)) {
+    throw new Error("Canonical field status is invalid.");
+  }
   validateConfidence(field.confidence);
   const alternatives = field.alternatives ?? [];
   for (const alternative of alternatives) {

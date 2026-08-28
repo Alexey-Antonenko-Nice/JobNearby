@@ -135,3 +135,20 @@ Evidence-reference IDs are deterministic SHA-256 identifiers derived from source
 observation ID, evidence kind, role/category qualifier, and normalized evidence
 value. They are not array positions or persistent database IDs, and every reference
 continues to trace to a supplied observation.
+
+## Persistence and retrieval
+
+M4.3 adds a domain-owned `CanonicalVacancyRepository` port with in-memory and
+SQLite adapters. Saving replaces the current canonical projection atomically while
+preserving the canonical vacancy ID. It never rewrites the immutable source
+observations from which that projection was derived. Projection history and
+algorithm-run history remain future work.
+
+SQLite stores fields, alternatives, organization relationships, observation
+membership, and evidence associations as structured rows. JSON is limited to the
+polymorphic values of canonical fields and alternatives. Closed status, field-name,
+and organization-role sets are enforced at the storage boundary, and retrieval
+revalidates the complete aggregate before returning it.
+
+Canonical vacancies remain public labor-market interpretations. CRM state, user
+notes, applications, and universal shortage flags do not belong in this repository.
