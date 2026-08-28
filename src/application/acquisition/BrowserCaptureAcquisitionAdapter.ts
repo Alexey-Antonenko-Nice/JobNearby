@@ -7,6 +7,7 @@ import type { BrowserCapturePayload } from "./BrowserCapturePayload.js";
 import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
 import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js";
+import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BROWSER_HTML_BYTES = 5 * 1024 * 1024;
@@ -15,6 +16,7 @@ export class BrowserCaptureAcquisitionAdapter {
   private readonly jsonLdExtractor = new LiteralJsonLdDocumentExtractor();
   private readonly jobPostingExtractor = new SchemaOrgJobPostingExtractor();
   private readonly jobPostingProjector = new SchemaOrgJobPostingProjector();
+  private readonly providerVacancyIdExtractor = new ConservativeProviderVacancyIdExtractor();
 
   toAcquisitionPackage(
     payload: BrowserCapturePayload,
@@ -30,6 +32,8 @@ export class BrowserCaptureAcquisitionAdapter {
       ? undefined
       : validateContent(payload.html, "Page HTML", MAX_BROWSER_HTML_BYTES);
     const acquiredAt = parseCapturedAt(payload.capturedAt);
+    const sourceName = sourceNameFromUrl(pageUrl);
+    const externalId = this.providerVacancyIdExtractor.extract({ sourceName, sourceUrl: pageUrl });
     const jobPostings = html === undefined
       ? []
       : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(html));
@@ -42,9 +46,10 @@ export class BrowserCaptureAcquisitionAdapter {
       acquiredAt,
       source: {
         sourceType: "BROWSER",
-        sourceName: sourceNameFromUrl(pageUrl),
+        sourceName,
       },
       sourceUrl: pageUrl,
+      ...(externalId !== undefined ? { externalId } : {}),
       ...(payload.pageTitle.trim().length > 0 ? { pageTitle: payload.pageTitle.trim() } : {}),
       content: {
         text: normalizeVisibleText(visibleText),

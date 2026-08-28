@@ -26,13 +26,14 @@ describe("BrowserCaptureAcquisitionAdapter", () => {
       acquiredAt: new Date("2026-08-28T09:00:00.000Z"),
       source: { sourceType: "BROWSER", sourceName: "hellowork.com" },
       sourceUrl: payload().pageUrl,
+      externalId: "123",
       pageTitle: payload().pageTitle,
       content: {
         text: "Technicien Maintenance H/F\n\nACTUA SAVERNE\nHEUFT France",
       },
       metadata: { userAgentFamily: "Chromium" },
     });
-    expect(result.externalId).toBeUndefined();
+    expect(result.externalId).toBe("123");
     expect(result.structuredFields).toBeUndefined();
     expect(result).not.toHaveProperty("employer");
   });
