@@ -118,6 +118,12 @@ This may differ from the source's own publication date.
 
 `SourceObservation` is the fundamental immutable evidence record.
 
+`CanonicalVacancy` is the separate, provider-independent interpretation of a
+recruitable role supported by one or more source observations. It preserves opaque
+evidence references, uncertainty, and conflicts without replacing observations or
+becoming private CRM state. Its Job Nearby identity is independent of provider IDs
+and employer-cluster identity. See `CANONICAL_VACANCY.md`.
+
 It represents what Job Nearby captured from one source at one moment.
 
 Conceptual structure:

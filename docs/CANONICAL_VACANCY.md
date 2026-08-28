@@ -1,0 +1,104 @@
+# Canonical Vacancy
+
+## Purpose and architectural position
+
+`CanonicalVacancy` is Job Nearby's current, revisable, provider-independent,
+evidence-backed interpretation of one recruitable role. It sits after acquisition,
+evidence extraction, normalization, publication/vacancy identity, and employer
+recognition, and before optional labor-market enrichment and private CRM behavior.
+
+```text
+External source → SourceObservation → evidence/recognition
+                → CanonicalVacancy → optional enrichment → private CRM/read models
+```
+
+Observation, interpretation, and user action remain separate. A canonical vacancy
+does not replace a source capture, an employer cluster, a publication or campaign,
+a private job opportunity, or a UI card. Multiple immutable observations can support
+one canonical vacancy, and the interpretation may be recalculated as evidence changes.
+
+## Invariants
+
+- **CV-INV-01:** canonicalization never replaces or mutates `SourceObservation`.
+- **CV-INV-02:** every derived fact references supplied canonical evidence IDs.
+- **CV-INV-03:** missing evidence produces `UNKNOWN`, never false-like defaults.
+- **CV-INV-04:** incompatible evidence is retained as alternatives and conflicts.
+- **CV-INV-05:** displayed companies and recruiters are not promoted to employer.
+- **CV-INV-06:** publication language and working-language requirements are separate.
+- **CV-INV-07:** work mode, work location, remote eligibility, and travel are separate.
+- **CV-INV-08:** canonical vacancies contain no private CRM state.
+- **CV-INV-09:** they contain no universal shortage-occupation Boolean.
+- **CV-INV-10:** unresolved or absent employer identity is valid.
+- **CV-INV-11:** optional enrichment is outside the boundary and cannot invalidate it.
+- **CV-INV-12:** provider identifiers never become `CanonicalVacancyId`.
+
+## Evidence references
+
+M4.1 does not alter M3 evidence interfaces. Callers provide opaque
+`CanonicalEvidenceReference` records with an application-generated ID, source
+observation ID, and kind. Candidate fields and organization relationships store
+those IDs. The canonicalizer validates that every used ID exists and traces to an
+observation in the supplied observation set. IDs are not derived from array
+positions or provider IDs; persistence is deliberately deferred.
+
+## Canonical fields
+
+Every canonical dimension uses `CanonicalField<T>`:
+
+- `UNKNOWN`: no usable evidence, no value, and no alternatives.
+- `RESOLVED`: all usable candidates represent one normalized value; supporting
+  evidence is merged.
+- `CONFLICTED`: incompatible values remain as evidence-backed alternatives; no
+  source priority silently selects a winner.
+- `AMBIGUOUS`: more than one interpretation is possible without direct conflict.
+- `PARTIAL`: useful information exists but is incomplete.
+
+The generic M4.1 resolver emits `UNKNOWN`, `RESOLVED`, or `CONFLICTED`.
+`AMBIGUOUS` and `PARTIAL` remain valid for later specialized resolvers. Confidence,
+when supplied, must remain in `[0,1]`; it is not employer-match confidence.
+
+## Independent dimensions
+
+Role, organization relationships, publication languages, work location, work mode,
+remote-eligible countries, travel, engagement, compensation, experience, education,
+skills, working-language requirements, functional context, industry context,
+position count, and lifecycle remain independent. Unknown facts use field status
+rather than invented values.
+
+Organization roles are `DISPLAYED_COMPANY`, `EMPLOYER`, `RECRUITER`,
+`STAFFING_AGENCY`, `CONSULTANCY`, `CLIENT`, `PROJECT_CUSTOMER`, and `UNKNOWN`.
+Every relationship needs `organizationId`, `employerClusterId`, or `rawName`, plus
+supporting evidence. An unresolved employer cluster is valid. These roles do not
+rewrite M3 `OrganizationEvidenceRole` values.
+
+## Canonicalization boundary
+
+`CanonicalVacancyCanonicalizer.canonicalize()` is pure. The caller supplies the
+Job Nearby vacancy ID, observations already believed to concern the role, evidence
+references, normalized candidates, organization relationships, and derivation
+metadata. The boundary does not fetch, scrape, group publications, run recognition,
+enrich, inspect CRM, or persist.
+
+Top-level status is `CONFLICTED` when any field conflicts, otherwise `USABLE` when
+role is resolved, and otherwise `PARTIAL`. `USABLE` does not mean complete and does
+not require resolved employer identity.
+
+## Validation scenarios
+
+- HEUFT: employer, CDI, base location, and extensive travel remain independent.
+- Skayl and ADSEARCH: recruiters do not become employers; unresolved employer
+  clusters remain valid.
+- TE Connectivity: German publication language coexists with required English and
+  preferred German working-language evidence.
+- Oxigent: Spain and remote work do not invent remote-eligibility geography.
+- Brightsmith: HYBRID/ON_SITE and CDD/freelance conflicts retain both alternatives.
+- AbbVie: functional context remains separate from pharmaceutical industry context.
+- Akkodis: consultancy and client relationships do not imply employer.
+- Vulcain: on-site work and European travel coexist independently.
+
+## Explicit separation and future work
+
+Persistence, repositories, acquisition, adapters, richer resolvers, publication
+grouping, enrichment, shortage analysis, CRM/application status, user notes, UI
+cards, and AI-assisted processing are outside M4.1. Later adapters may translate
+existing evidence and recognition results into normalized canonicalization input.

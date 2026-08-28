@@ -30,6 +30,12 @@ The architecture should avoid both extremes:
 
 The recommended initial architecture is therefore a **modular TypeScript monolith with explicit domain boundaries**.
 
+The public-market `vacancies` domain contains the provider-independent,
+evidence-backed `CanonicalVacancy` interpretation. Its pure application boundary
+sits after publication/employer recognition and before optional labor-market
+enrichment and private user-history/CRM concerns. It does not own capture,
+recognition, persistence, or user action state. See `CANONICAL_VACANCY.md`.
+
 ---
 
 # 2. Primary Architectural Goal
@@ -88,6 +94,7 @@ Conceptually:
      │                                   │
      │ Capture                           │
      │ Recognition                       │
+     │ Vacancies                         │
      │ Employers                         │
      │ Recruitment                       │
      │ User History                      │
