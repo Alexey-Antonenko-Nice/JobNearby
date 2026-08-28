@@ -1,5 +1,7 @@
 {
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "capture:server": "npm run build && node dist/infrastructure/http/runBrowserCaptureServer.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

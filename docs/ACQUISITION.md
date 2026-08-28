@@ -73,3 +73,73 @@ M5.1 adds no scraper, HTTP client, browser automation, provider selector, schedu
 queue, acquisition persistence, evidence rule, recognition behavior, canonicalizer,
 CRM behavior, or UI. Future acquisition mechanisms plug into this contract without
 moving their provider logic into the capture or recognition domains.
+
+## Generic Browser Capture
+
+M5.2 provides one browser integration: a small unpacked Chrome/Chromium extension
+in `browser-extension/` backed by a narrow local HTTP service. This is the smallest
+maintainable option for a one-click active-page capture in the current repository;
+it adds no provider selectors or general web API framework.
+
+```text
+browser extension
+  → BrowserCapturePayload
+  → POST http://127.0.0.1:4317/acquisition/browser
+  → BrowserCaptureAcquisitionAdapter
+  → AcquisitionPackage
+  → DeterministicAcquisitionCaptureMapper
+  → existing SqliteSourceObservationRepository
+```
+
+The extension reads `window.location.href`, `document.title`, and generic visible
+text from `document.body.innerText`. It optionally includes the current
+`document.documentElement.outerHTML`. Visible text receives only line-ending
+normalization and surrounding-whitespace trimming. Page title remains acquisition
+metadata; no title, employer, company, location, publication time, contract, or
+external vacancy ID is inferred.
+
+The adapter derives a conservative source name from the lower-case hostname,
+removing a leading `www.` or generic two-letter locale subdomain. A URL without a
+hostname uses `browser`. It always
+uses acquisition source type `BROWSER`; it does not guess whether the site is a job
+board or employer website.
+
+Visible text is limited to 2 MiB and optional HTML to 5 MiB. The complete JSON
+request is limited to 8 MiB. Oversized content is rejected with an error and is
+never silently truncated. Text remains the M5.1 `rawContent`; optional HTML remains
+preserved in acquisition metadata.
+
+The service binds only to `127.0.0.1:4317`, accepts the single browser-capture path,
+and grants CORS only to requesting Chrome/Firefox extension origins. It assumes a
+local user and has no accounts or remote exposure. The extension requests only
+`activeTab`, `scripting`, and access to that localhost endpoint—no history, cookies,
+downloads, or browsing-data permissions.
+
+Each request generates independent random acquisition and observation IDs. The URL,
+text, or timestamp never becomes identity, and repeated captures of an unchanged
+page are stored as separate immutable observations. A successful endpoint response
+contains only success, acquisition ID, source-observation ID, and observation time.
+The popup shows `Captured: <observation-id>` only after repository persistence;
+otherwise it displays a failure message. No downstream pipeline is invoked.
+
+### Installation and use
+
+1. Run `npm install` if dependencies are not installed.
+2. Start the local service with `npm run capture:server`. It creates or opens
+   `job-nearby.sqlite` in the repository directory.
+3. Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and
+   select the repository's `browser-extension` directory.
+4. Open an ordinary vacancy page, select the Job Nearby extension, and click
+   **Capture this page**.
+5. Confirm that the popup displays `Captured` and the new observation ID.
+
+For a manual verification, capture any normal public vacancy page, note the returned
+ID, and inspect the matching `source_observations` row in `job-nearby.sqlite`. Its
+source URL must equal the open page and `raw_content` must contain the visible
+vacancy text. Capturing the page again should return another observation ID and add
+another row.
+
+Known limitations: restricted browser pages cannot be scripted, very large pages
+are rejected, browser-rendered text may include navigation or cookie notices, and
+the local service must already be running. These are deliberate generic-capture
+tradeoffs; provider-specific refinement belongs in later adapters.
