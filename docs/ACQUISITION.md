@@ -143,3 +143,40 @@ Known limitations: restricted browser pages cannot be scripted, very large pages
 are rejected, browser-rendered text may include navigation or cookie notices, and
 the local service must already be running. These are deliberate generic-capture
 tradeoffs; provider-specific refinement belongs in later adapters.
+
+## Schema.org JobPosting acquisition
+
+M5.3 enriches future browser captures from standards-based JSON-LD already present
+in captured HTML. The application first locates literal
+`<script type="application/ld+json">` elements, parses each independently, and then
+detects `JobPosting` objects in direct documents, array roots, `@graph` roots, and
+`@type` arrays. It never executes scripts, resolves remote contexts, or fetches
+linked data. Malformed JSON-LD is skipped, so absence or failure cannot prevent the
+ordinary visible-text and HTML capture path.
+
+All detected JobPosting objects are retained unchanged under the acquisition
+content's structured payload with format `SCHEMA_ORG_JOB_POSTING_JSON_LD`. M5.1 then
+preserves that payload under `SourceObservation.metadata.acquisition`. If a page
+contains multiple postings, all are retained and no winner is projected.
+
+When exactly one posting exists, directly represented values may populate existing
+acquisition structured fields:
+
+- `title` becomes the displayed vacancy title;
+- `hiringOrganization.name` becomes `displayedCompanyName` only;
+- one simple `jobLocation` becomes readable location text without geocoding;
+- a valid `datePosted` becomes `publishedAt`;
+- string `employmentType` remains raw contract text;
+- deterministic `baseSalary` values retain explicit amount/range, currency, and
+  unit without conversion.
+
+The browser's visible text remains primary `rawContent`; JSON-LD `description` does
+not overwrite it. Unsupported, malformed, ambiguous, and multi-valued properties
+remain only in the raw structured object.
+
+`hiringOrganization` is source-published display data and is not a resolved
+employer or recruiter classification. In real pages it often names an intermediary.
+Likewise, `JobPosting.identifier` remains structured source data and never becomes
+`SourceReference.externalId`; provider listing identity and recruiter references
+can use different namespaces. No provider-specific hostname rule, DOM selector,
+recognition behavior, or historical backfill is part of this enrichment.
