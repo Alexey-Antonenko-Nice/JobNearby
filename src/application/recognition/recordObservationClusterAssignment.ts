@@ -4,6 +4,7 @@ import type {
   ObservationClusterAssignment,
   ObservationClusterAssignmentStatus,
 } from "../../domain/recognition/ObservationClusterAssignment.js";
+import { EffectiveAssignmentConflictError } from "../../domain/recognition/EmployerRecognitionPersistenceError.js";
 
 import {
   createObservationClusterAssignment,
@@ -33,9 +34,7 @@ export async function recordObservationClusterAssignment(
     );
 
     if (existingAccepted !== undefined) {
-      throw new Error(
-        `SourceObservation "${input.sourceObservationId}" already has an accepted assignment to EmployerCluster "${existingAccepted.employerClusterId}".`,
-      );
+      throw new EffectiveAssignmentConflictError(input.sourceObservationId);
     }
   }
 

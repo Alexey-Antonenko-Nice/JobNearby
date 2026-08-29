@@ -54,6 +54,10 @@ export class InMemoryEmployerClusterRepository
       return locationMatches && companyNameMatches;
     }).map(clone);
   }
+
+  deleteForRollback(id: EmployerClusterId): void {
+    this.clusters.delete(id);
+  }
 }
 
 function validateCluster(cluster: EmployerCluster): void {

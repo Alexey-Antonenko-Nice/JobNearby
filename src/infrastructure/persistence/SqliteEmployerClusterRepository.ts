@@ -25,28 +25,7 @@ export class SqliteEmployerClusterRepository implements EmployerClusterRepositor
   constructor(private readonly db: Database.Database) {}
 
   async save(cluster: EmployerCluster): Promise<void> {
-    validateCluster(cluster);
-    try {
-      this.db.prepare(`
-        INSERT INTO employer_clusters (
-          id, status, created_at, updated_at, resolved_employer_id,
-          primary_location_hint, display_label
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        cluster.id,
-        cluster.status,
-        cluster.createdAt.toISOString(),
-        cluster.updatedAt.toISOString(),
-        cluster.resolvedEmployerId ?? null,
-        cluster.primaryLocationHint ?? null,
-        cluster.displayLabel ?? null,
-      );
-    } catch (error) {
-      if (isUniqueConstraintError(error)) {
-        throw new Error(`EmployerCluster with id "${cluster.id}" already exists.`);
-      }
-      throw error;
-    }
+    insertEmployerCluster(this.db, cluster);
   }
 
   async findById(id: EmployerClusterId): Promise<EmployerCluster | null> {
@@ -83,6 +62,34 @@ export class SqliteEmployerClusterRepository implements EmployerClusterRepositor
           ?.includes(companyNameHint) === true;
       return locationMatches && companyNameMatches;
     });
+  }
+}
+
+export function insertEmployerCluster(
+  db: Database.Database,
+  cluster: EmployerCluster,
+): void {
+  validateCluster(cluster);
+  try {
+    db.prepare(`
+      INSERT INTO employer_clusters (
+        id, status, created_at, updated_at, resolved_employer_id,
+        primary_location_hint, display_label
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cluster.id,
+      cluster.status,
+      cluster.createdAt.toISOString(),
+      cluster.updatedAt.toISOString(),
+      cluster.resolvedEmployerId ?? null,
+      cluster.primaryLocationHint ?? null,
+      cluster.displayLabel ?? null,
+    );
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw new Error(`EmployerCluster with id "${cluster.id}" already exists.`);
+    }
+    throw error;
   }
 }
 

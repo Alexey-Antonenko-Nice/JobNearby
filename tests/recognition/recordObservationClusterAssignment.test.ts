@@ -148,7 +148,7 @@ describe("recordObservationClusterAssignment", () => {
         },
       ),
     ).rejects.toThrow(
-      'SourceObservation "observation-1" already has an accepted assignment to EmployerCluster "cluster-1".',
+      'SourceObservation "observation-1" already has an effective employer-cluster assignment.',
     );
   });
 
