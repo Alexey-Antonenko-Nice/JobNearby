@@ -12,6 +12,7 @@ import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVa
 import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProviderRecognizer.js";
 import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
 import { IndeedSelectedVacancyContextLocator } from "./IndeedSelectedVacancyContextLocator.js";
+import { LinkedInSelectedVacancyContextLocator } from "./LinkedInSelectedVacancyContextLocator.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
@@ -26,6 +27,7 @@ export class BrowserCaptureAcquisitionAdapter {
   private readonly contextLocators: Partial<Readonly<Record<ProviderKey, SelectedVacancyContextLocator>>> = {
     FRANCE_TRAVAIL: new FranceTravailSelectedVacancyContextLocator(),
     INDEED: new IndeedSelectedVacancyContextLocator(),
+    LINKEDIN: new LinkedInSelectedVacancyContextLocator(),
   };
 
   toAcquisitionPackage(
