@@ -14,6 +14,7 @@ import type {
   VacancyOrganizationRole,
 } from "../../domain/vacancies/CanonicalVacancy.js";
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
+import { normalizeVacancyProviderNamespace } from "../../domain/vacancy-identity/normalizeVacancyProviderNamespace.js";
 import { validateCanonicalVacancy } from "../../domain/vacancies/validateCanonicalVacancy.js";
 
 const fieldNames = [
@@ -232,6 +233,50 @@ export class SqliteCanonicalVacancyRepository
         derivedAt: parseDate(vacancyRow.derived_at),
       },
     });
+  }
+
+  async findByExactSourceIdentity(
+    providerNamespace: string,
+    externalId: string,
+  ): Promise<CanonicalVacancy | null> {
+    const normalizedProvider = normalizeVacancyProviderNamespace(providerNamespace);
+    const rows = this.db.prepare(`
+      SELECT DISTINCT
+        membership.canonical_vacancy_id,
+        observation.source_name
+      FROM canonical_vacancy_source_observations AS membership
+      INNER JOIN source_observations AS observation
+        ON observation.id = membership.source_observation_id
+      WHERE observation.external_id = ?
+    `).all(externalId) as Array<{
+      canonical_vacancy_id: string;
+      source_name: string;
+    }>;
+    const vacancyIds = [
+      ...new Set(
+        rows
+          .filter(
+            ({ source_name }) =>
+              normalizeVacancyProviderNamespace(source_name) === normalizedProvider,
+          )
+          .map(({ canonical_vacancy_id }) => canonical_vacancy_id),
+      ),
+    ];
+
+    if (vacancyIds.length > 1) {
+      throw new Error(
+        `Canonical vacancy identity integrity error: provider "${normalizedProvider}" and external ID "${externalId}" belong to multiple canonical vacancies.`,
+      );
+    }
+    if (vacancyIds[0] === undefined) return null;
+
+    const vacancy = await this.findById(vacancyIds[0]);
+    if (vacancy === null) {
+      throw new Error(
+        `Canonical vacancy identity integrity error: canonical vacancy "${vacancyIds[0]}" could not be reconstructed.`,
+      );
+    }
+    return vacancy;
   }
 
   private saveField(

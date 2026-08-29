@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
+import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
 import {
   heuftVacancy,
   runCanonicalVacancyRepositoryContract,
@@ -11,6 +12,8 @@ runCanonicalVacancyRepositoryContract("SQLite", () => {
   const db = createDatabase(":memory:");
   return {
     repository: new SqliteCanonicalVacancyRepository(db),
+    saveObservation: (observation) =>
+      new SqliteSourceObservationRepository(db).save(observation),
     close: () => db.close(),
   };
 });

@@ -6,4 +6,8 @@ import type {
 export interface CanonicalVacancyRepository {
   save(vacancy: CanonicalVacancy): Promise<void>;
   findById(id: CanonicalVacancyId): Promise<CanonicalVacancy | null>;
+  findByExactSourceIdentity(
+    providerNamespace: string,
+    externalId: string,
+  ): Promise<CanonicalVacancy | null>;
 }

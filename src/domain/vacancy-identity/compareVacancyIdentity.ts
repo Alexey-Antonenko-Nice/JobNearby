@@ -4,6 +4,7 @@ import type {
   VacancyIdentityComparison,
   VacancyIdentityComparisonReason,
 } from "./VacancyIdentityComparison.js";
+import { normalizeVacancyProviderNamespace } from "./normalizeVacancyProviderNamespace.js";
 
 const SOURCE_EXTERNAL_IDENTIFIER_TYPE = "SOURCE_EXTERNAL_ID";
 
@@ -17,8 +18,8 @@ export function compareVacancyIdentity(
   for (const leftIdentifier of leftIdentifiers) {
     const rightIdentifier = rightIdentifiers.find(
       (candidate) =>
-        normalizeProvider(candidate.provider) ===
-          normalizeProvider(leftIdentifier.provider) &&
+        normalizeVacancyProviderNamespace(candidate.provider) ===
+          normalizeVacancyProviderNamespace(leftIdentifier.provider) &&
         candidate.value === leftIdentifier.value,
     );
     if (rightIdentifier !== undefined) {
@@ -28,7 +29,9 @@ export function compareVacancyIdentity(
         leftObservationId: left.sourceObservationId,
         rightObservationId: right.sourceObservationId,
         matchedExternalIdentifier: {
-          providerNamespace: normalizeProvider(leftIdentifier.provider),
+          providerNamespace: normalizeVacancyProviderNamespace(
+            leftIdentifier.provider,
+          ),
           value: leftIdentifier.value,
           leftEvidence: leftIdentifier,
           rightEvidence: rightIdentifier,
@@ -58,10 +61,10 @@ function unresolvedReason(
 ): VacancyIdentityComparisonReason {
   if (left.length === 0 || right.length === 0) return "MISSING_EXTERNAL_ID";
   const leftProviders = new Set(
-    left.map(({ provider }) => normalizeProvider(provider)),
+    left.map(({ provider }) => normalizeVacancyProviderNamespace(provider)),
   );
   return right.some(({ provider }) =>
-    leftProviders.has(normalizeProvider(provider)),
+    leftProviders.has(normalizeVacancyProviderNamespace(provider)),
   )
     ? "EXTERNAL_ID_MISMATCH"
     : "PROVIDER_NAMESPACE_MISMATCH";
@@ -78,8 +81,4 @@ function unresolved(
     leftObservationId: left.sourceObservationId,
     rightObservationId: right.sourceObservationId,
   };
-}
-
-function normalizeProvider(value: string): string {
-  return value.trim().replace(/\s+/gu, " ").toLocaleLowerCase();
 }
