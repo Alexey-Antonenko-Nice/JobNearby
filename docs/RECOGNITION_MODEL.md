@@ -2099,6 +2099,25 @@ Provider ID recycling is a known future uncertainty and is not handled in M3.5.1
 Vacancy matching does not reuse employer-match confidence and does not merge or
 delete source observations.
 
+## Durable employer-recognition state
+
+M5.6.2a persists employer clusters and the complete historical sequence of
+observation-to-cluster assignments. Effective cluster membership is derived from
+an unsuperseded `ACCEPTED` or `USER_CONFIRMED` assignment. A `PROPOSED` assignment
+is a current review candidate only and does not establish membership; `REJECTED`
+assignments remain history without establishing membership.
+
+Historical observations supplied to the employer matcher are derived from these
+effective assignments and immutable `SourceObservation` records. There is no
+second mutable cluster-membership store. Persistence prevents more than one
+effective membership or more than one current proposal for an observation.
+
+This persistence milestone does not yet make creation of a new unresolved cluster
+and its initial accepted assignment atomic. It also does not yet reuse or replace
+an existing review proposal on retry. Those application-level transaction and
+retry semantics are deferred to M5.6.2b, and the acquisition pipeline is not wired
+to employer recognition here.
+
 ---
 
 # 61. Next Document

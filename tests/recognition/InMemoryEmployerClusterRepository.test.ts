@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import { createEmployerCluster } from "../../src/application/recognition/createEmployerCluster.js";
 
 import { InMemoryEmployerClusterRepository } from "../../src/infrastructure/persistence/InMemoryEmployerClusterRepository.js";
+import { runEmployerClusterRepositoryContract } from "./EmployerClusterRepository.contract.js";
+
+runEmployerClusterRepositoryContract("InMemory", () => ({
+  repository: new InMemoryEmployerClusterRepository(),
+  close() {},
+}));
 
 describe("InMemoryEmployerClusterRepository", () => {
   it("saves and restores an employer cluster", async () => {

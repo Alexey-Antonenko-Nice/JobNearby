@@ -130,6 +130,10 @@ describe("processObservation", () => {
       },
       findById: assignments.findById.bind(assignments),
       findByObservationId: assignments.findByObservationId.bind(assignments),
+      findEffectiveByObservationId:
+        assignments.findEffectiveByObservationId.bind(assignments),
+      findCurrentProposalByObservationId:
+        assignments.findCurrentProposalByObservationId.bind(assignments),
     };
     const clusterRepository: EmployerClusterRepository = {
       async save(_cluster: EmployerCluster) {
@@ -170,6 +174,10 @@ describe("processObservation", () => {
           },
           findById: assignments.findById.bind(assignments),
           findByObservationId: assignments.findByObservationId.bind(assignments),
+          findEffectiveByObservationId:
+            assignments.findEffectiveByObservationId.bind(assignments),
+          findCurrentProposalByObservationId:
+            assignments.findCurrentProposalByObservationId.bind(assignments),
         },
         matcher: { async findBestMatch() { return null; } },
         policy: { automaticAssignmentThreshold: 0.9, reviewThreshold: 0.65 },

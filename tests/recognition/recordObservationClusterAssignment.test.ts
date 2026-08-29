@@ -32,7 +32,7 @@ describe("recordObservationClusterAssignment", () => {
     ).toEqual(assignment);
   });
 
-  it("allows several proposed assignments for one observation", async () => {
+  it("rejects a second current proposal for one observation", async () => {
     const repository =
       new InMemoryObservationClusterAssignmentRepository();
 
@@ -51,27 +51,29 @@ describe("recordObservationClusterAssignment", () => {
       },
     );
 
-    await recordObservationClusterAssignment(
-      {
-        sourceObservationId: "observation-1",
-        employerClusterId: "cluster-2",
-        confidence: 0.61,
-        status: "PROPOSED",
-        algorithm: "matcher",
-        algorithmVersion: "0.1.0",
-      },
-      {
-        repository,
-        generateId: () => "assignment-2",
-      },
-    );
+    await expect(
+      recordObservationClusterAssignment(
+        {
+          sourceObservationId: "observation-1",
+          employerClusterId: "cluster-2",
+          confidence: 0.61,
+          status: "PROPOSED",
+          algorithm: "matcher",
+          algorithmVersion: "0.1.0",
+        },
+        {
+          repository,
+          generateId: () => "assignment-2",
+        },
+      ),
+    ).rejects.toThrow(/already has a current employer-cluster proposal/u);
 
     const assignments =
       await repository.findByObservationId(
         "observation-1",
       );
 
-    expect(assignments).toHaveLength(2);
+    expect(assignments).toHaveLength(1);
   });
 
   it("allows rejected history before accepting another cluster", async () => {
