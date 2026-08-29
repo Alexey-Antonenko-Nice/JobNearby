@@ -4,9 +4,11 @@ import type { CanonicalVacancyRepository } from "../../src/domain/vacancies/Cano
 import type { CanonicalVacancy } from "../../src/domain/vacancies/CanonicalVacancy.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import type { CanonicalizeVacancyInput } from "../../src/application/vacancies/CanonicalVacancyCanonicalizer.js";
+import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
 
 export interface RepositoryFixture {
   readonly repository: CanonicalVacancyRepository;
+  saveObservation(observation: SourceObservation): Promise<void>;
   close(): void;
 }
 
@@ -203,7 +205,140 @@ export function runCanonicalVacancyRepositoryContract(
         fixture.close();
       }
     });
+
+    it("finds a canonical vacancy by exact normalized provider identity", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("identity-a", " Indeed  Jobs ", "ABC123"));
+        const vacancy = makeVacancy("identity", {
+          sourceObservationIds: ["identity-a"],
+        });
+        await fixture.repository.save(vacancy);
+
+        expect(
+          await fixture.repository.findByExactSourceIdentity(
+            "indeed jobs",
+            "ABC123",
+          ),
+        ).toEqual(vacancy);
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("does not match a different external ID or provider namespace", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("identity-a", "Indeed", "ABC123"));
+        await fixture.repository.save(makeVacancy("identity", {
+          sourceObservationIds: ["identity-a"],
+        }));
+
+        expect(
+          await fixture.repository.findByExactSourceIdentity("Indeed", "XYZ789"),
+        ).toBeNull();
+        expect(
+          await fixture.repository.findByExactSourceIdentity("LinkedIn", "ABC123"),
+        ).toBeNull();
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("does not match an observation without an external ID", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("identity-a", "Indeed"));
+        await fixture.repository.save(makeVacancy("identity", {
+          sourceObservationIds: ["identity-a"],
+        }));
+
+        expect(
+          await fixture.repository.findByExactSourceIdentity("Indeed", "ABC123"),
+        ).toBeNull();
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("keeps leading zeros and external-ID case exact", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("identity-a", "Indeed", "001AbC"));
+        const vacancy = makeVacancy("identity", {
+          sourceObservationIds: ["identity-a"],
+        });
+        await fixture.repository.save(vacancy);
+
+        expect(
+          await fixture.repository.findByExactSourceIdentity("Indeed", "001AbC"),
+        ).toEqual(vacancy);
+        expect(
+          await fixture.repository.findByExactSourceIdentity("Indeed", "1AbC"),
+        ).toBeNull();
+        expect(
+          await fixture.repository.findByExactSourceIdentity("Indeed", "001abc"),
+        ).toBeNull();
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("returns one vacancy when several member observations share its exact identity", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("identity-a", "Indeed", "ABC123"));
+        await fixture.saveObservation(observation("identity-b", " indeed ", "ABC123"));
+        const vacancy = makeVacancy("identity", {
+          sourceObservationIds: ["identity-a", "identity-b"],
+        });
+        await fixture.repository.save(vacancy);
+
+        expect(
+          await fixture.repository.findByExactSourceIdentity("INDEED", "ABC123"),
+        ).toEqual(vacancy);
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("fails explicitly when an exact identity belongs to multiple vacancies", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("identity-a", "Indeed", "ABC123"));
+        await fixture.saveObservation(observation("identity-b", "indeed", "ABC123"));
+        await fixture.repository.save(makeVacancy("identity-a", {
+          sourceObservationIds: ["identity-a"],
+        }));
+        await fixture.repository.save(makeVacancy("identity-b", {
+          sourceObservationIds: ["identity-b"],
+        }));
+
+        await expect(
+          fixture.repository.findByExactSourceIdentity("Indeed", "ABC123"),
+        ).rejects.toThrow(/identity integrity error/u);
+      } finally {
+        fixture.close();
+      }
+    });
   });
+}
+
+function observation(
+  id: string,
+  sourceName: string,
+  externalId?: string,
+): SourceObservation {
+  return {
+    id,
+    source: {
+      sourceType: "JOB_BOARD",
+      sourceName,
+      ...(externalId === undefined ? {} : { externalId }),
+    },
+    observedAt: new Date("2026-08-28T12:00:00.000Z"),
+    metadata: {},
+  };
 }
 
 export function heuftVacancy(): CanonicalVacancy {

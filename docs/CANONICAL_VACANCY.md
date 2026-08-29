@@ -150,5 +150,14 @@ polymorphic values of canonical fields and alternatives. Closed status, field-na
 and organization-role sets are enforced at the storage boundary, and retrieval
 revalidates the complete aggregate before returning it.
 
+The repository can also resolve an existing canonical vacancy from an exact
+provider publication identity: the shared normalized provider namespace plus the
+exact, case-sensitive external ID. This read-only lookup follows persisted source
+observation membership and returns the fully reconstructed canonical projection.
+It fails explicitly if inconsistent data associates one exact identity with
+multiple canonical vacancies. No uniqueness constraint is introduced yet, so
+concurrent read-before-write protection remains future work. Publication/vacancy
+identity remains distinct from employer identity.
+
 Canonical vacancies remain public labor-market interpretations. CRM state, user
 notes, applications, and universal shortage flags do not belong in this repository.
