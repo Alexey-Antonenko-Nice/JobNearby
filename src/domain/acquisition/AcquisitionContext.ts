@@ -44,7 +44,8 @@ export function createAcquisitionContext(input: AcquisitionContext): Acquisition
   if (
     input.providerKey !== undefined &&
     input.providerKey !== "FRANCE_TRAVAIL" &&
-    input.providerKey !== "INDEED"
+    input.providerKey !== "INDEED" &&
+    input.providerKey !== "LINKEDIN"
   ) {
     throw new Error("Acquisition context provider key is invalid.");
   }

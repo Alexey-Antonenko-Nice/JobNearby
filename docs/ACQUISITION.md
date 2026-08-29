@@ -236,7 +236,7 @@ concise association evidence, and one of these provenance methods:
 - `GENERIC_SEMANTIC`: a provider-independent semantic mechanism established the
   boundary; no such locator is implemented yet;
 - `PROVIDER_LOCATOR`: a deterministic provider-specific locator established the
-  boundary; France Travail and Indeed are implemented;
+  boundary; France Travail, Indeed, and LinkedIn are implemented;
 - `USER_SELECTED`: the user explicitly identified a DOM region; its UI remains
   future work.
 
@@ -252,12 +252,13 @@ provider recognition, an external ID, or a selected context.
 
 ### Provider recognition and selected-context locators
 
-Acquisition routing recognizes providers from parsed, explicit hostname boundaries while leaving
-the stored `SourceReference.sourceName` unchanged. Current routes are:
+Acquisition routing recognizes providers from parsed, explicit hostname boundaries
+while leaving the stored `SourceReference.sourceName` unchanged. Current routes are:
 
 ```text
 candidat.francetravail.fr → FRANCE_TRAVAIL
 indeed.com and regional subdomains such as fr.indeed.com → INDEED
+linkedin.com and normalized legitimate subdomains → LINKEDIN
 ```
 
 Lookalike hosts and unknown providers do not match, and recognition failure never
@@ -292,5 +293,21 @@ agree:
 The selected-context text and HTML contain only the bounded detail section. The
 results list and full page remain preserved in the original acquisition snapshot.
 Missing HTML, stale URL state, duplicate candidates, or conflicting IDs produce no
-context without failing capture. LinkedIn selected-context location remains future
-work.
+context without failing capture.
+
+For LinkedIn, the M5.4 `currentJobId` remains the sole provider listing identity.
+The locator requires exactly one primary
+`JobDetails_AboutTheJob_<externalId>` element and independently corroborates it with
+an exact `/jobs/view/<externalId>/` link or
+`job-card-component-ref-<externalId>` component reference. When the matching job
+link is present, the locator requires exactly one structurally qualified enclosing
+`div`: it must separate all matching links and the JobDetails body into two direct
+branches, retain supplemental same-ID JobDetails evidence, and contain no result-card
+component references. It does not rank candidates by text or HTML length. With
+component-only corroboration, the primary JobDetails element is the deliberately
+bounded context.
+
+Competing JobDetails IDs, duplicate primary sections, competing job links, missing
+corroboration, or a mismatched `currentJobId` produce no context. LinkedIn scripts,
+tracking values, title text, company text, and result order are not used. Context
+content is not projected into vacancy fields or passed to evidence extraction.
