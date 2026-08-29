@@ -2112,11 +2112,15 @@ effective assignments and immutable `SourceObservation` records. There is no
 second mutable cluster-membership store. Persistence prevents more than one
 effective membership or more than one current proposal for an observation.
 
-This persistence milestone does not yet make creation of a new unresolved cluster
-and its initial accepted assignment atomic. It also does not yet reuse or replace
-an existing review proposal on retry. Those application-level transaction and
-retry semantics are deferred to M5.6.2b, and the acquisition pipeline is not wired
-to employer recognition here.
+M5.6.2b makes employer processing retry-safe. An existing effective assignment
+short-circuits matching, and `USER_CONFIRMED` membership is never overridden by
+automatic processing. Creation of a new unresolved cluster and its initial
+accepted assignment is atomic. A semantically identical review retry reuses the
+current proposal; a materially changed review result atomically supersedes it and
+preserves the previous proposal in history. Concurrent effective-assignment
+conflicts reload and preserve the winning membership rather than reassigning the
+observation. No automatic employer reassignment or acquisition-pipeline wiring is
+introduced.
 
 ---
 

@@ -8,6 +8,7 @@ import { createEmployerCluster } from "../../src/application/recognition/createE
 import { processObservation } from "../../src/application/recognition/processObservation.js";
 import { InMemoryEmployerClusterRepository } from "../../src/infrastructure/persistence/InMemoryEmployerClusterRepository.js";
 import { InMemoryObservationClusterAssignmentRepository } from "../../src/infrastructure/persistence/InMemoryObservationClusterAssignmentRepository.js";
+import { InMemoryEmployerRecognitionPersistence } from "../../src/infrastructure/persistence/InMemoryEmployerRecognitionPersistence.js";
 
 function observation(locationText?: string): SourceObservation {
   return {
@@ -23,6 +24,10 @@ async function setup(matchConfidence: number | null, locationText?: string) {
   const clusterRepository = new InMemoryEmployerClusterRepository();
   const assignmentRepository =
     new InMemoryObservationClusterAssignmentRepository();
+  const recognitionPersistence = new InMemoryEmployerRecognitionPersistence(
+    clusterRepository,
+    assignmentRepository,
+  );
   const existingCluster = createEmployerCluster(
     {
       displayLabel: "Existing employer",
@@ -48,6 +53,7 @@ async function setup(matchConfidence: number | null, locationText?: string) {
   const result = await processObservation(observation(locationText), {
     clusterRepository,
     assignmentRepository,
+    recognitionPersistence,
     matcher,
     policy: { automaticAssignmentThreshold: 0.9, reviewThreshold: 0.65 },
     algorithm: "controlled-matcher",
@@ -134,6 +140,8 @@ describe("processObservation", () => {
         assignments.findEffectiveByObservationId.bind(assignments),
       findCurrentProposalByObservationId:
         assignments.findCurrentProposalByObservationId.bind(assignments),
+      replaceCurrentProposal:
+        assignments.replaceCurrentProposal.bind(assignments),
     };
     const clusterRepository: EmployerClusterRepository = {
       async save(_cluster: EmployerCluster) {
@@ -155,30 +163,34 @@ describe("processObservation", () => {
         policy: { automaticAssignmentThreshold: 0.9, reviewThreshold: 0.65 },
         algorithm: "controlled-matcher",
         algorithmVersion: "1",
+        recognitionPersistence: {
+          async saveNewClusterWithAssignment(cluster) {
+            await clusterRepository.save(cluster);
+          },
+        },
       }),
     ).rejects.toThrow("cluster save failed");
     expect(assignmentSaveAttempted).toBe(false);
     expect(await assignments.findByObservationId("observation-1")).toEqual([]);
   });
 
-  it("propagates assignment failure and leaves the already-saved cluster visible", async () => {
+  it("rolls back a new cluster when its initial assignment fails", async () => {
     const clusters = new InMemoryEmployerClusterRepository();
-    const assignments = new InMemoryObservationClusterAssignmentRepository();
+    class FailingAssignments extends InMemoryObservationClusterAssignmentRepository {
+      override async save(): Promise<void> {
+        throw new Error("assignment save failed");
+      }
+    }
+    const assignments = new FailingAssignments();
 
     await expect(
       processObservation(observation("Molsheim"), {
         clusterRepository: clusters,
-        assignmentRepository: {
-          async save() {
-            throw new Error("assignment save failed");
-          },
-          findById: assignments.findById.bind(assignments),
-          findByObservationId: assignments.findByObservationId.bind(assignments),
-          findEffectiveByObservationId:
-            assignments.findEffectiveByObservationId.bind(assignments),
-          findCurrentProposalByObservationId:
-            assignments.findCurrentProposalByObservationId.bind(assignments),
-        },
+        assignmentRepository: assignments,
+        recognitionPersistence: new InMemoryEmployerRecognitionPersistence(
+          clusters,
+          assignments,
+        ),
         matcher: { async findBestMatch() { return null; } },
         policy: { automaticAssignmentThreshold: 0.9, reviewThreshold: 0.65 },
         algorithm: "controlled-matcher",
@@ -187,6 +199,6 @@ describe("processObservation", () => {
       }),
     ).rejects.toThrow("assignment save failed");
 
-    expect(await clusters.findById("new-cluster")).not.toBeNull();
+    expect(await clusters.findById("new-cluster")).toBeNull();
   });
 });

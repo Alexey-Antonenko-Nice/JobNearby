@@ -7,6 +7,10 @@ import type {
   ObservationClusterAssignmentStatus,
 } from "../../domain/recognition/ObservationClusterAssignment.js";
 import type { ObservationClusterAssignmentRepository } from "../../domain/recognition/ObservationClusterAssignmentRepository.js";
+import {
+  CurrentProposalConflictError,
+  EffectiveAssignmentConflictError,
+} from "../../domain/recognition/EmployerRecognitionPersistenceError.js";
 
 interface AssignmentRow {
   id: string;
@@ -31,32 +35,7 @@ export class SqliteObservationClusterAssignmentRepository
   constructor(private readonly db: Database.Database) {}
 
   async save(assignment: ObservationClusterAssignment): Promise<void> {
-    validateAssignment(assignment);
-    try {
-      this.db.prepare(`
-        INSERT INTO observation_cluster_assignments (
-          id, source_observation_id, employer_cluster_id, confidence, status,
-          algorithm, algorithm_version, evaluated_at, explanation, superseded_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-      `).run(
-        assignment.id,
-        assignment.sourceObservationId,
-        assignment.employerClusterId,
-        assignment.confidence,
-        assignment.status,
-        assignment.algorithm,
-        assignment.algorithmVersion,
-        assignment.evaluatedAt.toISOString(),
-        assignment.explanation ?? null,
-      );
-    } catch (error) {
-      if (isDuplicateIdError(error)) {
-        throw new Error(
-          `ObservationClusterAssignment with id "${assignment.id}" already exists.`,
-        );
-      }
-      throw error;
-    }
+    insertObservationClusterAssignment(this.db, assignment);
   }
 
   async findById(
@@ -100,6 +79,47 @@ export class SqliteObservationClusterAssignmentRepository
     );
   }
 
+  async replaceCurrentProposal(
+    existingProposalId: ObservationClusterAssignmentId,
+    replacement: ObservationClusterAssignment,
+    supersededAt: Date,
+  ): Promise<void> {
+    validateAssignment(replacement);
+    if (replacement.status !== "PROPOSED") {
+      throw new Error("Replacement assignment must be PROPOSED.");
+    }
+    if (Number.isNaN(supersededAt.getTime())) {
+      throw new Error("Proposal supersededAt must be a valid date.");
+    }
+    const replace = this.db.transaction(() => {
+      const existing = this.db.prepare(`
+        SELECT source_observation_id, status, superseded_at
+        FROM observation_cluster_assignments WHERE id = ?
+      `).get(existingProposalId) as
+        | {
+            source_observation_id: string;
+            status: string;
+            superseded_at: string | null;
+          }
+        | undefined;
+      if (existing === undefined) {
+        throw new Error(`Current proposal "${existingProposalId}" does not exist.`);
+      }
+      if (existing.status !== "PROPOSED" || existing.superseded_at !== null) {
+        throw new Error(`Assignment "${existingProposalId}" is not a current proposal.`);
+      }
+      if (existing.source_observation_id !== replacement.sourceObservationId) {
+        throw new Error("Replacement proposal must belong to the same SourceObservation.");
+      }
+      this.db.prepare(`
+        UPDATE observation_cluster_assignments
+        SET superseded_at = ? WHERE id = ?
+      `).run(supersededAt.toISOString(), existingProposalId);
+      insertObservationClusterAssignment(this.db, replacement);
+    });
+    replace();
+  }
+
   private findCurrent(
     sourceObservationId: SourceObservationId,
     statusPredicate: string,
@@ -119,6 +139,46 @@ export class SqliteObservationClusterAssignmentRepository
       );
     }
     return rows[0] === undefined ? null : mapRow(rows[0]);
+  }
+}
+
+export function insertObservationClusterAssignment(
+  db: Database.Database,
+  assignment: ObservationClusterAssignment,
+): void {
+  validateAssignment(assignment);
+  try {
+    db.prepare(`
+      INSERT INTO observation_cluster_assignments (
+        id, source_observation_id, employer_cluster_id, confidence, status,
+        algorithm, algorithm_version, evaluated_at, explanation, superseded_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+    `).run(
+      assignment.id,
+      assignment.sourceObservationId,
+      assignment.employerClusterId,
+      assignment.confidence,
+      assignment.status,
+      assignment.algorithm,
+      assignment.algorithmVersion,
+      assignment.evaluatedAt.toISOString(),
+      assignment.explanation ?? null,
+    );
+  } catch (error) {
+    if (isDuplicateIdError(error)) {
+      throw new Error(
+        `ObservationClusterAssignment with id "${assignment.id}" already exists.`,
+      );
+    }
+    if (isCurrentStateConstraintError(error)) {
+      if (assignment.status === "ACCEPTED" || assignment.status === "USER_CONFIRMED") {
+        throw new EffectiveAssignmentConflictError(assignment.sourceObservationId);
+      }
+      if (assignment.status === "PROPOSED") {
+        throw new CurrentProposalConflictError(assignment.sourceObservationId);
+      }
+    }
+    throw error;
   }
 }
 
@@ -174,6 +234,15 @@ function isDuplicateIdError(error: unknown): boolean {
     error instanceof Error &&
     error.message.includes(
       "UNIQUE constraint failed: observation_cluster_assignments.id",
+    )
+  );
+}
+
+function isCurrentStateConstraintError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(
+      "UNIQUE constraint failed: observation_cluster_assignments.source_observation_id",
     )
   );
 }

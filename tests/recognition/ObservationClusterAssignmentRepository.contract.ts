@@ -140,6 +140,105 @@ export function runObservationClusterAssignmentRepositoryContract(
         fixture.close();
       }
     });
+
+    it("atomically replaces a current proposal while preserving history", async () => {
+      const fixture = createFixture();
+      try {
+        const original = assignment("proposal-original", "replace-proposal", "PROPOSED");
+        const replacement = {
+          ...assignment("proposal-replacement", "replace-proposal", "PROPOSED"),
+          confidence: 0.9,
+        };
+        await fixture.prepare(original);
+        await fixture.prepare(replacement);
+        await fixture.repository.save(original);
+        await fixture.repository.replaceCurrentProposal(
+          original.id,
+          replacement,
+          new Date("2026-08-29T11:00:00.000Z"),
+        );
+
+        expect(await fixture.repository.findByObservationId("replace-proposal"))
+          .toEqual([original, replacement]);
+        expect(await fixture.repository.findCurrentProposalByObservationId(
+          "replace-proposal",
+        )).toEqual(replacement);
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("rolls back proposal supersession when replacement insertion fails", async () => {
+      const fixture = createFixture();
+      try {
+        const original = assignment("proposal-original", "rollback-proposal", "PROPOSED");
+        const duplicate = assignment("duplicate-id", "other-observation", "REJECTED");
+        const invalidReplacement = {
+          ...assignment("duplicate-id", "rollback-proposal", "PROPOSED"),
+          employerClusterId: duplicate.employerClusterId,
+        };
+        await fixture.prepare(original);
+        await fixture.prepare(duplicate);
+        await fixture.prepare(invalidReplacement);
+        await fixture.repository.save(original);
+        await fixture.repository.save(duplicate);
+
+        await expect(fixture.repository.replaceCurrentProposal(
+          original.id,
+          invalidReplacement,
+          new Date("2026-08-29T11:00:00.000Z"),
+        )).rejects.toThrow(/already exists/u);
+        expect(await fixture.repository.findCurrentProposalByObservationId(
+          "rollback-proposal",
+        )).toEqual(original);
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("rejects missing, non-current, and cross-observation proposal replacement", async () => {
+      const fixture = createFixture();
+      try {
+        const original = assignment("proposal-original", "guarded-proposal", "PROPOSED");
+        const otherObservation = assignment(
+          "proposal-other",
+          "different-observation",
+          "PROPOSED",
+        );
+        const rejected = assignment("rejected-existing", "rejected-observation", "REJECTED");
+        const replacementForRejected = assignment(
+          "replacement-for-rejected",
+          "rejected-observation",
+          "PROPOSED",
+        );
+        await fixture.prepare(original);
+        await fixture.prepare(otherObservation);
+        await fixture.prepare(rejected);
+        await fixture.prepare(replacementForRejected);
+        await fixture.repository.save(original);
+        await fixture.repository.save(rejected);
+        await expect(fixture.repository.replaceCurrentProposal(
+          "missing",
+          original,
+          new Date("2026-08-29T11:00:00.000Z"),
+        )).rejects.toThrow(/does not exist/u);
+        await expect(fixture.repository.replaceCurrentProposal(
+          original.id,
+          otherObservation,
+          new Date("2026-08-29T11:00:00.000Z"),
+        )).rejects.toThrow(/same SourceObservation/u);
+        await expect(fixture.repository.replaceCurrentProposal(
+          rejected.id,
+          replacementForRejected,
+          new Date("2026-08-29T11:00:00.000Z"),
+        )).rejects.toThrow(/not a current proposal/u);
+        expect(await fixture.repository.findCurrentProposalByObservationId(
+          "guarded-proposal",
+        )).toEqual(original);
+      } finally {
+        fixture.close();
+      }
+    });
   });
 }
 

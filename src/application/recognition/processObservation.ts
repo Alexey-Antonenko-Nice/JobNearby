@@ -1,12 +1,15 @@
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { EmployerCluster } from "../../domain/recognition/EmployerCluster.js";
 import type { ObservationClusterAssignment } from "../../domain/recognition/ObservationClusterAssignment.js";
+import type { EmployerRecognitionPersistence } from "../../domain/recognition/EmployerRecognitionPersistence.js";
+import { EffectiveAssignmentConflictError } from "../../domain/recognition/EmployerRecognitionPersistenceError.js";
 import { createEmployerCluster } from "./createEmployerCluster.js";
+import { createObservationClusterAssignment } from "./createObservationClusterAssignment.js";
 import {
   evaluateObservationEmployerCluster,
   type EvaluateObservationEmployerClusterDependencies,
 } from "./evaluateObservationEmployerCluster.js";
-import { recordObservationClusterAssignment } from "./recordObservationClusterAssignment.js";
+import { loadEffectiveEmployerMembership } from "./loadEffectiveEmployerMembership.js";
 
 export {
   evaluateObservationEmployerCluster,
@@ -34,6 +37,7 @@ export type ProcessObservationResult =
 
 export interface ProcessObservationDependencies
   extends EvaluateObservationEmployerClusterDependencies {
+  readonly recognitionPersistence: EmployerRecognitionPersistence;
   readonly generateClusterId?: () => string;
 }
 
@@ -41,6 +45,18 @@ export async function processObservation(
   observation: SourceObservation,
   dependencies: ProcessObservationDependencies,
 ): Promise<ProcessObservationResult> {
+  const existingMembership = await loadEffectiveEmployerMembership(
+    observation.id,
+    dependencies,
+  );
+  if (existingMembership !== null) {
+    return {
+      outcome: "MATCHED_EXISTING_CLUSTER",
+      employerCluster: existingMembership.cluster,
+      assignment: existingMembership.assignment,
+    };
+  }
+
   const evaluation = await evaluateObservationEmployerCluster(
     observation,
     dependencies,
@@ -84,9 +100,7 @@ export async function processObservation(
     },
   );
 
-  await dependencies.clusterRepository.save(employerCluster);
-
-  const assignment = await recordObservationClusterAssignment(
+  const assignment = createObservationClusterAssignment(
     {
       sourceObservationId: observation.id,
       employerClusterId: employerCluster.id,
@@ -98,13 +112,31 @@ export async function processObservation(
         "New unresolved employer cluster created for this observation.",
     },
     {
-      repository: dependencies.assignmentRepository,
       ...(dependencies.now !== undefined ? { now: dependencies.now } : {}),
       ...(dependencies.generateAssignmentId !== undefined
         ? { generateId: dependencies.generateAssignmentId }
         : {}),
     },
   );
+
+  try {
+    await dependencies.recognitionPersistence.saveNewClusterWithAssignment(
+      employerCluster,
+      assignment,
+    );
+  } catch (error) {
+    if (!(error instanceof EffectiveAssignmentConflictError)) throw error;
+    const winningMembership = await loadEffectiveEmployerMembership(
+      observation.id,
+      dependencies,
+    );
+    if (winningMembership === null) throw error;
+    return {
+      outcome: "MATCHED_EXISTING_CLUSTER",
+      employerCluster: winningMembership.cluster,
+      assignment: winningMembership.assignment,
+    };
+  }
 
   return {
     outcome: "CREATED_NEW_CLUSTER",

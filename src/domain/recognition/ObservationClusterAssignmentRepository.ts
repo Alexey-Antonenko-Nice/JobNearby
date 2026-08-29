@@ -25,4 +25,10 @@ export interface ObservationClusterAssignmentRepository {
   findCurrentProposalByObservationId(
     sourceObservationId: SourceObservationId,
   ): Promise<ObservationClusterAssignment | null>;
+
+  replaceCurrentProposal(
+    existingProposalId: ObservationClusterAssignmentId,
+    replacement: ObservationClusterAssignment,
+    supersededAt: Date,
+  ): Promise<void>;
 }

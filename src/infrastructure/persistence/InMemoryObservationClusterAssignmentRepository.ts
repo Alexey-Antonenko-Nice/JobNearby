@@ -7,13 +7,20 @@ import type {
 
 import type { ObservationClusterAssignmentRepository } from "../../domain/recognition/ObservationClusterAssignmentRepository.js";
 import type { EmployerClusterId } from "../../domain/recognition/EmployerCluster.js";
+import {
+  CurrentProposalConflictError,
+  EffectiveAssignmentConflictError,
+} from "../../domain/recognition/EmployerRecognitionPersistenceError.js";
 
 export class InMemoryObservationClusterAssignmentRepository
   implements ObservationClusterAssignmentRepository
 {
   private readonly assignments = new Map<
     ObservationClusterAssignmentId,
-    ObservationClusterAssignment
+    {
+      readonly assignment: ObservationClusterAssignment;
+      supersededAt: Date | null;
+    }
   >();
 
   findEffectiveByClusterId(
@@ -21,10 +28,12 @@ export class InMemoryObservationClusterAssignmentRepository
   ): readonly ObservationClusterAssignment[] {
     return [...this.assignments.values()]
       .filter(
-        (assignment) =>
+        ({ assignment, supersededAt }) =>
           assignment.employerClusterId === employerClusterId &&
+          supersededAt === null &&
           isEffective(assignment),
       )
+      .map(({ assignment }) => assignment)
       .sort(compareAssignments)
       .map(clone);
   }
@@ -40,14 +49,17 @@ export class InMemoryObservationClusterAssignmentRepository
 
     validateAssignment(assignment);
     enforceCurrentState(this.assignments.values(), assignment);
-    this.assignments.set(assignment.id, clone(assignment));
+    this.assignments.set(assignment.id, {
+      assignment: clone(assignment),
+      supersededAt: null,
+    });
   }
 
   async findById(
     id: ObservationClusterAssignmentId,
   ): Promise<ObservationClusterAssignment | null> {
-    const assignment = this.assignments.get(id);
-    return assignment === undefined ? null : clone(assignment);
+    const record = this.assignments.get(id);
+    return record === undefined ? null : clone(record.assignment);
   }
 
   async findByObservationId(
@@ -55,9 +67,10 @@ export class InMemoryObservationClusterAssignmentRepository
   ): Promise<readonly ObservationClusterAssignment[]> {
     return [...this.assignments.values()]
       .filter(
-        (assignment) =>
+        ({ assignment }) =>
           assignment.sourceObservationId === sourceObservationId,
       )
+      .map(({ assignment }) => assignment)
       .sort(compareAssignments)
       .map(clone);
   }
@@ -83,38 +96,83 @@ export class InMemoryObservationClusterAssignmentRepository
       "current proposal",
     );
   }
+
+  async replaceCurrentProposal(
+    existingProposalId: ObservationClusterAssignmentId,
+    replacement: ObservationClusterAssignment,
+    supersededAt: Date,
+  ): Promise<void> {
+    validateAssignment(replacement);
+    if (replacement.status !== "PROPOSED") {
+      throw new Error("Replacement assignment must be PROPOSED.");
+    }
+    if (Number.isNaN(supersededAt.getTime())) {
+      throw new Error("Proposal supersededAt must be a valid date.");
+    }
+    const existing = this.assignments.get(existingProposalId);
+    if (existing === undefined) {
+      throw new Error(`Current proposal "${existingProposalId}" does not exist.`);
+    }
+    if (
+      existing.assignment.status !== "PROPOSED" ||
+      existing.supersededAt !== null
+    ) {
+      throw new Error(`Assignment "${existingProposalId}" is not a current proposal.`);
+    }
+    if (
+      existing.assignment.sourceObservationId !== replacement.sourceObservationId
+    ) {
+      throw new Error("Replacement proposal must belong to the same SourceObservation.");
+    }
+    if (this.assignments.has(replacement.id)) {
+      throw new Error(
+        `ObservationClusterAssignment with id "${replacement.id}" already exists.`,
+      );
+    }
+
+    existing.supersededAt = new Date(supersededAt);
+    try {
+      await this.save(replacement);
+    } catch (error) {
+      existing.supersededAt = null;
+      throw error;
+    }
+  }
+}
+
+interface AssignmentRecord {
+  readonly assignment: ObservationClusterAssignment;
+  readonly supersededAt: Date | null;
 }
 
 function enforceCurrentState(
-  assignments: Iterable<ObservationClusterAssignment>,
+  assignments: Iterable<AssignmentRecord>,
   candidate: ObservationClusterAssignment,
 ): void {
-  for (const assignment of assignments) {
+  for (const { assignment, supersededAt } of assignments) {
+    if (supersededAt !== null) continue;
     if (assignment.sourceObservationId !== candidate.sourceObservationId) continue;
     if (isEffective(assignment) && isEffective(candidate)) {
-      throw new Error(
-        `SourceObservation "${candidate.sourceObservationId}" already has an effective employer-cluster assignment.`,
-      );
+      throw new EffectiveAssignmentConflictError(candidate.sourceObservationId);
     }
     if (assignment.status === "PROPOSED" && candidate.status === "PROPOSED") {
-      throw new Error(
-        `SourceObservation "${candidate.sourceObservationId}" already has a current employer-cluster proposal.`,
-      );
+      throw new CurrentProposalConflictError(candidate.sourceObservationId);
     }
   }
 }
 
 function findOne(
-  assignments: Iterable<ObservationClusterAssignment>,
+  assignments: Iterable<AssignmentRecord>,
   sourceObservationId: SourceObservationId,
   predicate: (assignment: ObservationClusterAssignment) => boolean,
   label: string,
 ): ObservationClusterAssignment | null {
   const matches = [...assignments].filter(
-    (assignment) =>
+    ({ assignment, supersededAt }) =>
+      supersededAt === null &&
       assignment.sourceObservationId === sourceObservationId &&
       predicate(assignment),
-  );
+  ).map(({ assignment }) => assignment);
   if (matches.length > 1) {
     throw new Error(
       `Observation-cluster assignment integrity error: multiple ${label}s exist for SourceObservation "${sourceObservationId}".`,
