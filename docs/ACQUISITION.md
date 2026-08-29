@@ -193,6 +193,7 @@ browser capture URL matches one of the URL forms established by the real corpus:
 | `indeed.com` | non-empty `vjk` query parameter |
 | `linkedin.com` | non-empty `currentJobId` on a `/jobs/` route |
 | `jobleads.com` | exact `/job/<id>` route |
+| `candidat.francetravail.fr` | exact `/offres/recherche/detail/<uppercase-alphanumeric-id>` route |
 
 Extraction uses the parsed URL, requires the URL hostname to match the normalized
 source namespace, preserves the identifier as a string, and is non-fatal. Unknown,
@@ -216,3 +217,62 @@ the unchanged M5.1 mapper then places it in `SourceReference.externalId`. Existi
 M3.5 behavior can consequently recognize repeated captures with the same provider
 namespace and exact ID. M5.4 does not change that comparator, inspect DOM content,
 deduplicate captures, migrate the schema, or backfill historical observations.
+
+## Acquisition contexts
+
+M5.5 adds optional bounded acquisition contexts while preserving the original full
+page snapshot:
+
+```text
+full-page text and HTML
+  + optional bounded selected-vacancy context
+  ≠ vacancy-field or employer interpretation
+```
+
+An `AcquisitionPackage` may contain zero or more contexts. A selected context can
+retain bounded text and HTML, the provider key and external ID used for association,
+concise association evidence, and one of these provenance methods:
+
+- `GENERIC_SEMANTIC`: a provider-independent semantic mechanism established the
+  boundary; no such locator is implemented yet;
+- `PROVIDER_LOCATOR`: a deterministic provider-specific locator established the
+  boundary; France Travail is the first implementation;
+- `USER_SELECTED`: the user explicitly identified a DOM region; its UI remains
+  future work.
+
+Contexts pass through acquisition metadata as
+`SourceObservation.metadata.acquisition.contexts` and therefore round-trip through
+the existing JSON metadata persistence without a schema migration. They supplement
+`rawContent` and full HTML and never replace either representation. M5.5 does not
+project context contents into vacancy fields or send them to recognition.
+
+Acquisition contexts are channel-neutral and optional. Manual entry, APIs, imports,
+email, and unsupported browser providers remain valid without HTML, DOM state,
+provider recognition, an external ID, or a selected context.
+
+### Provider recognition and France Travail
+
+Acquisition routing recognizes providers from parsed, exact hostnames while leaving
+the stored `SourceReference.sourceName` unchanged. Currently only:
+
+```text
+candidat.francetravail.fr → FRANCE_TRAVAIL
+```
+
+is routed to a selected-context locator. Lookalike hosts and unknown providers do
+not match, and recognition failure never prevents ordinary capture.
+
+For the demonstrated France Travail route, the existing conservative external-ID
+path extracts values such as `213BBCX` and `212YCRF`. The locator returns a context
+only when all of the following agree:
+
+1. the URL and acquisition external ID match;
+2. a result with the same `data-id-offre` is marked `active`;
+3. exactly one open `PopinDetails.modal-details-offre.in` region exists;
+4. that bounded detail independently references the same external ID in its heading
+   or vacancy action link.
+
+Missing, conflicting, or ambiguous evidence returns no selected context while the
+full browser acquisition continues. The locator identifies a bounded fragment; it
+does not parse vacancy fields, classify organizations, or recognize employers.
+Future provider locators should remain similarly small and fail closed.

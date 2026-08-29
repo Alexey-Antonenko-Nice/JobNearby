@@ -26,6 +26,7 @@ describe("provider vacancy ID browser acquisition", () => {
     ["Indeed", "https://fr.indeed.com/jobs?vjk=d559a370adf21f3b", "d559a370adf21f3b"],
     ["LinkedIn", "https://www.linkedin.com/jobs/search-results/?currentJobId=4459878282", "4459878282"],
     ["JobLeads", "https://www.jobleads.com/job/e83dd012cb1ce77d88ca81cbfe1d3f4a0", "e83dd012cb1ce77d88ca81cbfe1d3f4a0"],
+    ["France Travail", "https://candidat.francetravail.fr/offres/recherche/detail/213BBCX", "213BBCX"],
   ])("maps the %s URL ID through AcquisitionPackage into SourceReference", (_provider, url, id) => {
     const { acquisition, observation } = capture(url, `observation-${id}`);
     expect(acquisition.externalId).toBe(id);

@@ -11,6 +11,7 @@ const rules: Readonly<Record<string, ExtractionRule>> = {
   "indeed.com": (url) => nonEmptyParameter(url, "vjk"),
   "linkedin.com": extractLinkedIn,
   "jobleads.com": extractJobLeads,
+  "candidat.francetravail.fr": extractFranceTravail,
 };
 
 export class ConservativeProviderVacancyIdExtractor
@@ -27,6 +28,10 @@ export class ConservativeProviderVacancyIdExtractor
       return undefined;
     }
   }
+}
+
+function extractFranceTravail(url: URL): string | undefined {
+  return /^\/offres\/recherche\/detail\/([0-9A-Z]+)\/?$/u.exec(url.pathname)?.[1];
 }
 
 function extractHellowork(url: URL): string | undefined {

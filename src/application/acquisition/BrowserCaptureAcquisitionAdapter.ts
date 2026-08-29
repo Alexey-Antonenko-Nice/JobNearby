@@ -8,6 +8,8 @@ import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
 import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js";
 import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
+import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProviderRecognizer.js";
+import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BROWSER_HTML_BYTES = 5 * 1024 * 1024;
@@ -17,6 +19,8 @@ export class BrowserCaptureAcquisitionAdapter {
   private readonly jobPostingExtractor = new SchemaOrgJobPostingExtractor();
   private readonly jobPostingProjector = new SchemaOrgJobPostingProjector();
   private readonly providerVacancyIdExtractor = new ConservativeProviderVacancyIdExtractor();
+  private readonly providerRecognizer = new HostnameAcquisitionProviderRecognizer();
+  private readonly franceTravailLocator = new FranceTravailSelectedVacancyContextLocator();
 
   toAcquisitionPackage(
     payload: BrowserCapturePayload,
@@ -34,6 +38,15 @@ export class BrowserCaptureAcquisitionAdapter {
     const acquiredAt = parseCapturedAt(payload.capturedAt);
     const sourceName = sourceNameFromUrl(pageUrl);
     const externalId = this.providerVacancyIdExtractor.extract({ sourceName, sourceUrl: pageUrl });
+    const providerKey = this.providerRecognizer.recognize({ sourceName, sourceUrl: pageUrl });
+    const selectedContext = html === undefined || providerKey !== "FRANCE_TRAVAIL"
+      ? undefined
+      : this.franceTravailLocator.locate({
+          providerKey,
+          sourceUrl: pageUrl,
+          ...(externalId !== undefined ? { externalId } : {}),
+          html,
+        });
     const jobPostings = html === undefined
       ? []
       : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(html));
@@ -64,6 +77,7 @@ export class BrowserCaptureAcquisitionAdapter {
           : {}),
       },
       ...(structuredFields !== undefined ? { structuredFields } : {}),
+      ...(selectedContext !== undefined ? { contexts: [selectedContext] } : {}),
       metadata: payload.browserMetadata === undefined
         ? {}
         : structuredClone(payload.browserMetadata),
