@@ -150,14 +150,36 @@ polymorphic values of canonical fields and alternatives. Closed status, field-na
 and organization-role sets are enforced at the storage boundary, and retrieval
 revalidates the complete aggregate before returning it.
 
-The repository can also resolve an existing canonical vacancy from an exact
-provider publication identity: the shared normalized provider namespace plus the
-exact, case-sensitive external ID. This read-only lookup follows persisted source
-observation membership and returns the fully reconstructed canonical projection.
-It fails explicitly if inconsistent data associates one exact identity with
-multiple canonical vacancies. No uniqueness constraint is introduced yet, so
-concurrent read-before-write protection remains future work. Publication/vacancy
-identity remains distinct from employer identity.
+The repository can also resolve or atomically claim a canonical vacancy from an
+exact provider publication identity: the shared normalized provider namespace plus
+the exact, case-sensitive external ID. Durable claims and membership constraints
+make concurrent processors converge on one internal canonical ID. Publication/
+vacancy identity remains distinct from employer identity.
+
+## Observation processing orchestrator
+
+M5.6.3b adds an application operation that begins with a persisted
+`SourceObservationId`, claims canonical identity, reconstructs the complete
+observation history, reruns evidence extraction for every member, processes
+employer recognition for the requested observation, resolves at most one effective
+employer cluster across the history, and replaces the complete canonical
+projection. A review-required employer does not block canonicalization and its
+candidate cluster is not promoted to effective membership.
+
+Retries reuse durable identity and employer state. A claim may survive a failed
+attempt before the first projection, so creation versus update is determined from
+the stored projection rather than claim outcome. Extracted evidence is recomputed,
+not persisted, and the derivation recipe version records the current processing
+recipe rather than historical evidence versions. Selected Vacancy Context remains
+preserved acquisition metadata and is not yet substituted for observation text.
+Browser capture does not invoke this operation automatically yet.
+
+Identity claims make concurrent attempts converge on one canonical ID, but they do
+not serialize complete projection rebuilds. Two workers that both observe no first
+projection can each rebuild from its own observation and the later replace-save can
+overwrite the earlier membership. Capture-server wiring must therefore remain
+disabled until processing is serialized per canonical ID or guarded by an
+optimistic projection revision/retry mechanism.
 
 Canonical vacancies remain public labor-market interpretations. CRM state, user
 notes, applications, and universal shortage flags do not belong in this repository.
