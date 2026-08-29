@@ -145,6 +145,79 @@ export function runCanonicalVacancyRepositoryContract(
       }
     });
 
+    it("finds a canonical vacancy by SourceObservation ID", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("member-a", "Indeed", "MEMBER-1"));
+        const vacancy = makeVacancy("member", {
+          sourceObservationIds: ["member-a"],
+        });
+        await fixture.repository.save(vacancy);
+        expect(
+          await fixture.repository.findBySourceObservationId("member-a"),
+        ).toEqual(vacancy);
+        expect(
+          await fixture.repository.findBySourceObservationId("missing-member"),
+        ).toBeNull();
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("converges repeated claims for one observation", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("claim-a", "Indeed"));
+        expect(
+          await fixture.repository.claimIdentity("claim-a", "canonical-winner"),
+        ).toEqual({
+          canonicalVacancyId: "canonical-winner",
+          outcome: "CLAIMED",
+        });
+        expect(
+          await fixture.repository.claimIdentity("claim-a", "canonical-loser"),
+        ).toEqual({
+          canonicalVacancyId: "canonical-winner",
+          outcome: "EXISTING",
+        });
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("converges different observations with one exact identity", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("claim-a", " Indeed ", "SAME"));
+        await fixture.saveObservation(observation("claim-b", "indeed", "SAME"));
+        await fixture.repository.claimIdentity("claim-a", "canonical-winner");
+        expect(
+          await fixture.repository.claimIdentity("claim-b", "canonical-loser"),
+        ).toEqual({
+          canonicalVacancyId: "canonical-winner",
+          outcome: "EXISTING",
+        });
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("keeps distinct exact identities and missing external IDs independent", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("claim-a", "Indeed", "ABC"));
+        await fixture.saveObservation(observation("claim-b", "LinkedIn", "ABC"));
+        await fixture.saveObservation(observation("claim-c", "Indeed", "abc"));
+        await fixture.saveObservation(observation("claim-d", "Indeed"));
+        expect((await fixture.repository.claimIdentity("claim-a", "canonical-a")).canonicalVacancyId).toBe("canonical-a");
+        expect((await fixture.repository.claimIdentity("claim-b", "canonical-b")).canonicalVacancyId).toBe("canonical-b");
+        expect((await fixture.repository.claimIdentity("claim-c", "canonical-c")).canonicalVacancyId).toBe("canonical-c");
+        expect((await fixture.repository.claimIdentity("claim-d", "canonical-d")).canonicalVacancyId).toBe("canonical-d");
+      } finally {
+        fixture.close();
+      }
+    });
+
     it("atomically replaces the current projection for the same ID", async () => {
       const fixture = createFixture();
       try {
@@ -302,7 +375,7 @@ export function runCanonicalVacancyRepositoryContract(
       }
     });
 
-    it("fails explicitly when an exact identity belongs to multiple vacancies", async () => {
+    it("prevents an exact identity from belonging to multiple vacancies", async () => {
       const fixture = createFixture();
       try {
         await fixture.saveObservation(observation("identity-a", "Indeed", "ABC123"));
@@ -310,13 +383,28 @@ export function runCanonicalVacancyRepositoryContract(
         await fixture.repository.save(makeVacancy("identity-a", {
           sourceObservationIds: ["identity-a"],
         }));
-        await fixture.repository.save(makeVacancy("identity-b", {
-          sourceObservationIds: ["identity-b"],
-        }));
-
         await expect(
-          fixture.repository.findByExactSourceIdentity("Indeed", "ABC123"),
-        ).rejects.toThrow(/identity integrity error/u);
+          fixture.repository.save(makeVacancy("identity-b", {
+            sourceObservationIds: ["identity-b"],
+          })),
+        ).rejects.toThrow(/integrity error/u);
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("prevents one observation from belonging to two vacancies", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("shared", "Indeed"));
+        await fixture.repository.save(makeVacancy("first", {
+          sourceObservationIds: ["shared"],
+        }));
+        await expect(
+          fixture.repository.save(makeVacancy("second", {
+            sourceObservationIds: ["shared"],
+          })),
+        ).rejects.toThrow(/membership integrity error/u);
       } finally {
         fixture.close();
       }

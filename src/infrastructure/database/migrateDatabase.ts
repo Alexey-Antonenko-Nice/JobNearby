@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import { migration001 } from "./migrations/001_create_source_observations.js";
 import { migration002 } from "./migrations/002_create_canonical_vacancies.js";
 import { migration003 } from "./migrations/003_create_employer_recognition.js";
+import { migration004 } from "./migrations/004_create_canonical_vacancy_identity_claims.js";
 
 interface Migration {
   version: number;
@@ -14,6 +15,7 @@ const migrations: readonly Migration[] = [
   migration001,
   migration002,
   migration003,
+  migration004,
 ];
 
 export function migrateDatabase(db: Database.Database): void {

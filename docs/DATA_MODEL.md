@@ -129,6 +129,15 @@ references, field states and alternatives, and organization relationships as
 structured relational data. Re-saving atomically replaces that current projection;
 it does not mutate observations or yet retain projection history.
 
+Canonical identity persistence enforces that one `SourceObservation` belongs to
+at most one `CanonicalVacancy`. A normalized provider namespace plus exact,
+case-sensitive external ID may likewise identify at most one canonical vacancy.
+Atomic claim records coordinate concurrent processors before a complete canonical
+projection exists; they reserve identity and membership but do not contain vacancy
+facts or replace immutable observations as evidence. Repeated or competing claims
+converge on the same internal canonical ID. An observation without an external ID
+can still claim membership, but it creates no exact provider-identity claim.
+
 It represents what Job Nearby captured from one source at one moment.
 
 Conceptual structure:

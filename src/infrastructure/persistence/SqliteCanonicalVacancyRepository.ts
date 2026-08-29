@@ -14,6 +14,7 @@ import type {
   VacancyOrganizationRole,
 } from "../../domain/vacancies/CanonicalVacancy.js";
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
+import type { SourceObservationId } from "../../domain/capture/SourceObservation.js";
 import { normalizeVacancyProviderNamespace } from "../../domain/vacancy-identity/normalizeVacancyProviderNamespace.js";
 import { validateCanonicalVacancy } from "../../domain/vacancies/validateCanonicalVacancy.js";
 
@@ -97,6 +98,14 @@ export class SqliteCanonicalVacancyRepository
   async save(vacancy: CanonicalVacancy): Promise<void> {
     const validated = validateCanonicalVacancy(vacancy);
     const replaceProjection = this.db.transaction(() => {
+      for (const observationId of validated.sourceObservationIds) {
+        const claim = this.claimMembershipInTransaction(observationId, validated.id);
+        if (claim.canonicalVacancyId !== validated.id) {
+          throw new Error(
+            `Canonical vacancy membership integrity error: SourceObservation "${observationId}" belongs to "${claim.canonicalVacancyId}" and cannot join "${validated.id}".`,
+          );
+        }
+      }
       const now = new Date().toISOString();
       this.db.prepare(`
         INSERT INTO canonical_vacancies (
@@ -130,6 +139,13 @@ export class SqliteCanonicalVacancyRepository
           validated.id,
         );
       }
+      this.db.prepare(`
+        DELETE FROM canonical_vacancy_observation_claims
+        WHERE canonical_vacancy_id = ?
+          AND source_observation_id NOT IN (
+            SELECT value FROM json_each(?)
+          )
+      `).run(validated.id, JSON.stringify(validated.sourceObservationIds));
 
       const insertMembership = this.db.prepare(`
         INSERT INTO canonical_vacancy_source_observations (
@@ -163,7 +179,7 @@ export class SqliteCanonicalVacancyRepository
         this.saveOrganizationRelationship(validated.id, index, relationship);
       });
     });
-    replaceProjection();
+    replaceProjection.immediate();
   }
 
   async findById(id: CanonicalVacancyId): Promise<CanonicalVacancy | null> {
@@ -235,48 +251,172 @@ export class SqliteCanonicalVacancyRepository
     });
   }
 
+  async findBySourceObservationId(
+    sourceObservationId: SourceObservationId,
+  ): Promise<CanonicalVacancy | null> {
+    const rows = this.db.prepare(`
+      SELECT canonical_vacancy_id
+      FROM canonical_vacancy_observation_claims
+      WHERE source_observation_id = ?
+    `).all(sourceObservationId) as Array<{ canonical_vacancy_id: string }>;
+    const vacancyIds = [...new Set(rows.map(({ canonical_vacancy_id }) => canonical_vacancy_id))];
+    if (vacancyIds.length > 1) {
+      throw new Error(
+        `Canonical vacancy membership integrity error: SourceObservation "${sourceObservationId}" belongs to multiple canonical vacancies.`,
+      );
+    }
+    if (vacancyIds[0] === undefined) return null;
+    return this.findById(vacancyIds[0]);
+  }
+
   async findByExactSourceIdentity(
     providerNamespace: string,
     externalId: string,
   ): Promise<CanonicalVacancy | null> {
     const normalizedProvider = normalizeVacancyProviderNamespace(providerNamespace);
-    const rows = this.db.prepare(`
-      SELECT DISTINCT
-        membership.canonical_vacancy_id,
-        observation.source_name
-      FROM canonical_vacancy_source_observations AS membership
-      INNER JOIN source_observations AS observation
-        ON observation.id = membership.source_observation_id
-      WHERE observation.external_id = ?
-    `).all(externalId) as Array<{
-      canonical_vacancy_id: string;
-      source_name: string;
-    }>;
-    const vacancyIds = [
-      ...new Set(
-        rows
-          .filter(
-            ({ source_name }) =>
-              normalizeVacancyProviderNamespace(source_name) === normalizedProvider,
-          )
-          .map(({ canonical_vacancy_id }) => canonical_vacancy_id),
-      ),
-    ];
+    const claim = this.db.prepare(`
+      SELECT canonical_vacancy_id
+      FROM canonical_vacancy_exact_identity_claims
+      WHERE provider_namespace = ? AND external_id = ?
+    `).get(normalizedProvider, externalId) as
+      | { canonical_vacancy_id: string }
+      | undefined;
+    if (claim === undefined) return null;
+    return this.findById(claim.canonical_vacancy_id);
+  }
 
-    if (vacancyIds.length > 1) {
+  async claimIdentity(
+    sourceObservationId: SourceObservationId,
+    proposedCanonicalVacancyId: CanonicalVacancyId,
+  ) {
+    const claim = this.db.transaction(() =>
+      this.claimIdentityInTransaction(
+        sourceObservationId,
+        proposedCanonicalVacancyId,
+      ));
+    return claim.immediate();
+  }
+
+  private claimIdentityInTransaction(
+    sourceObservationId: SourceObservationId,
+    proposedCanonicalVacancyId: CanonicalVacancyId,
+  ) {
+    const observation = this.db.prepare(`
+      SELECT source_name, external_id
+      FROM source_observations
+      WHERE id = ?
+    `).get(sourceObservationId) as
+      | { source_name: string; external_id: string | null }
+      | undefined;
+    if (observation === undefined) {
       throw new Error(
-        `Canonical vacancy identity integrity error: provider "${normalizedProvider}" and external ID "${externalId}" belong to multiple canonical vacancies.`,
+        `Canonical vacancy identity claim requires existing SourceObservation "${sourceObservationId}".`,
       );
     }
-    if (vacancyIds[0] === undefined) return null;
-
-    const vacancy = await this.findById(vacancyIds[0]);
-    if (vacancy === null) {
+    const observationClaim = this.db.prepare(`
+      SELECT canonical_vacancy_id
+      FROM canonical_vacancy_observation_claims
+      WHERE source_observation_id = ?
+    `).get(sourceObservationId) as
+      | { canonical_vacancy_id: string }
+      | undefined;
+    const provider = normalizeVacancyProviderNamespace(observation.source_name);
+    const identityClaim = observation.external_id === null
+      ? undefined
+      : this.db.prepare(`
+          SELECT canonical_vacancy_id
+          FROM canonical_vacancy_exact_identity_claims
+          WHERE provider_namespace = ? AND external_id = ?
+        `).get(provider, observation.external_id) as
+          | { canonical_vacancy_id: string }
+          | undefined;
+    if (
+      observationClaim !== undefined &&
+      identityClaim !== undefined &&
+      observationClaim.canonical_vacancy_id !== identityClaim.canonical_vacancy_id
+    ) {
       throw new Error(
-        `Canonical vacancy identity integrity error: canonical vacancy "${vacancyIds[0]}" could not be reconstructed.`,
+        `Canonical vacancy identity integrity error: observation and exact identity claims disagree for SourceObservation "${sourceObservationId}".`,
       );
     }
-    return vacancy;
+    const winner = observationClaim?.canonical_vacancy_id
+      ?? identityClaim?.canonical_vacancy_id
+      ?? proposedCanonicalVacancyId;
+    this.db.prepare(`
+      INSERT INTO canonical_vacancy_observation_claims (
+        source_observation_id, canonical_vacancy_id
+      ) VALUES (?, ?)
+      ON CONFLICT(source_observation_id) DO NOTHING
+    `).run(sourceObservationId, winner);
+    if (observation.external_id !== null) {
+      this.db.prepare(`
+        INSERT INTO canonical_vacancy_exact_identity_claims (
+          provider_namespace, external_id, canonical_vacancy_id
+        ) VALUES (?, ?, ?)
+        ON CONFLICT(provider_namespace, external_id) DO NOTHING
+      `).run(provider, observation.external_id, winner);
+    }
+    const persistedObservationClaim = this.db.prepare(`
+      SELECT canonical_vacancy_id
+      FROM canonical_vacancy_observation_claims
+      WHERE source_observation_id = ?
+    `).get(sourceObservationId) as { canonical_vacancy_id: string };
+    const persistedIdentityClaim = observation.external_id === null
+      ? undefined
+      : this.db.prepare(`
+          SELECT canonical_vacancy_id
+          FROM canonical_vacancy_exact_identity_claims
+          WHERE provider_namespace = ? AND external_id = ?
+        `).get(provider, observation.external_id) as { canonical_vacancy_id: string };
+    if (
+      persistedIdentityClaim !== undefined &&
+      persistedObservationClaim.canonical_vacancy_id !==
+        persistedIdentityClaim.canonical_vacancy_id
+    ) {
+      throw new Error(
+        `Canonical vacancy identity integrity error: concurrent claims disagree for SourceObservation "${sourceObservationId}".`,
+      );
+    }
+    return {
+      canonicalVacancyId: persistedObservationClaim.canonical_vacancy_id,
+      outcome:
+        observationClaim === undefined && identityClaim === undefined
+          ? "CLAIMED" as const
+          : "EXISTING" as const,
+    };
+  }
+
+  private claimMembershipInTransaction(
+    sourceObservationId: SourceObservationId,
+    proposedCanonicalVacancyId: CanonicalVacancyId,
+  ) {
+    const observationExists = this.db.prepare(`
+      SELECT 1 FROM source_observations WHERE id = ?
+    `).get(sourceObservationId) !== undefined;
+    if (observationExists) {
+      return this.claimIdentityInTransaction(
+        sourceObservationId,
+        proposedCanonicalVacancyId,
+      );
+    }
+    const existing = this.db.prepare(`
+      SELECT canonical_vacancy_id
+      FROM canonical_vacancy_observation_claims
+      WHERE source_observation_id = ?
+    `).get(sourceObservationId) as
+      | { canonical_vacancy_id: string }
+      | undefined;
+    const winner = existing?.canonical_vacancy_id ?? proposedCanonicalVacancyId;
+    this.db.prepare(`
+      INSERT INTO canonical_vacancy_observation_claims (
+        source_observation_id, canonical_vacancy_id
+      ) VALUES (?, ?)
+      ON CONFLICT(source_observation_id) DO NOTHING
+    `).run(sourceObservationId, winner);
+    return {
+      canonicalVacancyId: winner,
+      outcome: existing === undefined ? "CLAIMED" as const : "EXISTING" as const,
+    };
   }
 
   private saveField(
