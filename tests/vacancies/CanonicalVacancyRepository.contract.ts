@@ -5,6 +5,7 @@ import type { CanonicalVacancy } from "../../src/domain/vacancies/CanonicalVacan
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import type { CanonicalizeVacancyInput } from "../../src/application/vacancies/CanonicalVacancyCanonicalizer.js";
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
+import { CanonicalVacancyStaleProjectionError } from "../../src/domain/vacancies/CanonicalVacancyPersistenceError.js";
 
 export interface RepositoryFixture {
   readonly repository: CanonicalVacancyRepository;
@@ -218,7 +219,7 @@ export function runCanonicalVacancyRepositoryContract(
       }
     });
 
-    it("atomically replaces the current projection for the same ID", async () => {
+    it("atomically replaces the current projection for the same ID and claim set", async () => {
       const fixture = createFixture();
       try {
         const first = makeVacancy("replace", {
@@ -227,13 +228,61 @@ export function runCanonicalVacancyRepositoryContract(
           roleCandidates: [candidate({ title: "First title" }, "replace-role-a")],
         });
         const replacement = makeVacancy("replace", {
-          evidenceReferences: [ref("replace-role-b", "replace-observation-b")],
-          sourceObservationIds: ["replace-observation-b"],
+          evidenceReferences: [ref("replace-role-b", "replace-observation-a")],
+          sourceObservationIds: ["replace-observation-a"],
           roleCandidates: [candidate({ title: "Replacement title" }, "replace-role-b")],
         });
         await fixture.repository.save(first);
         await fixture.repository.save(replacement);
         expect(await fixture.repository.findById(first.id)).toEqual(replacement);
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("finds claims before a canonical projection exists", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("claimed-only", "Indeed", "CLAIMED"));
+        await fixture.repository.claimIdentity("claimed-only", "canonical-claimed");
+        expect(
+          await fixture.repository.findClaimedSourceObservationIds("canonical-claimed"),
+        ).toEqual(["claimed-only"]);
+        expect(await fixture.repository.findById("canonical-claimed")).toBeNull();
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("returns CREATED then UPDATED_EXISTING for guarded saves", async () => {
+      const fixture = createFixture();
+      try {
+        const vacancy = makeVacancy("save-result", {});
+        expect(await fixture.repository.save(vacancy)).toEqual({ outcome: "CREATED" });
+        expect(await fixture.repository.save(vacancy)).toEqual({
+          outcome: "UPDATED_EXISTING",
+        });
+      } finally {
+        fixture.close();
+      }
+    });
+
+    it("rejects stale projection membership without deleting claims or projection", async () => {
+      const fixture = createFixture();
+      try {
+        const original = makeVacancy("stale", {
+          sourceObservationIds: ["stale-a"],
+        });
+        await fixture.repository.save(original);
+        await fixture.saveObservation(observation("stale-b", "Indeed"));
+        await fixture.repository.claimIdentity("stale-b", original.id);
+        await expect(fixture.repository.save(original)).rejects.toBeInstanceOf(
+          CanonicalVacancyStaleProjectionError,
+        );
+        expect(await fixture.repository.findById(original.id)).toEqual(original);
+        expect(
+          await fixture.repository.findClaimedSourceObservationIds(original.id),
+        ).toEqual(["stale-a", "stale-b"]);
       } finally {
         fixture.close();
       }

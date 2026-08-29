@@ -4,9 +4,11 @@ import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/v
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import {
   CanonicalVacancyIntegrityError,
+  CanonicalVacancyConcurrencyError,
   SourceObservationNotFoundError,
   processVacancyObservation,
 } from "../../src/application/vacancies/processVacancyObservation.js";
+import { CanonicalVacancyStaleProjectionError } from "../../src/domain/vacancies/CanonicalVacancyPersistenceError.js";
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
 import { createExtractedVacancyEvidence } from "../../src/domain/evidence/ExtractedVacancyEvidence.js";
 import type { EmployerCluster } from "../../src/domain/recognition/EmployerCluster.js";
@@ -93,7 +95,7 @@ describe("processVacancyObservation", () => {
     ]));
   });
 
-  it("documents the remaining concurrent first-projection lost-update boundary", async () => {
+  it("converges concurrent first projections without losing membership", async () => {
     const fixture = makeFixture({ employerOutcome: "REVIEW_REQUIRED" });
     await fixture.sources.save(observation("concurrent-a", "SAME", "A"));
     await fixture.sources.save(observation("concurrent-b", "SAME", "B"));
@@ -112,11 +114,108 @@ describe("processVacancyObservation", () => {
     ]);
     expect(new Set(results.map(({ canonicalVacancyId }) => canonicalVacancyId)))
       .toEqual(new Set(["canonical-generated"]));
+    expect(results.map(({ canonicalVacancyOutcome }) => canonicalVacancyOutcome).sort())
+      .toEqual(["CREATED", "UPDATED_EXISTING"]);
     const persisted = await fixture.canonicals.findById("canonical-generated");
-    expect(persisted?.sourceObservationIds).toHaveLength(1);
-    expect(["concurrent-a", "concurrent-b"]).toContain(
-      persisted?.sourceObservationIds[0],
+    expect(persisted?.sourceObservationIds).toEqual(["concurrent-a", "concurrent-b"]);
+    expect(persisted?.evidenceReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceObservationId: "concurrent-a" }),
+      expect.objectContaining({ sourceObservationId: "concurrent-b" }),
+    ]));
+  });
+
+  it("fully rebuilds after a claimed observation makes the first save stale", async () => {
+    const fixture = makeFixture({ employerOutcome: "REVIEW_REQUIRED" });
+    await fixture.sources.save(observation("retry-a", "SAME", "A"));
+    await fixture.sources.save(observation("retry-b", "SAME", "B"));
+    let release!: () => void;
+    let reached!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    const firstExtraction = new Promise<void>((resolve) => { reached = resolve; });
+    let blockedOnce = false;
+    fixture.extractor.extract.mockImplementation(async (item: SourceObservation) => {
+      if (!blockedOnce) {
+        blockedOnce = true;
+        reached();
+        await blocked;
+      }
+      return createExtractedVacancyEvidence({ sourceObservationId: item.id });
+    });
+    const processing = processVacancyObservation("retry-a", fixture.dependencies);
+    await firstExtraction;
+    await fixture.canonicals.claimIdentity("retry-b", "canonical-loser");
+    release();
+    const result = await processing;
+    expect(result.canonicalVacancyOutcome).toBe("CREATED");
+    expect((await fixture.canonicals.findById(result.canonicalVacancyId))
+      ?.sourceObservationIds).toEqual(["retry-a", "retry-b"]);
+    expect(fixture.extractor.extract.mock.calls.map(([item]) => item.id))
+      .toEqual(["retry-a", "retry-a", "retry-b"]);
+    expect(fixture.processEmployerObservation).toHaveBeenCalledTimes(2);
+  });
+
+  it("converges concurrent additions while preserving history and sorting new claims", async () => {
+    const fixture = makeFixture({ employerOutcome: "REVIEW_REQUIRED" });
+    await fixture.sources.save(observation("existing-a", "SAME", "A", {
+      observedAt: new Date("2026-08-29T10:00:00.000Z"),
+    }));
+    await processVacancyObservation("existing-a", fixture.dependencies);
+    await fixture.sources.save(observation("new-b", "SAME", "B", {
+      observedAt: new Date("2026-08-29T12:00:00.000Z"),
+    }));
+    await fixture.sources.save(observation("new-c", "SAME", "C", {
+      observedAt: new Date("2026-08-29T11:00:00.000Z"),
+    }));
+    let arrivals = 0;
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => { release = resolve; });
+    fixture.extractor.extract.mockImplementation(async (item: SourceObservation) => {
+      if (item.id !== "existing-a" || arrivals < 2) {
+        arrivals += 1;
+        if (arrivals === 2) release();
+        await barrier;
+      }
+      return createExtractedVacancyEvidence({ sourceObservationId: item.id });
+    });
+    await Promise.all([
+      processVacancyObservation("new-b", fixture.dependencies),
+      processVacancyObservation("new-c", fixture.dependencies),
+    ]);
+    const canonical = await fixture.canonicals.findById("canonical-generated");
+    expect(canonical?.sourceObservationIds).toEqual([
+      "existing-a",
+      "new-c",
+      "new-b",
+    ]);
+    expect(new Set(canonical?.evidenceReferences.map(({ sourceObservationId }) =>
+      sourceObservationId))).toEqual(new Set(["existing-a", "new-b", "new-c"]));
+  });
+
+  it("fails explicitly when stale projection retries are exhausted", async () => {
+    const fixture = makeFixture({ employerOutcome: "REVIEW_REQUIRED" });
+    await fixture.sources.save(observation("retry-a", "EXT", "A"));
+    vi.spyOn(fixture.canonicals, "save").mockRejectedValue(
+      new CanonicalVacancyStaleProjectionError("canonical-generated"),
     );
+    await expect(processVacancyObservation("retry-a", {
+      ...fixture.dependencies,
+      maximumProjectionAttempts: 2,
+    })).rejects.toBeInstanceOf(CanonicalVacancyConcurrencyError);
+    expect(fixture.extractor.extract).toHaveBeenCalledTimes(2);
+    expect(fixture.processEmployerObservation).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry unrelated repository failures", async () => {
+    const fixture = makeFixture({ employerOutcome: "REVIEW_REQUIRED" });
+    await fixture.sources.save(observation("retry-a", "EXT", "A"));
+    vi.spyOn(fixture.canonicals, "save").mockRejectedValue(
+      new Error("database unavailable"),
+    );
+    await expect(
+      processVacancyObservation("retry-a", fixture.dependencies),
+    ).rejects.toThrow(/database unavailable/u);
+    expect(fixture.extractor.extract).toHaveBeenCalledTimes(1);
+    expect(fixture.processEmployerObservation).toHaveBeenCalledTimes(1);
   });
 
   it("fails explicitly when canonical history references a missing observation", async () => {
@@ -134,6 +233,18 @@ describe("processVacancyObservation", () => {
       processVacancyObservation("obs-a", fixture.dependencies),
     ).rejects.toThrow(/missing SourceObservation "historical-missing"/u);
     expect(fixture.processEmployerObservation).not.toHaveBeenCalled();
+  });
+
+  it("fails when persisted projection membership lacks an authoritative claim", async () => {
+    const fixture = makeFixture();
+    await fixture.sources.save(observation("obs-a", "EXT-1", "Title"));
+    await processVacancyObservation("obs-a", fixture.dependencies);
+    vi.spyOn(fixture.canonicals, "findClaimedSourceObservationIds")
+      .mockResolvedValue([]);
+    await expect(
+      processVacancyObservation("obs-a", fixture.dependencies),
+    ).rejects.toThrow(/without an authoritative claim/u);
+    expect(fixture.extractor.extract).toHaveBeenCalledTimes(1);
   });
 
   it("saves REVIEW_REQUIRED without promoting its candidate cluster", async () => {

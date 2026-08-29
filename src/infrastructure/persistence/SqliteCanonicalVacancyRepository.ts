@@ -17,6 +17,7 @@ import type { CanonicalVacancyRepository } from "../../domain/vacancies/Canonica
 import type { SourceObservationId } from "../../domain/capture/SourceObservation.js";
 import { normalizeVacancyProviderNamespace } from "../../domain/vacancy-identity/normalizeVacancyProviderNamespace.js";
 import { validateCanonicalVacancy } from "../../domain/vacancies/validateCanonicalVacancy.js";
+import { CanonicalVacancyStaleProjectionError } from "../../domain/vacancies/CanonicalVacancyPersistenceError.js";
 
 const fieldNames = [
   "role",
@@ -95,7 +96,7 @@ export class SqliteCanonicalVacancyRepository
 {
   constructor(private readonly db: Database.Database) {}
 
-  async save(vacancy: CanonicalVacancy): Promise<void> {
+  async save(vacancy: CanonicalVacancy) {
     const validated = validateCanonicalVacancy(vacancy);
     const replaceProjection = this.db.transaction(() => {
       for (const observationId of validated.sourceObservationIds) {
@@ -106,6 +107,15 @@ export class SqliteCanonicalVacancyRepository
           );
         }
       }
+      const claimedObservationIds = this.findClaimedSourceObservationIdsInTransaction(
+        validated.id,
+      );
+      if (!sameSet(claimedObservationIds, validated.sourceObservationIds)) {
+        throw new CanonicalVacancyStaleProjectionError(validated.id);
+      }
+      const projectionExists = this.db.prepare(`
+        SELECT 1 FROM canonical_vacancies WHERE id = ?
+      `).get(validated.id) !== undefined;
       const now = new Date().toISOString();
       this.db.prepare(`
         INSERT INTO canonical_vacancies (
@@ -139,14 +149,6 @@ export class SqliteCanonicalVacancyRepository
           validated.id,
         );
       }
-      this.db.prepare(`
-        DELETE FROM canonical_vacancy_observation_claims
-        WHERE canonical_vacancy_id = ?
-          AND source_observation_id NOT IN (
-            SELECT value FROM json_each(?)
-          )
-      `).run(validated.id, JSON.stringify(validated.sourceObservationIds));
-
       const insertMembership = this.db.prepare(`
         INSERT INTO canonical_vacancy_source_observations (
           canonical_vacancy_id, source_observation_id, observation_order
@@ -178,8 +180,11 @@ export class SqliteCanonicalVacancyRepository
       validated.organizationRelationships.forEach((relationship, index) => {
         this.saveOrganizationRelationship(validated.id, index, relationship);
       });
+      return {
+        outcome: projectionExists ? "UPDATED_EXISTING" as const : "CREATED" as const,
+      };
     });
-    replaceProjection.immediate();
+    return replaceProjection.immediate();
   }
 
   async findById(id: CanonicalVacancyId): Promise<CanonicalVacancy | null> {
@@ -285,6 +290,12 @@ export class SqliteCanonicalVacancyRepository
     return this.findById(claim.canonical_vacancy_id);
   }
 
+  async findClaimedSourceObservationIds(
+    canonicalVacancyId: CanonicalVacancyId,
+  ): Promise<readonly SourceObservationId[]> {
+    return this.findClaimedSourceObservationIdsInTransaction(canonicalVacancyId);
+  }
+
   async claimIdentity(
     sourceObservationId: SourceObservationId,
     proposedCanonicalVacancyId: CanonicalVacancyId,
@@ -384,6 +395,18 @@ export class SqliteCanonicalVacancyRepository
           ? "CLAIMED" as const
           : "EXISTING" as const,
     };
+  }
+
+  private findClaimedSourceObservationIdsInTransaction(
+    canonicalVacancyId: CanonicalVacancyId,
+  ): SourceObservationId[] {
+    return (this.db.prepare(`
+      SELECT source_observation_id
+      FROM canonical_vacancy_observation_claims
+      WHERE canonical_vacancy_id = ?
+      ORDER BY source_observation_id
+    `).all(canonicalVacancyId) as Array<{ source_observation_id: string }>)
+      .map(({ source_observation_id }) => source_observation_id);
   }
 
   private claimMembershipInTransaction(
@@ -669,4 +692,9 @@ function parseDate(value: string): Date {
     throw new Error("Stored canonical derivation date is invalid.");
   }
   return date;
+}
+
+function sameSet(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length &&
+    left.every((value) => right.includes(value));
 }

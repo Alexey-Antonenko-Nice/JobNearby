@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
+import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
+import { CanonicalVacancyStaleProjectionError } from "../../src/domain/vacancies/CanonicalVacancyPersistenceError.js";
 import {
   heuftVacancy,
   runCanonicalVacancyRepositoryContract,
@@ -19,6 +24,53 @@ runCanonicalVacancyRepositoryContract("SQLite", () => {
 });
 
 describe("SqliteCanonicalVacancyRepository integrity", () => {
+  it("rejects a stale projection across independent SQLite connections", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "job-nearby-canonical-concurrency-"));
+    const filename = join(directory, "verification.sqlite");
+    const firstDb = createDatabase(filename);
+    const secondDb = createDatabase(filename);
+    try {
+      const sources = new SqliteSourceObservationRepository(firstDb);
+      for (const id of ["multi-a", "multi-b"]) {
+        await sources.save({
+          id,
+          source: {
+            sourceType: "JOB_BOARD",
+            sourceName: "Indeed",
+            externalId: "MULTI",
+          },
+          observedAt: new Date("2026-08-29T12:00:00.000Z"),
+          metadata: {},
+        });
+      }
+      const first = new SqliteCanonicalVacancyRepository(firstDb);
+      const second = new SqliteCanonicalVacancyRepository(secondDb);
+      await first.claimIdentity("multi-a", "canonical-multi");
+      const canonicalizer = new DeterministicCanonicalVacancyCanonicalizer();
+      const stale = canonicalizer.canonicalize({
+        id: "canonical-multi",
+        sourceObservationIds: ["multi-a"],
+        evidenceReferences: [],
+        derivation: {
+          algorithm: "test",
+          algorithmVersion: "1",
+          derivedAt: new Date("2026-08-29T12:00:00.000Z"),
+        },
+      });
+      await second.claimIdentity("multi-b", "canonical-other");
+      await expect(first.save(stale)).rejects.toBeInstanceOf(
+        CanonicalVacancyStaleProjectionError,
+      );
+      expect(await second.findClaimedSourceObservationIds("canonical-multi"))
+        .toEqual(["multi-a", "multi-b"]);
+      expect(await first.findById("canonical-multi")).toBeNull();
+    } finally {
+      secondDb.close();
+      firstDb.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("rolls back an identity claim when exact-identity persistence fails", async () => {
     const db = createDatabase(":memory:");
     const observations = new SqliteSourceObservationRepository(db);

@@ -9,8 +9,12 @@ export interface CanonicalVacancyIdentityClaim {
   readonly outcome: "CLAIMED" | "EXISTING";
 }
 
+export interface CanonicalVacancySaveResult {
+  readonly outcome: "CREATED" | "UPDATED_EXISTING";
+}
+
 export interface CanonicalVacancyRepository {
-  save(vacancy: CanonicalVacancy): Promise<void>;
+  save(vacancy: CanonicalVacancy): Promise<CanonicalVacancySaveResult>;
   findById(id: CanonicalVacancyId): Promise<CanonicalVacancy | null>;
   findBySourceObservationId(
     sourceObservationId: SourceObservationId,
@@ -19,6 +23,9 @@ export interface CanonicalVacancyRepository {
     providerNamespace: string,
     externalId: string,
   ): Promise<CanonicalVacancy | null>;
+  findClaimedSourceObservationIds(
+    canonicalVacancyId: CanonicalVacancyId,
+  ): Promise<readonly SourceObservationId[]>;
   claimIdentity(
     sourceObservationId: SourceObservationId,
     proposedCanonicalVacancyId: CanonicalVacancyId,
