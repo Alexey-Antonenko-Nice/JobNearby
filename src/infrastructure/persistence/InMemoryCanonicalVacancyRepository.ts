@@ -7,6 +7,7 @@ import type { SourceObservationId } from "../../domain/capture/SourceObservation
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
 import { normalizeVacancyProviderNamespace } from "../../domain/vacancy-identity/normalizeVacancyProviderNamespace.js";
 import { validateCanonicalVacancy } from "../../domain/vacancies/validateCanonicalVacancy.js";
+import { CanonicalVacancyStaleProjectionError } from "../../domain/vacancies/CanonicalVacancyPersistenceError.js";
 
 export class InMemoryCanonicalVacancyRepository
   implements CanonicalVacancyRepository
@@ -22,7 +23,7 @@ export class InMemoryCanonicalVacancyRepository
     private readonly sourceObservationRepository: SourceObservationRepository,
   ) {}
 
-  async save(vacancy: CanonicalVacancy): Promise<void> {
+  async save(vacancy: CanonicalVacancy) {
     const validated = validateCanonicalVacancy(vacancy);
     const observations = await Promise.all(
       validated.sourceObservationIds.map(async (id) => {
@@ -30,15 +31,17 @@ export class InMemoryCanonicalVacancyRepository
         return { id, observation };
       }),
     );
+    const nextObservationClaims = new Map(this.observationClaims);
+    const nextExactIdentityClaims = new Map(this.exactIdentityClaims);
     for (const { id, observation } of observations) {
-      const observationWinner = this.observationClaims.get(id);
+      const observationWinner = nextObservationClaims.get(id);
       if (observationWinner !== undefined && observationWinner !== validated.id) {
         throw membershipConflict(id, observationWinner, validated.id);
       }
       if (observation === null) continue;
       const externalId = observation.source.externalId;
       if (externalId === undefined) continue;
-      const identityWinner = this.exactIdentityClaims.get(
+      const identityWinner = nextExactIdentityClaims.get(
         identityKey(observation.source.sourceName, externalId),
       );
       if (identityWinner !== undefined && identityWinner !== validated.id) {
@@ -51,19 +54,11 @@ export class InMemoryCanonicalVacancyRepository
       }
     }
 
-    for (const [observationId, canonicalVacancyId] of this.observationClaims) {
-      if (
-        canonicalVacancyId === validated.id &&
-        !validated.sourceObservationIds.includes(observationId)
-      ) {
-        this.observationClaims.delete(observationId);
-      }
-    }
     for (const { id, observation } of observations) {
-      this.observationClaims.set(id, validated.id);
+      nextObservationClaims.set(id, validated.id);
       if (observation === null) continue;
       if (observation.source.externalId !== undefined) {
-        this.exactIdentityClaims.set(
+        nextExactIdentityClaims.set(
           identityKey(
             observation.source.sourceName,
             observation.source.externalId,
@@ -72,7 +67,25 @@ export class InMemoryCanonicalVacancyRepository
         );
       }
     }
+    const claimedIds = [...nextObservationClaims]
+      .filter(([, canonicalVacancyId]) => canonicalVacancyId === validated.id)
+      .map(([observationId]) => observationId);
+    if (!sameSet(claimedIds, validated.sourceObservationIds)) {
+      throw new CanonicalVacancyStaleProjectionError(validated.id);
+    }
+    const outcome = this.vacancies.has(validated.id)
+      ? "UPDATED_EXISTING" as const
+      : "CREATED" as const;
+    this.observationClaims.clear();
+    for (const [key, value] of nextObservationClaims) {
+      this.observationClaims.set(key, value);
+    }
+    this.exactIdentityClaims.clear();
+    for (const [key, value] of nextExactIdentityClaims) {
+      this.exactIdentityClaims.set(key, value);
+    }
     this.vacancies.set(validated.id, clone(validated));
+    return { outcome };
   }
 
   async findById(id: CanonicalVacancyId): Promise<CanonicalVacancy | null> {
@@ -98,6 +111,15 @@ export class InMemoryCanonicalVacancyRepository
     );
     if (vacancyId === undefined) return null;
     return this.findById(vacancyId);
+  }
+
+  async findClaimedSourceObservationIds(
+    canonicalVacancyId: CanonicalVacancyId,
+  ): Promise<readonly SourceObservationId[]> {
+    return [...this.observationClaims]
+      .filter(([, claimedCanonicalId]) => claimedCanonicalId === canonicalVacancyId)
+      .map(([sourceObservationId]) => sourceObservationId)
+      .sort((left, right) => left.localeCompare(right));
   }
 
   async claimIdentity(
@@ -169,4 +191,9 @@ function identityConflict(
 
 function clone<T>(value: T): T {
   return structuredClone(value);
+}
+
+function sameSet(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length &&
+    left.every((value) => right.includes(value));
 }

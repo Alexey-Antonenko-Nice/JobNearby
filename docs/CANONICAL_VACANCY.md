@@ -174,12 +174,18 @@ recipe rather than historical evidence versions. Selected Vacancy Context remain
 preserved acquisition metadata and is not yet substituted for observation text.
 Browser capture does not invoke this operation automatically yet.
 
-Identity claims make concurrent attempts converge on one canonical ID, but they do
-not serialize complete projection rebuilds. Two workers that both observe no first
-projection can each rebuild from its own observation and the later replace-save can
-overwrite the earlier membership. Capture-server wiring must therefore remain
-disabled until processing is serialized per canonical ID or guarded by an
-optimistic projection revision/retry mechanism.
+Canonical observation claims are monotonic authoritative membership coordination;
+projection replacement never deletes them. Before commit, repository save compares
+the submitted observation set with all current claims inside its short SQLite
+transaction. A stale projection is rejected without changing claims or projection
+rows, and the orchestrator reloads complete history, re-extracts evidence, reruns
+retry-safe employer processing, and rebuilds. Abandoned claims can therefore be
+healed when the canonical vacancy is next processed.
+
+No long-running SQLite lock or general projection revision is used. Claims remain
+identity coordination rather than vacancy facts, while `CanonicalVacancy` remains
+replaceable interpreted state. Capture-server wiring remains disabled until this
+concurrency milestone is committed and reviewed.
 
 Canonical vacancies remain public labor-market interpretations. CRM state, user
 notes, applications, and universal shortage flags do not belong in this repository.
