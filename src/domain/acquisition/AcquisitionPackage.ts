@@ -1,3 +1,8 @@
+import {
+  createAcquisitionContext,
+  type AcquisitionContext,
+} from "./AcquisitionContext.js";
+
 export type AcquisitionId = string;
 
 export type AcquisitionSourceType =
@@ -40,6 +45,7 @@ export interface AcquisitionPackage {
   readonly pageTitle?: string;
   readonly content: AcquisitionContent;
   readonly structuredFields?: AcquisitionStructuredFields;
+  readonly contexts?: readonly AcquisitionContext[];
   readonly metadata: Readonly<Record<string, unknown>>;
 }
 
@@ -77,6 +83,7 @@ export function createAcquisitionPackage(
       : {}),
   };
   const structuredFields = copyStructuredFields(input.structuredFields);
+  const contexts = input.contexts?.map(createAcquisitionContext);
 
   return {
     acquisitionId,
@@ -87,6 +94,7 @@ export function createAcquisitionPackage(
     ...(optionalText(input.pageTitle) !== undefined ? { pageTitle: input.pageTitle!.trim() } : {}),
     content,
     ...(structuredFields !== undefined ? { structuredFields } : {}),
+    ...(contexts !== undefined ? { contexts } : {}),
     metadata: structuredClone(input.metadata),
   };
 }

@@ -76,6 +76,25 @@ describe("ConservativeProviderVacancyIdExtractor", () => {
       .toBeUndefined();
   });
 
+  it("extracts France Travail IDs only from the demonstrated detail route", () => {
+    expect(extract(
+      "candidat.francetravail.fr",
+      "https://candidat.francetravail.fr/offres/recherche/detail/213BBCX",
+    )).toBe("213BBCX");
+    expect(extract(
+      "candidat.francetravail.fr",
+      "https://candidat.francetravail.fr/offres/recherche/detail/212YCRF",
+    )).toBe("212YCRF");
+    expect(extract(
+      "candidat.francetravail.fr",
+      "https://candidat.francetravail.fr/offres/recherche?detail=213BBCX",
+    )).toBeUndefined();
+    expect(extract(
+      "fake-francetravail.fr",
+      "https://fake-francetravail.fr/offres/recherche/detail/213BBCX",
+    )).toBeUndefined();
+  });
+
   it("is non-fatal for unknown providers, malformed URLs, and source-name mismatches", () => {
     expect(extract("example.com", "https://example.com/jobs/123")).toBeUndefined();
     expect(extract("indeed.com", "not a URL")).toBeUndefined();

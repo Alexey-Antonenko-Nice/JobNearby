@@ -5,6 +5,8 @@ import { createDatabase } from "../../src/infrastructure/database/createDatabase
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
 
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
+import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisition/BrowserCaptureAcquisitionAdapter.js";
+import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 
 describe("SqliteSourceObservationRepository", () => {
   it("saves and restores a complete observation", async () => {
@@ -160,6 +162,48 @@ describe("SqliteSourceObservationRepository", () => {
       "First observation",
     );
 
+    db.close();
+  });
+
+  it("round-trips selected vacancy contexts through acquisition metadata", async () => {
+    const db = createDatabase(":memory:");
+    const repository = new SqliteSourceObservationRepository(db);
+    const html = `
+      <li data-id-offre="212YCRF" class="result active"></li>
+      <div id="PopinDetails" class="modal modal-details-offre in">
+        <h1>Offre n° 212YCRF Technicien électromécanique</h1>
+        <a href="/postuler?idOffre=212YCRF&amp;x=1">Postuler</a>
+      </div>`;
+    const acquisition = new BrowserCaptureAcquisitionAdapter().toAcquisitionPackage({
+      pageUrl: "https://candidat.francetravail.fr/offres/recherche/detail/212YCRF",
+      pageTitle: "France Travail",
+      visibleText: "Full visible search page",
+      html,
+      capturedAt: "2026-08-29T05:21:51Z",
+    }, "acquisition-context-round-trip");
+    const observation = new DeterministicAcquisitionCaptureMapper().toSourceObservation(
+      acquisition,
+      "observation-context-round-trip",
+    );
+
+    await repository.save(observation);
+    const restored = await repository.findById(observation.id);
+    expect(restored?.metadata.acquisition).toMatchObject({
+      contexts: [{
+        kind: "SELECTED_VACANCY",
+        associationMethod: "PROVIDER_LOCATOR",
+        providerKey: "FRANCE_TRAVAIL",
+        providerExternalId: "212YCRF",
+        associationEvidence: [
+          "URL_EXTERNAL_ID",
+          "MATCHING_ACTIVE_RESULT",
+          "OPEN_OFFER_DETAIL",
+          "DETAIL_EXTERNAL_ID_MATCH",
+        ],
+        text: expect.stringContaining("212YCRF"),
+        html: expect.stringContaining('id="PopinDetails"'),
+      }],
+    });
     db.close();
   });
 });

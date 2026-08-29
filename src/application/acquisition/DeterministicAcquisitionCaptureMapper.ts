@@ -85,6 +85,7 @@ function buildObservationMetadata(
       ...(acquisition.content.structuredPayload !== undefined
         ? { structuredPayload: acquisition.content.structuredPayload }
         : {}),
+      ...(acquisition.contexts !== undefined ? { contexts: acquisition.contexts } : {}),
     },
   });
 }
