@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
-import Database from "better-sqlite3";
 
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
-import { migration001 } from "../../src/infrastructure/database/migrations/001_create_source_observations.js";
-import { migration002 } from "../../src/infrastructure/database/migrations/002_create_canonical_vacancies.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
 import { heuftVacancy } from "../vacancies/CanonicalVacancyRepository.contract.js";
@@ -56,8 +53,36 @@ describe("database migrations", () => {
       `)
       .all();
 
-    expect(rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+    expect(rows).toEqual([
+      { version: 1 },
+      { version: 2 },
+      { version: 3 },
+      { version: 4 },
+    ]);
 
+    db.close();
+  });
+
+  it("creates canonical identity claims and single-membership uniqueness", () => {
+    const db = createDatabase(":memory:");
+    expect(db.prepare(`
+      SELECT version, name FROM schema_migrations WHERE version = 4
+    `).get()).toEqual({
+      version: 4,
+      name: "create_canonical_vacancy_identity_claims",
+    });
+    const names = new Set(
+      (db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE name LIKE 'canonical_vacancy_%claim%'
+           OR name = 'idx_canonical_vacancy_single_observation_membership'
+      `).all() as Array<{ name: string }>).map(({ name }) => name),
+    );
+    expect(names).toEqual(expect.objectContaining(new Set([
+      "canonical_vacancy_observation_claims",
+      "canonical_vacancy_exact_identity_claims",
+      "idx_canonical_vacancy_single_observation_membership",
+    ])));
     db.close();
   });
 
@@ -155,25 +180,8 @@ describe("database migrations", () => {
     db.close();
   });
 
-  it("upgrades schema version 2 to 3 without changing existing data", async () => {
-    const db = new Database(":memory:");
-    db.pragma("foreign_keys = ON");
-    db.exec(`
-      CREATE TABLE schema_migrations (
-        version INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        applied_at TEXT NOT NULL
-      )
-    `);
-    migration001.up(db);
-    migration002.up(db);
-    db.prepare(`
-      INSERT INTO schema_migrations (version, name, applied_at)
-      VALUES (?, ?, ?), (?, ?, ?)
-    `).run(
-      1, migration001.name, "2026-08-29T00:00:00.000Z",
-      2, migration002.name, "2026-08-29T00:00:00.000Z",
-    );
+  it("upgrades existing canonical data through migration 004", async () => {
+    const db = createDatabase(":memory:");
     const observations = new SqliteSourceObservationRepository(db);
     for (const id of ["heuft-a", "heuft-b"]) {
       await observations.save({
@@ -187,6 +195,13 @@ describe("database migrations", () => {
     const vacancy = heuftVacancy();
     await canonical.save(vacancy);
 
+    db.exec(`
+      DROP TABLE canonical_vacancy_exact_identity_claims;
+      DROP TABLE canonical_vacancy_observation_claims;
+      DROP INDEX idx_canonical_vacancy_single_observation_membership;
+      DELETE FROM schema_migrations WHERE version = 4;
+    `);
+
     migrateDatabase(db);
 
     expect(await observations.findById("heuft-a")).toMatchObject({ id: "heuft-a" });
@@ -194,7 +209,67 @@ describe("database migrations", () => {
     expect(db.prepare(`SELECT COUNT(*) AS count FROM employer_clusters`).get())
       .toEqual({ count: 0 });
     expect(db.prepare(`SELECT version FROM schema_migrations ORDER BY version`).all())
-      .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      .toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+      ]);
+    db.close();
+  });
+
+  it("rejects conflicting historical membership during migration 004", () => {
+    const db = createDatabase(":memory:");
+    db.exec(`
+      DROP TABLE canonical_vacancy_exact_identity_claims;
+      DROP TABLE canonical_vacancy_observation_claims;
+      DROP INDEX idx_canonical_vacancy_single_observation_membership;
+      DELETE FROM schema_migrations WHERE version = 4;
+      INSERT INTO canonical_vacancies (
+        id, canonicalization_status, derivation_algorithm,
+        derivation_algorithm_version, derived_at, created_at, updated_at
+      ) VALUES
+        ('conflict-a', 'PARTIAL', 'test', '1', '2026-01-01', '2026-01-01', '2026-01-01'),
+        ('conflict-b', 'PARTIAL', 'test', '1', '2026-01-01', '2026-01-01', '2026-01-01');
+      INSERT INTO canonical_vacancy_source_observations (
+        canonical_vacancy_id, source_observation_id, observation_order
+      ) VALUES
+        ('conflict-a', 'shared-observation', 0),
+        ('conflict-b', 'shared-observation', 0);
+    `);
+    expect(() => migrateDatabase(db)).toThrow(/belongs to multiple canonical vacancies/u);
+    expect(db.prepare(`SELECT version FROM schema_migrations WHERE version = 4`).get())
+      .toBeUndefined();
+    db.close();
+  });
+
+  it("rejects conflicting historical exact identities during migration 004", () => {
+    const db = createDatabase(":memory:");
+    db.exec(`
+      DROP TABLE canonical_vacancy_exact_identity_claims;
+      DROP TABLE canonical_vacancy_observation_claims;
+      DROP INDEX idx_canonical_vacancy_single_observation_membership;
+      DELETE FROM schema_migrations WHERE version = 4;
+      INSERT INTO source_observations (
+        id, source_type, source_name, external_id, observed_at, metadata_json
+      ) VALUES
+        ('identity-a', 'JOB_BOARD', ' Indeed ', 'ABC', '2026-01-01', '{}'),
+        ('identity-b', 'JOB_BOARD', 'indeed', 'ABC', '2026-01-01', '{}');
+      INSERT INTO canonical_vacancies (
+        id, canonicalization_status, derivation_algorithm,
+        derivation_algorithm_version, derived_at, created_at, updated_at
+      ) VALUES
+        ('identity-canonical-a', 'PARTIAL', 'test', '1', '2026-01-01', '2026-01-01', '2026-01-01'),
+        ('identity-canonical-b', 'PARTIAL', 'test', '1', '2026-01-01', '2026-01-01', '2026-01-01');
+      INSERT INTO canonical_vacancy_source_observations (
+        canonical_vacancy_id, source_observation_id, observation_order
+      ) VALUES
+        ('identity-canonical-a', 'identity-a', 0),
+        ('identity-canonical-b', 'identity-b', 0);
+    `);
+    expect(() => migrateDatabase(db)).toThrow(/identity integrity error/u);
+    expect(db.prepare(`SELECT version FROM schema_migrations WHERE version = 4`).get())
+      .toBeUndefined();
     db.close();
   });
 });

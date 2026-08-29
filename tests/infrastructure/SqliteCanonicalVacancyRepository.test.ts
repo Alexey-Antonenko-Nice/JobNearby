@@ -19,6 +19,73 @@ runCanonicalVacancyRepositoryContract("SQLite", () => {
 });
 
 describe("SqliteCanonicalVacancyRepository integrity", () => {
+  it("rolls back an identity claim when exact-identity persistence fails", async () => {
+    const db = createDatabase(":memory:");
+    const observations = new SqliteSourceObservationRepository(db);
+    await observations.save({
+      id: "claim-rollback",
+      source: {
+        sourceType: "JOB_BOARD",
+        sourceName: "Indeed",
+        externalId: "ROLLBACK",
+      },
+      observedAt: new Date("2026-08-29T12:00:00.000Z"),
+      metadata: {},
+    });
+    db.exec(`
+      CREATE TRIGGER fail_exact_identity_claim
+      BEFORE INSERT ON canonical_vacancy_exact_identity_claims
+      BEGIN
+        SELECT RAISE(ABORT, 'injected identity claim failure');
+      END;
+    `);
+    const repository = new SqliteCanonicalVacancyRepository(db);
+    await expect(
+      repository.claimIdentity("claim-rollback", "canonical-rollback"),
+    ).rejects.toThrow(/injected identity claim failure/u);
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM canonical_vacancy_observation_claims
+    `).get()).toEqual({ count: 0 });
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM canonical_vacancy_exact_identity_claims
+    `).get()).toEqual({ count: 0 });
+    db.close();
+  });
+
+  it("converges claims made through independent repository instances", async () => {
+    const db = createDatabase(":memory:");
+    const observations = new SqliteSourceObservationRepository(db);
+    for (const id of ["concurrent-a", "concurrent-b"]) {
+      await observations.save({
+        id,
+        source: {
+          sourceType: "JOB_BOARD",
+          sourceName: id === "concurrent-a" ? " Indeed " : "indeed",
+          externalId: "CONCURRENT",
+        },
+        observedAt: new Date("2026-08-29T12:00:00.000Z"),
+        metadata: {},
+      });
+    }
+    const first = new SqliteCanonicalVacancyRepository(db);
+    const second = new SqliteCanonicalVacancyRepository(db);
+    const winner = await first.claimIdentity("concurrent-a", "canonical-first");
+    const converged = await second.claimIdentity("concurrent-b", "canonical-second");
+    expect(winner).toEqual({
+      canonicalVacancyId: "canonical-first",
+      outcome: "CLAIMED",
+    });
+    expect(converged).toEqual({
+      canonicalVacancyId: "canonical-first",
+      outcome: "EXISTING",
+    });
+    expect(db.prepare(`
+      SELECT COUNT(DISTINCT canonical_vacancy_id) AS count
+      FROM canonical_vacancy_observation_claims
+    `).get()).toEqual({ count: 1 });
+    db.close();
+  });
+
   it("rolls back the complete projection replacement when a child insert fails", async () => {
     const db = createDatabase(":memory:");
     const repository = new SqliteCanonicalVacancyRepository(db);
