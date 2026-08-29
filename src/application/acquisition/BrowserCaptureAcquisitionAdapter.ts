@@ -3,6 +3,7 @@ import {
   type AcquisitionId,
   type AcquisitionPackage,
 } from "../../domain/acquisition/AcquisitionPackage.js";
+import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
 import type { BrowserCapturePayload } from "./BrowserCapturePayload.js";
 import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
@@ -10,6 +11,8 @@ import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js"
 import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
 import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProviderRecognizer.js";
 import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
+import { IndeedSelectedVacancyContextLocator } from "./IndeedSelectedVacancyContextLocator.js";
+import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BROWSER_HTML_BYTES = 5 * 1024 * 1024;
@@ -20,7 +23,10 @@ export class BrowserCaptureAcquisitionAdapter {
   private readonly jobPostingProjector = new SchemaOrgJobPostingProjector();
   private readonly providerVacancyIdExtractor = new ConservativeProviderVacancyIdExtractor();
   private readonly providerRecognizer = new HostnameAcquisitionProviderRecognizer();
-  private readonly franceTravailLocator = new FranceTravailSelectedVacancyContextLocator();
+  private readonly contextLocators: Partial<Readonly<Record<ProviderKey, SelectedVacancyContextLocator>>> = {
+    FRANCE_TRAVAIL: new FranceTravailSelectedVacancyContextLocator(),
+    INDEED: new IndeedSelectedVacancyContextLocator(),
+  };
 
   toAcquisitionPackage(
     payload: BrowserCapturePayload,
@@ -39,9 +45,9 @@ export class BrowserCaptureAcquisitionAdapter {
     const sourceName = sourceNameFromUrl(pageUrl);
     const externalId = this.providerVacancyIdExtractor.extract({ sourceName, sourceUrl: pageUrl });
     const providerKey = this.providerRecognizer.recognize({ sourceName, sourceUrl: pageUrl });
-    const selectedContext = html === undefined || providerKey !== "FRANCE_TRAVAIL"
+    const selectedContext = html === undefined || providerKey === undefined
       ? undefined
-      : this.franceTravailLocator.locate({
+      : this.contextLocators[providerKey]?.locate({
           providerKey,
           sourceUrl: pageUrl,
           ...(externalId !== undefined ? { externalId } : {}),
