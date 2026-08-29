@@ -17,4 +17,12 @@ export interface ObservationClusterAssignmentRepository {
   findByObservationId(
     sourceObservationId: SourceObservationId,
   ): Promise<readonly ObservationClusterAssignment[]>;
+
+  findEffectiveByObservationId(
+    sourceObservationId: SourceObservationId,
+  ): Promise<ObservationClusterAssignment | null>;
+
+  findCurrentProposalByObservationId(
+    sourceObservationId: SourceObservationId,
+  ): Promise<ObservationClusterAssignment | null>;
 }

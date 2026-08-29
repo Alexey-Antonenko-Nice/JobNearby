@@ -9,6 +9,8 @@ import { createExtractedVacancyEvidence } from "../../src/domain/evidence/Extrac
 import { decideEmployerClusterAssignment } from "../../src/domain/recognition/decideEmployerClusterAssignment.js";
 import { EvidenceBasedEmployerClusterMatcher } from "../../src/application/recognition/EvidenceBasedEmployerClusterMatcher.js";
 import { InMemoryEmployerClusterObservationProvider } from "../../src/infrastructure/persistence/InMemoryEmployerClusterObservationProvider.js";
+import { InMemoryObservationClusterAssignmentRepository } from "../../src/infrastructure/persistence/InMemoryObservationClusterAssignmentRepository.js";
+import { InMemorySourceObservationRepository } from "../../src/infrastructure/persistence/InMemorySourceObservationRepository.js";
 
 function observation(id: string): SourceObservation {
   return {
@@ -25,6 +27,33 @@ function cluster(id: string): EmployerCluster {
     status: "UNRESOLVED",
     createdAt: new Date("2026-08-23T00:00:00.000Z"),
     updatedAt: new Date("2026-08-23T00:00:00.000Z"),
+  };
+}
+
+function createObservationProvider() {
+  const assignments = new InMemoryObservationClusterAssignmentRepository();
+  const observations = new InMemorySourceObservationRepository();
+  const provider = new InMemoryEmployerClusterObservationProvider(
+    assignments,
+    observations,
+  );
+  let assignmentNumber = 0;
+  return {
+    provider,
+    async addObservation(clusterId: string, item: SourceObservation) {
+      await observations.save(item);
+      assignmentNumber += 1;
+      await assignments.save({
+        id: `history-assignment-${assignmentNumber}`,
+        sourceObservationId: item.id,
+        employerClusterId: clusterId,
+        confidence: 1,
+        status: "ACCEPTED",
+        algorithm: "matcher-test-history",
+        algorithmVersion: "1",
+        evaluatedAt: new Date("2026-08-23T00:00:00.000Z"),
+      });
+    },
   };
 }
 
@@ -104,7 +133,7 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
     const extractedIds: string[] = [];
     const matcher = new EvidenceBasedEmployerClusterMatcher({
       evidenceExtractor: controlledExtractor(new Map(), extractedIds),
-      observationProvider: new InMemoryEmployerClusterObservationProvider(),
+      observationProvider: createObservationProvider().provider,
     });
 
     await expect(matcher.findBestMatch(observation("new"), [])).resolves.toBeNull();
@@ -115,7 +144,7 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
     const extractedIds: string[] = [];
     const matcher = new EvidenceBasedEmployerClusterMatcher({
       evidenceExtractor: controlledExtractor(new Map(), extractedIds),
-      observationProvider: new InMemoryEmployerClusterObservationProvider(),
+      observationProvider: createObservationProvider().provider,
     });
 
     await expect(
@@ -125,8 +154,8 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
   });
 
   it("skips an empty candidate while evaluating a later candidate with history", async () => {
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    provider.addObservation("populated", observation("history"));
+    const { provider, addObservation } = createObservationProvider();
+    await addObservation("populated", observation("history"));
     const matcher = new EvidenceBasedEmployerClusterMatcher({
       evidenceExtractor: controlledExtractor(
         new Map([
@@ -147,8 +176,8 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
 
   it("returns the existing pipeline confidence and provenance for one history item", async () => {
     const history = observation("history-loxam");
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    provider.addObservation("cluster-loxam", history);
+    const { provider, addObservation } = createObservationProvider();
+    await addObservation("cluster-loxam", history);
     const matcher = new EvidenceBasedEmployerClusterMatcher({
       evidenceExtractor: controlledExtractor(
         new Map([
@@ -173,8 +202,8 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
 
   it("keeps the strongest historical observation instead of averaging", async () => {
     const histories = [observation("history-030"), observation("history-091"), observation("history-048")];
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    histories.forEach((item) => provider.addObservation("cluster-a", item));
+    const { provider, addObservation } = createObservationProvider();
+    for (const item of histories) await addObservation("cluster-a", item);
     const evidenceMap = new Map<string, ExtractedVacancyEvidence>([
       ["new", evidence("new", { intermediary: "ACTUA", displayedLocation: "Strasbourg", workplace: "Molsheim", characteristics: [robopac] })],
       ["history-030", evidence("history-030", { intermediary: "ACTUA", displayedLocation: "Strasbourg" })],
@@ -195,9 +224,9 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
   });
 
   it("chooses the cluster with the strongest historical match", async () => {
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    provider.addObservation("cluster-weak", observation("weak"));
-    provider.addObservation("cluster-strong", observation("strong"));
+    const { provider, addObservation } = createObservationProvider();
+    await addObservation("cluster-weak", observation("weak"));
+    await addObservation("cluster-strong", observation("strong"));
     const matcher = new EvidenceBasedEmployerClusterMatcher({
       evidenceExtractor: controlledExtractor(
         new Map([
@@ -214,8 +243,8 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
   });
 
   it("highly matches an anonymous distinctive fingerprint with geography", async () => {
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    provider.addObservation("packaging", observation("packaging-history"));
+    const { provider, addObservation } = createObservationProvider();
+    await addObservation("packaging", observation("packaging-history"));
     const matcher = new EvidenceBasedEmployerClusterMatcher({
       evidenceExtractor: controlledExtractor(
         new Map([
@@ -231,8 +260,8 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
   });
 
   it("keeps incompatible explicit identity and industry confidence low", async () => {
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    provider.addObservation("weyersheim", observation("concrete-history"));
+    const { provider, addObservation } = createObservationProvider();
+    await addObservation("weyersheim", observation("concrete-history"));
     const matcher = new EvidenceBasedEmployerClusterMatcher({
       evidenceExtractor: controlledExtractor(
         new Map([
@@ -248,10 +277,10 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
   });
 
   it("preserves candidate order and historical order on ties", async () => {
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    provider.addObservation("first", observation("first-history"));
-    provider.addObservation("first", observation("second-history-same-cluster"));
-    provider.addObservation("second", observation("second-cluster-history"));
+    const { provider, addObservation } = createObservationProvider();
+    await addObservation("first", observation("first-history"));
+    await addObservation("first", observation("second-history-same-cluster"));
+    await addObservation("second", observation("second-cluster-history"));
     const entries = ["new", "first-history", "second-history-same-cluster", "second-cluster-history"].map(
       (id) => [id, evidence(id, { employer: "ACME" })] as const,
     );
@@ -273,8 +302,8 @@ describe("EvidenceBasedEmployerClusterMatcher", () => {
     const current = observation("new");
     const historical = observation("history");
     const candidate = cluster("cluster-a");
-    const provider = new InMemoryEmployerClusterObservationProvider();
-    provider.addObservation(candidate.id, historical);
+    const { provider, addObservation } = createObservationProvider();
+    await addObservation(candidate.id, historical);
     const currentEvidence = evidence(current.id, { employer: "ACME" });
     const historicalEvidence = evidence(historical.id, { employer: "ACME" });
     const matcher = new EvidenceBasedEmployerClusterMatcher({
