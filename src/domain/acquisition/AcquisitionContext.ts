@@ -41,7 +41,11 @@ export function createAcquisitionContext(input: AcquisitionContext): Acquisition
 
   const associationEvidence = input.associationEvidence?.map((value) =>
     requireText(value, "Acquisition context association evidence"));
-  if (input.providerKey !== undefined && input.providerKey !== "FRANCE_TRAVAIL") {
+  if (
+    input.providerKey !== undefined &&
+    input.providerKey !== "FRANCE_TRAVAIL" &&
+    input.providerKey !== "INDEED"
+  ) {
     throw new Error("Acquisition context provider key is invalid.");
   }
 

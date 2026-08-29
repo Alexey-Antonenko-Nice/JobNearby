@@ -236,7 +236,7 @@ concise association evidence, and one of these provenance methods:
 - `GENERIC_SEMANTIC`: a provider-independent semantic mechanism established the
   boundary; no such locator is implemented yet;
 - `PROVIDER_LOCATOR`: a deterministic provider-specific locator established the
-  boundary; France Travail is the first implementation;
+  boundary; France Travail and Indeed are implemented;
 - `USER_SELECTED`: the user explicitly identified a DOM region; its UI remains
   future work.
 
@@ -250,17 +250,18 @@ Acquisition contexts are channel-neutral and optional. Manual entry, APIs, impor
 email, and unsupported browser providers remain valid without HTML, DOM state,
 provider recognition, an external ID, or a selected context.
 
-### Provider recognition and France Travail
+### Provider recognition and selected-context locators
 
-Acquisition routing recognizes providers from parsed, exact hostnames while leaving
-the stored `SourceReference.sourceName` unchanged. Currently only:
+Acquisition routing recognizes providers from parsed, explicit hostname boundaries while leaving
+the stored `SourceReference.sourceName` unchanged. Current routes are:
 
 ```text
 candidat.francetravail.fr → FRANCE_TRAVAIL
+indeed.com and regional subdomains such as fr.indeed.com → INDEED
 ```
 
-is routed to a selected-context locator. Lookalike hosts and unknown providers do
-not match, and recognition failure never prevents ordinary capture.
+Lookalike hosts and unknown providers do not match, and recognition failure never
+prevents ordinary capture.
 
 For the demonstrated France Travail route, the existing conservative external-ID
 path extracts values such as `213BBCX` and `212YCRF`. The locator returns a context
@@ -276,3 +277,20 @@ Missing, conflicting, or ambiguous evidence returns no selected context while th
 full browser acquisition continues. The locator identifies a bounded fragment; it
 does not parse vacancy fields, classify organizations, or recognize employers.
 Future provider locators should remain similarly small and fail closed.
+
+For Indeed, the existing M5.4 `vjk` value remains provider listing identity. The
+Indeed locator returns a bounded context only when all of these independently
+agree:
+
+1. the URL `vjk` equals the acquisition external ID;
+2. exactly one result card has `result`, `vjs-highlight`, and `job_<externalId>`
+   class tokens;
+3. that result contains a link whose `data-jk` equals the external ID;
+4. exactly one `section#job-full-details.jobsearch-ViewJobContainerWrapper` exists;
+5. a link within that detail carries the same ID in its `fromjk` parameter.
+
+The selected-context text and HTML contain only the bounded detail section. The
+results list and full page remain preserved in the original acquisition snapshot.
+Missing HTML, stale URL state, duplicate candidates, or conflicting IDs produce no
+context without failing capture. LinkedIn selected-context location remains future
+work.

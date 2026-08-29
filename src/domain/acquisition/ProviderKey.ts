@@ -1,1 +1,1 @@
-export type ProviderKey = "FRANCE_TRAVAIL";
+export type ProviderKey = "FRANCE_TRAVAIL" | "INDEED";

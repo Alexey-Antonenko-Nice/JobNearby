@@ -12,7 +12,11 @@ export class HostnameAcquisitionProviderRecognizer implements AcquisitionProvide
   recognize(input: AcquisitionProviderRecognitionInput): ProviderKey | undefined {
     try {
       const hostname = new URL(input.sourceUrl).hostname.toLocaleLowerCase();
-      if (hostname !== input.sourceName.toLocaleLowerCase()) return undefined;
+      const sourceName = input.sourceName.toLocaleLowerCase();
+      if (hostname === "indeed.com" || hostname.endsWith(".indeed.com")) {
+        return sourceName === "indeed.com" ? "INDEED" : undefined;
+      }
+      if (hostname !== sourceName) return undefined;
       return providersByHostname[hostname];
     } catch {
       return undefined;
