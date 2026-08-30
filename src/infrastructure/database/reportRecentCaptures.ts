@@ -69,13 +69,38 @@ function parseMetadata(value: string): Record<string, unknown> {
 }
 
 function hasSelectedVacancyContext(metadata: Record<string, unknown>): boolean {
+  return selectedVacancyContexts(metadata).length > 0;
+}
+
+function selectedVacancyContexts(metadata: Record<string, unknown>) {
   const acquisition = metadata.acquisition;
-  if (acquisition === null || typeof acquisition !== "object") return false;
-  const contexts = (acquisition as Record<string, unknown>).contexts;
-  return Array.isArray(contexts) && contexts.some(
-    (context) => context !== null && typeof context === "object" &&
-      (context as Record<string, unknown>).kind === "SELECTED_VACANCY",
-  );
+  if (!isRecord(acquisition) || !Array.isArray(acquisition.contexts)) return [];
+  return acquisition.contexts.flatMap((context) => {
+    if (!isRecord(context) || context.kind !== "SELECTED_VACANCY") return [];
+    const text = typeof context.text === "string" ? context.text : undefined;
+    const html = typeof context.html === "string" ? context.html : undefined;
+    return [{
+      kind: "SELECTED_VACANCY",
+      text: text === undefined ? { exists: false } : {
+        exists: true,
+        length: text.length,
+        preview: boundedTextPreview(text),
+      },
+      html: html === undefined ? { exists: false } : {
+        exists: true,
+        length: html.length,
+      },
+    }];
+  });
+}
+
+function boundedTextPreview(text: string): string {
+  const normalized = text.replace(/\s+/gu, " ").trim();
+  return normalized.length <= 240 ? normalized : `${normalized.slice(0, 237)}...`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function parseJson(value: string | null): unknown {
@@ -256,6 +281,7 @@ async function reportObservation(
     },
     acquisitionAndExtraction: {
       selectedVacancyContextCaptured: hasSelectedVacancyContext(parseMetadata(row.metadata_json)),
+      selectedVacancyContexts: selectedVacancyContexts(parseMetadata(row.metadata_json)),
       providerExternalIdExtraction: row.external_id === null ? null : {
         provider: row.source_name, externalVacancyId: row.external_id,
         extractionMethod: "DIRECT_FIELD",
