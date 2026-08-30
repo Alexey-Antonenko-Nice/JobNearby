@@ -6,6 +6,7 @@ import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
 import {
   normalizeVacancyEvidenceInput,
+  textualEvidenceContent,
   type VacancyEvidenceExtractionInput,
 } from "../../domain/evidence/VacancyEvidenceInput.js";
 
@@ -18,14 +19,12 @@ export class ExplicitTextVacancyEvidenceExtractor
     input: VacancyEvidenceExtractionInput,
   ): Promise<ExtractedVacancyEvidence> {
     const observation = normalizeVacancyEvidenceInput(input);
-    const vacancyText = [observation.description, observation.rawContent]
-      .filter((value): value is string => value !== undefined)
-      .join("\n");
-    const contactText = observation.contactText ?? "";
+    const { vacancyText, contactText, contentOrigin } = textualEvidenceContent(input);
     const provenance = {
       sourceObservationId: observation.id,
       extractionMethod: "TEXT_EXTRACTION" as const,
       confidence: EXPLICIT_TEXT_CONFIDENCE,
+      ...(contentOrigin === undefined ? {} : { contentOrigin }),
     };
 
     const organizations: OrganizationEvidence[] = [];
