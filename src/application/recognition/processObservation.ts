@@ -1,4 +1,5 @@
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
+import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { EmployerCluster } from "../../domain/recognition/EmployerCluster.js";
 import type { ObservationClusterAssignment } from "../../domain/recognition/ObservationClusterAssignment.js";
 import type { EmployerRecognitionPersistence } from "../../domain/recognition/EmployerRecognitionPersistence.js";
@@ -42,7 +43,7 @@ export interface ProcessObservationDependencies
 }
 
 export async function processObservation(
-  observation: SourceObservation,
+  observation: VacancyEvidenceExtractionInput,
   dependencies: ProcessObservationDependencies,
 ): Promise<ProcessObservationResult> {
   const existingMembership = await loadEffectiveEmployerMembership(
