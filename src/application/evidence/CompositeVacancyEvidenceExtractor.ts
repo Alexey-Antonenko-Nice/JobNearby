@@ -1,4 +1,3 @@
-import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { EmployerCharacteristicEvidence } from "../../domain/evidence/EmployerCharacteristicEvidence.js";
 import type { EvidenceProvenance } from "../../domain/evidence/EvidenceProvenance.js";
 import type { ExternalIdentifierEvidence } from "../../domain/evidence/ExternalIdentifierEvidence.js";
@@ -10,6 +9,10 @@ import type { LocationEvidence } from "../../domain/evidence/LocationEvidence.js
 import type { OrganizationEvidence } from "../../domain/evidence/OrganizationEvidence.js";
 import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import {
+  normalizeVacancyEvidenceInput,
+  type VacancyEvidenceExtractionInput,
+} from "../../domain/evidence/VacancyEvidenceInput.js";
 
 export class CompositeVacancyEvidenceExtractor
   implements VacancyEvidenceExtractor
@@ -17,8 +20,9 @@ export class CompositeVacancyEvidenceExtractor
   constructor(private readonly extractors: readonly VacancyEvidenceExtractor[]) {}
 
   async extract(
-    observation: SourceObservation,
+    input: VacancyEvidenceExtractionInput,
   ): Promise<ExtractedVacancyEvidence> {
+    const observation = normalizeVacancyEvidenceInput(input);
     const results = await Promise.all(
       this.extractors.map((extractor) => extractor.extract(observation)),
     );
@@ -56,7 +60,7 @@ export class CompositeVacancyEvidenceExtractor
 }
 
 function provenanceKey(provenance: EvidenceProvenance): string {
-  return `${provenance.sourceObservationId}\u0000${provenance.extractionMethod}\u0000${provenance.confidence}`;
+  return `${provenance.sourceObservationId}\u0000${provenance.extractionMethod}\u0000${provenance.confidence}\u0000${provenance.contentOrigin ?? "SOURCE_OBSERVATION"}`;
 }
 
 function organizationKey(evidence: OrganizationEvidence): string {

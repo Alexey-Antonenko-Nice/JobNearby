@@ -1,4 +1,3 @@
-import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type {
   EmployerCharacteristicCategory,
   EmployerCharacteristicEvidence,
@@ -7,6 +6,10 @@ import type {
 import type { ExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import { createExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import {
+  normalizeVacancyEvidenceInput,
+  type VacancyEvidenceExtractionInput,
+} from "../../domain/evidence/VacancyEvidenceInput.js";
 
 const EXPLICIT_CHARACTERISTIC_CONFIDENCE = 0.98;
 
@@ -139,8 +142,9 @@ export class ExplicitEmployerCharacteristicExtractor
   implements VacancyEvidenceExtractor
 {
   async extract(
-    observation: SourceObservation,
+    input: VacancyEvidenceExtractionInput,
   ): Promise<ExtractedVacancyEvidence> {
+    const observation = normalizeVacancyEvidenceInput(input);
     const text = [observation.description, observation.rawContent]
       .filter((value): value is string => value !== undefined)
       .join("\n");

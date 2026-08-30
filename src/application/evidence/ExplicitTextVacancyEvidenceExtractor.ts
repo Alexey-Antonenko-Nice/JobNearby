@@ -1,10 +1,13 @@
-import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { ExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import { createExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import type { LocationEvidence } from "../../domain/evidence/LocationEvidence.js";
 import type { OrganizationEvidence } from "../../domain/evidence/OrganizationEvidence.js";
 import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import {
+  normalizeVacancyEvidenceInput,
+  type VacancyEvidenceExtractionInput,
+} from "../../domain/evidence/VacancyEvidenceInput.js";
 
 const EXPLICIT_TEXT_CONFIDENCE = 0.98;
 
@@ -12,8 +15,9 @@ export class ExplicitTextVacancyEvidenceExtractor
   implements VacancyEvidenceExtractor
 {
   async extract(
-    observation: SourceObservation,
+    input: VacancyEvidenceExtractionInput,
   ): Promise<ExtractedVacancyEvidence> {
+    const observation = normalizeVacancyEvidenceInput(input);
     const vacancyText = [observation.description, observation.rawContent]
       .filter((value): value is string => value !== undefined)
       .join("\n");

@@ -1,6 +1,6 @@
-import type { SourceObservation } from "../capture/SourceObservation.js";
 import type { ExtractedVacancyEvidence } from "./ExtractedVacancyEvidence.js";
+import type { VacancyEvidenceExtractionInput } from "./VacancyEvidenceInput.js";
 
 export interface VacancyEvidenceExtractor {
-  extract(observation: SourceObservation): Promise<ExtractedVacancyEvidence>;
+  extract(input: VacancyEvidenceExtractionInput): Promise<ExtractedVacancyEvidence>;
 }
