@@ -172,7 +172,12 @@ the stored projection rather than claim outcome. Extracted evidence is recompute
 not persisted, and the derivation recipe version records the current processing
 recipe rather than historical evidence versions. Selected Vacancy Context remains
 preserved acquisition metadata and is not yet substituted for observation text.
-Browser capture does not invoke this operation automatically yet.
+Browser capture invokes this operation automatically after its immutable
+`SourceObservation` is durably persisted. A later processing failure leaves the
+capture successful and is reported separately; repeated captures remain separate
+observations, while exact provider identity may aggregate their history into one
+canonical vacancy. Employer review remains informational only. Selected Vacancy
+Context is still not used for interpretation.
 
 Canonical observation claims are monotonic authoritative membership coordination;
 projection replacement never deletes them. Before commit, repository save compares

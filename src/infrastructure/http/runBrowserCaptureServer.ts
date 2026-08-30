@@ -1,14 +1,17 @@
-import { DeterministicAcquisitionCaptureMapper } from "../../application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { createDatabase } from "../database/createDatabase.js";
-import { SqliteSourceObservationRepository } from "../persistence/SqliteSourceObservationRepository.js";
+import { createCaptureProcessingRuntime } from "../runtime/createCaptureProcessingRuntime.js";
 import { createBrowserCaptureServer } from "./createBrowserCaptureServer.js";
 
 const host = "127.0.0.1";
 const port = 4317;
 const database = createDatabase("job-nearby.sqlite");
+const runtime = createCaptureProcessingRuntime(database, {
+  onProcessingFailure: (sourceObservationId, error) => {
+    console.error(`Vacancy processing failed for SourceObservation "${sourceObservationId}".`, error);
+  },
+});
 const server = createBrowserCaptureServer({
-  repository: new SqliteSourceObservationRepository(database),
-  acquisitionMapper: new DeterministicAcquisitionCaptureMapper(),
+  captureAndProcessBrowserVacancy: runtime.captureAndProcessBrowserVacancy,
 });
 
 server.listen(port, host, () => {

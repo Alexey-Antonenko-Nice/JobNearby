@@ -1,13 +1,19 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
-import { ingestBrowserCapture, type BrowserCaptureIngestionDependencies } from "../../application/acquisition/ingestBrowserCapture.js";
 import type { BrowserCapturePayload } from "../../application/acquisition/BrowserCapturePayload.js";
+import type { CaptureAndProcessBrowserVacancyResult } from "../../application/acquisition/captureAndProcessBrowserVacancy.js";
 
 export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
+export interface BrowserCaptureServerDependencies {
+  readonly captureAndProcessBrowserVacancy: (
+    payload: BrowserCapturePayload,
+  ) => Promise<CaptureAndProcessBrowserVacancyResult>;
+}
+
 export function createBrowserCaptureServer(
-  dependencies: BrowserCaptureIngestionDependencies,
+  dependencies: BrowserCaptureServerDependencies,
 ): Server {
   return createServer(async (request, response) => {
     setCorsHeaders(request, response);
@@ -22,17 +28,30 @@ export function createBrowserCaptureServer(
 
     try {
       const payload = parsePayload(await readJsonBody(request));
-      const result = await ingestBrowserCapture(payload, dependencies);
-      sendJson(response, 201, {
-        ...result,
-        observedAt: result.observedAt.toISOString(),
-      });
+      const result = await dependencies.captureAndProcessBrowserVacancy(payload);
+      sendJson(response, 201, captureResponseDto(result));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Browser capture failed.";
       const status = message.startsWith("Browser capture could not be persisted:") ? 500 : 400;
       sendJson(response, status, { success: false, error: message });
     }
   });
+}
+
+function captureResponseDto(result: CaptureAndProcessBrowserVacancyResult): object {
+  const capture = {
+    observationId: result.capture.observationId,
+    acquisitionId: result.capture.acquisitionId,
+    observedAt: result.capture.observedAt.toISOString(),
+  };
+  if (result.processing.status === "FAILED") {
+    return {
+      success: true,
+      capture,
+      processing: { status: "FAILED", code: "PROCESSING_FAILED" },
+    };
+  }
+  return { success: true, capture, processing: result.processing };
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
