@@ -1,9 +1,28 @@
 import { createBrowserCapturePayload } from "./capture-page.js";
 
-const button = document.querySelector("#capture");
-const status = document.querySelector("#status");
+export function captureFeedback(body) {
+  if (body.processing.status === "FAILED") {
+    return "Captured, but processing did not finish.";
+  }
+  const messages = [
+    body.processing.vacancyOutcome === "CREATED"
+      ? "Captured into a new vacancy record."
+      : "Captured and added to an existing vacancy record.",
+  ];
+  const employerMessages = {
+    MATCHED_EXISTING_RECORD: "Linked to an existing employer record.",
+    UNRESOLVED_RECORD_CREATED: "Employer not identified yet.",
+    REVIEW_REQUIRED: "Employer match needs review.",
+  };
+  messages.push(employerMessages[body.processing.employerStatus]);
+  if (body.processing.canonicalizationStatus === "CONFLICTED") {
+    messages.push("Some captured vacancy details conflict.");
+  }
+  return messages.join(" ");
+}
 
-button.addEventListener("click", async () => {
+function initializePopup(button, status) {
+  button.addEventListener("click", async () => {
   button.disabled = true;
   status.textContent = "Capturing…";
   try {
@@ -28,11 +47,20 @@ button.addEventListener("click", async () => {
     if (!response.ok || body.success !== true) {
       throw new Error(body.error ?? `Capture service returned ${response.status}.`);
     }
-    status.textContent = `Captured: ${body.sourceObservationId}`;
+    status.textContent = captureFeedback(body);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     status.textContent = `Capture failed: ${message}`;
   } finally {
     button.disabled = false;
   }
-});
+  });
+}
+
+if (typeof document !== "undefined") {
+  const button = document.querySelector("#capture");
+  const status = document.querySelector("#status");
+  if (button !== null && status !== null) {
+    initializePopup(button, status);
+  }
+}

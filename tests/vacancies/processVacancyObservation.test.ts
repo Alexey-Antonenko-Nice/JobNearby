@@ -279,6 +279,92 @@ describe("processVacancyObservation", () => {
     );
   });
 
+  it("inherits the established canonical employer when a later exact-identity observation has no employer match", async () => {
+    const fixture = makeFixture();
+
+    await fixture.sources.save(observation("old", "SAME", "Old"));
+    await fixture.sources.save(observation("new", "SAME", "New"));
+
+    const cluster = employerCluster("historical-cluster");
+    await fixture.clusters.save(cluster);
+    await fixture.assignments.save(
+      assignment("old-assignment", "old", cluster.id),
+    );
+
+    const {
+      processEmployerObservation: _processEmployerObservation,
+      ...dependencies
+    } = fixture.dependencies;
+
+    await processVacancyObservation("old", dependencies);
+
+    const result = await processVacancyObservation("new", dependencies);
+
+    expect(result.canonicalVacancyId).toBe("canonical-generated");
+
+    expect(
+      await fixture.assignments.findEffectiveByObservationId("new"),
+    ).toEqual(
+      expect.objectContaining({
+        sourceObservationId: "new",
+        employerClusterId: "historical-cluster",
+        status: "ACCEPTED",
+        algorithm: "canonical-vacancy-employer-continuity",
+        algorithmVersion: "0.1.0",
+        explanation: "Employer membership inherited from canonical vacancy history after no evidence-based match.",
+      }),
+    );
+
+    const canonical = await fixture.canonicals.findById(
+      result.canonicalVacancyId,
+    );
+
+    expect(canonical?.organizationRelationships).toContainEqual(
+      expect.objectContaining({
+        role: "EMPLOYER",
+        employerClusterId: "historical-cluster",
+      }),
+    );
+  });
+
+  it("keeps canonical employer continuity idempotent when the later observation is retried", async () => {
+    const fixture = makeFixture();
+
+    await fixture.sources.save(observation("old", "SAME", "Old"));
+    await fixture.sources.save(observation("new", "SAME", "New"));
+
+    const cluster = employerCluster("historical-cluster");
+    await fixture.clusters.save(cluster);
+    await fixture.assignments.save(
+      assignment("old-assignment", "old", cluster.id),
+    );
+
+    const {
+      processEmployerObservation: _processEmployerObservation,
+      ...dependencies
+    } = fixture.dependencies;
+
+    await processVacancyObservation("old", dependencies);
+    const first = await processVacancyObservation("new", dependencies);
+    const firstAssignment = await fixture.assignments
+      .findEffectiveByObservationId("new");
+    const retry = await processVacancyObservation("new", dependencies);
+
+    expect(retry.canonicalVacancyId).toBe(first.canonicalVacancyId);
+    expect(await fixture.assignments.findEffectiveByObservationId("new"))
+      .toEqual(firstAssignment);
+    expect(await fixture.assignments.findByObservationId("new"))
+      .toEqual([firstAssignment]);
+    expect(await fixture.clusters.findCandidates({})).toEqual([cluster]);
+    expect(firstAssignment).toEqual(expect.objectContaining({
+      employerClusterId: "historical-cluster",
+      status: "ACCEPTED",
+      algorithm: "canonical-vacancy-employer-continuity",
+      algorithmVersion: "0.1.0",
+      explanation: "Employer membership inherited from canonical vacancy history after no evidence-based match.",
+    }));
+  });
+
   it("fails closed for conflicting effective employer clusters", async () => {
     const fixture = makeFixture({ employerOutcome: "REVIEW_REQUIRED" });
     await fixture.sources.save(observation("old", "SAME", "Old"));

@@ -19,10 +19,13 @@ import type {
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 import { CanonicalVacancyStaleProjectionError } from "../../domain/vacancies/CanonicalVacancyPersistenceError.js";
 import {
+  evaluateObservationEmployerCluster,
   processObservation,
   type ProcessObservationDependencies,
   type ProcessObservationResult,
 } from "../recognition/processObservation.js";
+import { recordObservationClusterAssignment } from "../recognition/recordObservationClusterAssignment.js";
+import { EffectiveAssignmentConflictError } from "../../domain/recognition/EmployerRecognitionPersistenceError.js";
 import type {
   ExistingPipelineCanonicalVacancyAdapter,
   ExistingPipelineCanonicalVacancyAdapterInput,
@@ -30,6 +33,8 @@ import type {
 
 const DEFAULT_DERIVATION_ALGORITHM = "process-vacancy-observation";
 const DEFAULT_DERIVATION_ALGORITHM_VERSION = "0.1.0";
+const EMPLOYER_CONTINUITY_ALGORITHM = "canonical-vacancy-employer-continuity";
+const EMPLOYER_CONTINUITY_ALGORITHM_VERSION = "0.1.0";
 
 export class SourceObservationNotFoundError extends Error {
   constructor(sourceObservationId: SourceObservationId) {
@@ -135,9 +140,20 @@ export async function processVacancyObservation(
         basis.observations.map((observation) =>
           dependencies.evidenceExtractor.extract(observation)),
       );
-      const employerResult = await (
-        dependencies.processEmployerObservation ?? processObservation
-      )(requestedObservation, dependencies.employerRecognition);
+      const establishedEmployerCluster = await resolveCanonicalEmployerCluster(
+        basis.observationIds.filter((id) => id !== requestedObservation.id),
+        dependencies.employerRecognition,
+      );
+      const employerResult = establishedEmployerCluster === null ||
+          dependencies.processEmployerObservation !== undefined
+        ? await (
+          dependencies.processEmployerObservation ?? processObservation
+        )(requestedObservation, dependencies.employerRecognition)
+        : await processEmployerObservationWithCanonicalContinuity(
+          requestedObservation,
+          establishedEmployerCluster,
+          dependencies.employerRecognition,
+        );
       const employerCluster = await resolveCanonicalEmployerCluster(
         basis.observationIds,
         dependencies.employerRecognition,
@@ -181,6 +197,96 @@ export async function processVacancyObservation(
     claim.canonicalVacancyId,
     maximumAttempts,
   );
+}
+
+async function processEmployerObservationWithCanonicalContinuity(
+  observation: SourceObservation,
+  establishedEmployerCluster: EmployerCluster,
+  dependencies: ProcessObservationDependencies,
+): Promise<ProcessObservationResult> {
+  const evaluation = await evaluateObservationEmployerCluster(
+    observation,
+    dependencies,
+  );
+  if (evaluation.outcome === "AUTO_MATCH") {
+    return {
+      outcome: "MATCHED_EXISTING_CLUSTER",
+      employerCluster: evaluation.cluster,
+      assignment: evaluation.assignment,
+    };
+  }
+  if (evaluation.outcome === "REVIEW_REQUIRED") {
+    return {
+      outcome: "REVIEW_REQUIRED",
+      candidateCluster: evaluation.candidateCluster,
+      proposal: evaluation.proposal,
+      confidence: evaluation.confidence,
+      ...(evaluation.explanation === undefined
+        ? {}
+        : { explanation: evaluation.explanation }),
+    };
+  }
+
+  const assignment = await recordCanonicalEmployerContinuity(
+    observation.id,
+    establishedEmployerCluster,
+    dependencies,
+  );
+  return {
+    outcome: "MATCHED_EXISTING_CLUSTER",
+    employerCluster: establishedEmployerCluster,
+    assignment,
+  };
+}
+
+async function recordCanonicalEmployerContinuity(
+  sourceObservationId: SourceObservationId,
+  employerCluster: EmployerCluster,
+  dependencies: ProcessObservationDependencies,
+) {
+  const existing = await dependencies.assignmentRepository
+    .findEffectiveByObservationId(sourceObservationId);
+  if (existing !== null) {
+    if (existing.employerClusterId !== employerCluster.id) {
+      throw new CanonicalVacancyIntegrityError(
+        `Canonical vacancy employer integrity error: observation "${sourceObservationId}" already has an effective membership in EmployerCluster "${existing.employerClusterId}".`,
+      );
+    }
+    return existing;
+  }
+
+  try {
+    return await recordObservationClusterAssignment(
+      {
+        sourceObservationId,
+        employerClusterId: employerCluster.id,
+        confidence: 1,
+        status: "ACCEPTED",
+        algorithm: EMPLOYER_CONTINUITY_ALGORITHM,
+        algorithmVersion: EMPLOYER_CONTINUITY_ALGORITHM_VERSION,
+        explanation:
+          "Employer membership inherited from canonical vacancy history after no evidence-based match.",
+      },
+      {
+        repository: dependencies.assignmentRepository,
+        ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+        ...(dependencies.generateAssignmentId === undefined
+          ? {}
+          : { generateId: dependencies.generateAssignmentId }),
+      },
+    );
+  } catch (error) {
+    if (!(error instanceof EffectiveAssignmentConflictError)) throw error;
+    const winningAssignment = await dependencies.assignmentRepository
+      .findEffectiveByObservationId(sourceObservationId);
+    if (winningAssignment === null) throw error;
+    if (winningAssignment.employerClusterId !== employerCluster.id) {
+      throw new CanonicalVacancyIntegrityError(
+        `Canonical vacancy employer integrity error: observation "${sourceObservationId}" concurrently received an effective membership in EmployerCluster "${winningAssignment.employerClusterId}".`,
+      );
+    }
+    return winningAssignment;
+  }
 }
 
 export async function resolveCanonicalEmployerCluster(
