@@ -31,7 +31,7 @@ export class ConservativeProviderVacancyIdExtractor
 }
 
 function extractFranceTravail(url: URL): string | undefined {
-  return /^\/offres\/recherche\/detail\/([0-9A-Z]+)\/?$/u.exec(url.pathname)?.[1];
+  return /^\/offres\/recherche\/(?:emploirecherche\/)?detail\/([0-9A-Z]+)\/?$/u.exec(url.pathname)?.[1];
 }
 
 function extractHellowork(url: URL): string | undefined {

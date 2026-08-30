@@ -22,12 +22,13 @@ function linkedInHtml(id: string, options: {
   readonly competingLinkId?: string;
   readonly repeatedDetailLink?: boolean;
   readonly separateMatchingLinkBranch?: boolean;
+  readonly selfIdentifyingPrimary?: boolean;
 } = {}): string {
   const primaryId = options.primaryId ?? id;
   const linkId = options.linkId ?? id;
   const componentId = options.componentId ?? id;
   const primary = `
-    <div id="JobDetails_AboutTheJob_${primaryId}" class="job-details-section">
+    <div id="JobDetails_AboutTheJob_${primaryId}"${options.selfIdentifyingPrimary === true ? ` componentkey="JobDetails_AboutTheJob_${primaryId}"` : ""} class="job-details-section">
       <h2>À propos de l’offre d’emploi</h2>
       <p>Bounded LinkedIn vacancy description.</p>
     </div>`;
@@ -108,6 +109,33 @@ describe("LinkedInSelectedVacancyContextLocator", () => {
     const context = locate("4460344242", linkedInHtml("4460344242", { includeLink: false }));
     expect(context?.associationEvidence).toContain("MATCHING_LINKEDIN_COMPONENT_REFERENCE");
     expect(context?.html).toMatch(/^\s*<div id="JobDetails_AboutTheJob_/u);
+  });
+
+  it("uses a self-identifying exact-ID detail section when broad page wrappers include result cards", () => {
+    const id = "4460344242";
+    const html = `
+      <div class="results-shell">
+        <div class="results-list">
+          <div componentkey="job-card-component-ref-9999999999">Other vacancy</div>
+          <div componentkey="job-card-component-ref-${id}">Selected vacancy</div>
+        </div>
+        <div class="detail-pane">
+          <a href="/jobs/view/${id}/">Selected vacancy title</a>
+          <div id="JobDetails_AboutTheJob_${id}" componentkey="JobDetails_AboutTheJob_${id}">
+            <p>Bounded LinkedIn vacancy description.</p>
+          </div>
+        </div>
+      </div>`;
+    const context = locate(id, html);
+
+    expect(context).toMatchObject({
+      providerExternalId: id,
+      associationEvidence: expect.arrayContaining([
+        "MATCHING_LINKEDIN_COMPONENT_REFERENCE",
+      ]),
+    });
+    expect(context?.html).toMatch(new RegExp(`^\\s*<div id="JobDetails_AboutTheJob_${id}"`, "u"));
+    expect(context?.html).not.toContain("Other vacancy");
   });
 
   it("accepts repeated same-ID job links inside one unambiguous detail branch", () => {
