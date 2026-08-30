@@ -38,7 +38,12 @@ export class LinkedInSelectedVacancyContextLocator implements SelectedVacancyCon
     const linkedWrapper = matchingLinkExists
       ? findUniqueLinkedDetailWrapper(input.html, primary.fragment, input.externalId)
       : undefined;
-    if (matchingLinkExists && linkedWrapper === undefined) return undefined;
+    if (
+      matchingLinkExists &&
+      linkedWrapper === undefined &&
+      (!matchingComponentExists ||
+        !isSelfIdentifyingPrimaryDetail(primary.fragment, input.externalId))
+    ) return undefined;
     if (!matchingLinkExists && !matchingComponentExists) return undefined;
     const boundedHtml = linkedWrapper?.html ?? primary.fragment.html;
     if (containsCompetingJobDetailsId(boundedHtml, input.externalId)) return undefined;
@@ -188,6 +193,16 @@ function containsAnyJobCardComponentReference(html: string): boolean {
 function containsPrimaryJobDetails(html: string, externalId: string): boolean {
   const expected = `JobDetails_AboutTheJob_${externalId}`;
   return openingTags(html, "div").some((tag) => attribute(tag, "id") === expected);
+}
+
+function isSelfIdentifyingPrimaryDetail(
+  primary: ElementFragment,
+  externalId: string,
+): boolean {
+  const tag = openingTagMatches(primary.html, "div")[0]?.[0];
+  return tag !== undefined &&
+    attribute(tag, "id") === `JobDetails_AboutTheJob_${externalId}` &&
+    attribute(tag, "componentkey") === `JobDetails_AboutTheJob_${externalId}`;
 }
 
 function containsCompetingJobLink(html: string, externalId: string): boolean {

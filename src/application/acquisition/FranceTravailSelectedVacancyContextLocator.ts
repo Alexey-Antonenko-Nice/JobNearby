@@ -41,7 +41,7 @@ export class FranceTravailSelectedVacancyContextLocator
 function urlHasExternalId(sourceUrl: string, externalId: string): boolean {
   try {
     const url = new URL(sourceUrl);
-    return /^\/offres\/recherche\/detail\/([0-9A-Z]+)\/?$/u.exec(url.pathname)?.[1]
+    return /^\/offres\/recherche\/(?:emploirecherche\/)?detail\/([0-9A-Z]+)\/?$/u.exec(url.pathname)?.[1]
       === externalId;
   } catch {
     return false;

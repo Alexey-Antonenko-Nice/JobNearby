@@ -61,8 +61,11 @@ describe("France Travail provider recognition", () => {
 });
 
 describe("FranceTravailSelectedVacancyContextLocator", () => {
-  it.each(["213BBCX", "212YCRF"])("validates independent real-corpus pattern %s", (id) => {
-    const context = locate(id, franceTravailHtml(id));
+  it.each([
+    ["213BBCX", "https://candidat.francetravail.fr/offres/recherche/detail/213BBCX"],
+    ["212YVQL", "https://candidat.francetravail.fr/offres/recherche/emploirecherche/detail/212YVQL"],
+  ])("validates the supported URL form for %s", (id, sourceUrl) => {
+    const context = locate(id, franceTravailHtml(id), sourceUrl);
     expect(context).toMatchObject({
       kind: "SELECTED_VACANCY",
       associationMethod: "PROVIDER_LOCATOR",
@@ -126,6 +129,24 @@ describe("selected-context acquisition integration", () => {
     expect(observation.metadata.acquisition).toMatchObject({ contexts: acquisition.contexts });
     expect(observation).not.toHaveProperty("title");
     expect(observation).not.toHaveProperty("displayedCompanyName");
+  });
+
+  it("extracts an ID and invokes selected-context recognition for the emploirecherche route", () => {
+    const id = "212YVQL";
+    const acquisition = adapter.toAcquisitionPackage({
+      pageUrl: `https://candidat.francetravail.fr/offres/recherche/emploirecherche/detail/${id}`,
+      pageTitle: "Search results",
+      visibleText: "FULL PAGE WITH MANY VACANCIES",
+      html: franceTravailHtml(id),
+      capturedAt: "2026-08-30T09:44:57Z",
+    }, "capture-emploirecherche");
+
+    expect(acquisition.externalId).toBe(id);
+    expect(acquisition.contexts?.[0]).toMatchObject({
+      kind: "SELECTED_VACANCY",
+      providerKey: "FRANCE_TRAVAIL",
+      providerExternalId: id,
+    });
   });
 
   it("keeps a manual package valid without browser concepts", () => {
