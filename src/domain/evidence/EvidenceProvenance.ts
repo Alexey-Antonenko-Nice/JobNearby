@@ -6,10 +6,15 @@ export type EvidenceExtractionMethod =
   | "USER_CONFIRMED"
   | "EXTERNAL_SOURCE";
 
+export type EvidenceContentOrigin =
+  | "SOURCE_OBSERVATION"
+  | "SELECTED_VACANCY_CONTEXT";
+
 export interface EvidenceProvenance {
   readonly sourceObservationId: SourceObservationId;
   readonly extractionMethod: EvidenceExtractionMethod;
   readonly confidence: number;
+  readonly contentOrigin?: EvidenceContentOrigin;
 }
 
 const extractionMethods: readonly EvidenceExtractionMethod[] = [
@@ -17,6 +22,11 @@ const extractionMethods: readonly EvidenceExtractionMethod[] = [
   "TEXT_EXTRACTION",
   "USER_CONFIRMED",
   "EXTERNAL_SOURCE",
+];
+
+const contentOrigins: readonly EvidenceContentOrigin[] = [
+  "SOURCE_OBSERVATION",
+  "SELECTED_VACANCY_CONTEXT",
 ];
 
 export function createEvidenceProvenance(
@@ -37,11 +47,20 @@ export function createEvidenceProvenance(
   if (!extractionMethods.includes(provenance.extractionMethod)) {
     throw new Error("Evidence extraction method is invalid.");
   }
+  if (
+    provenance.contentOrigin !== undefined &&
+    !contentOrigins.includes(provenance.contentOrigin)
+  ) {
+    throw new Error("Evidence content origin is invalid.");
+  }
 
   return {
     sourceObservationId: provenance.sourceObservationId.trim(),
     extractionMethod: provenance.extractionMethod,
     confidence: provenance.confidence,
+    ...(provenance.contentOrigin === undefined
+      ? {}
+      : { contentOrigin: provenance.contentOrigin }),
   };
 }
 

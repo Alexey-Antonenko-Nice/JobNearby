@@ -135,6 +135,16 @@ describe("ExtractedVacancyEvidence", () => {
     },
   );
 
+  it("preserves whether evidence was extracted from selected vacancy context", () => {
+    expect(createEvidenceProvenance({
+      ...extracted,
+      contentOrigin: "SELECTED_VACANCY_CONTEXT",
+    })).toEqual({
+      ...extracted,
+      contentOrigin: "SELECTED_VACANCY_CONTEXT",
+    });
+  });
+
   it("rejects empty required textual values", () => {
     expect(() =>
       createOrganizationEvidence({

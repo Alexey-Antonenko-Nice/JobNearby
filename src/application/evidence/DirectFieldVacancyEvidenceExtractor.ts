@@ -1,5 +1,8 @@
-import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import {
+  normalizeVacancyEvidenceInput,
+  type VacancyEvidenceExtractionInput,
+} from "../../domain/evidence/VacancyEvidenceInput.js";
 import {
   createExtractedVacancyEvidence,
   type ExtractedVacancyEvidence,
@@ -9,8 +12,9 @@ export class DirectFieldVacancyEvidenceExtractor
   implements VacancyEvidenceExtractor
 {
   async extract(
-    observation: SourceObservation,
+    input: VacancyEvidenceExtractionInput,
   ): Promise<ExtractedVacancyEvidence> {
+    const observation = normalizeVacancyEvidenceInput(input);
     const provenance = {
       sourceObservationId: observation.id,
       extractionMethod: "DIRECT_FIELD" as const,
