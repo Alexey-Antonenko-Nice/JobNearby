@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { CompositeVacancyEvidenceExtractor } from "../../src/application/evidence/CompositeVacancyEvidenceExtractor.js";
+import { DirectFieldVacancyEvidenceExtractor } from "../../src/application/evidence/DirectFieldVacancyEvidenceExtractor.js";
+import { ExplicitEmployerCharacteristicExtractor } from "../../src/application/evidence/ExplicitEmployerCharacteristicExtractor.js";
+import { ExplicitTextVacancyEvidenceExtractor } from "../../src/application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import {
@@ -11,6 +15,7 @@ import {
 import { CanonicalVacancyStaleProjectionError } from "../../src/domain/vacancies/CanonicalVacancyPersistenceError.js";
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
 import { createExtractedVacancyEvidence } from "../../src/domain/evidence/ExtractedVacancyEvidence.js";
+import type { VacancyEvidenceExtractionInput } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 import type { EmployerCluster } from "../../src/domain/recognition/EmployerCluster.js";
 import type { ObservationClusterAssignment } from "../../src/domain/recognition/ObservationClusterAssignment.js";
 import { InMemoryCanonicalVacancyRepository } from "../../src/infrastructure/persistence/InMemoryCanonicalVacancyRepository.js";
@@ -57,7 +62,17 @@ describe("processVacancyObservation", () => {
 
   it("retries the same observation with the same canonical ID and no duplicate membership", async () => {
     const fixture = makeFixture();
-    await fixture.sources.save(observation("obs-a", "EXT-1", "First title"));
+    await fixture.sources.save(observation("obs-a", "EXT-1", "First title", {
+      metadata: {
+        acquisition: {
+          contexts: [{
+            kind: "SELECTED_VACANCY",
+            associationMethod: "PROVIDER_LOCATOR",
+            text: "Selected retry context",
+          }],
+        },
+      },
+    }));
     await processVacancyObservation("obs-a", fixture.dependencies);
     const result = await processVacancyObservation("obs-a", fixture.dependencies);
     expect(result.canonicalVacancyId).toBe("canonical-generated");
@@ -437,21 +452,100 @@ describe("processVacancyObservation", () => {
     expect(saveSpy).toHaveBeenCalledTimes(2);
   });
 
-  it("does not substitute selected acquisition context for rawContent", async () => {
+  it("routes exactly one selected acquisition context without replacing rawContent", async () => {
     const fixture = makeFixture();
+    const selectedContext = {
+      kind: "SELECTED_VACANCY" as const,
+      associationMethod: "PROVIDER_LOCATOR" as const,
+      text: "SELECTED TEXT",
+    };
     const captured = observation("obs-a", "EXT-1", "Title", {
       rawContent: "FULL PAGE TEXT",
       metadata: {
         acquisition: {
-          contexts: [{ kind: "SELECTED_VACANCY", text: "SELECTED TEXT" }],
+          contexts: [selectedContext],
         },
       },
     });
     await fixture.sources.save(captured);
     await processVacancyObservation("obs-a", fixture.dependencies);
-    expect(fixture.extractor.extract).toHaveBeenCalledWith(captured);
+    expect(fixture.extractor.extract).toHaveBeenCalledWith({
+      ...captured,
+      evidenceContent: {
+        kind: "SELECTED_VACANCY_CONTEXT",
+        context: selectedContext,
+      },
+    });
     expect((fixture.extractor.extract.mock.calls[0]![0]).rawContent)
       .toBe("FULL PAGE TEXT");
+  });
+
+  it("keeps source-observation extraction input when no selected context exists", async () => {
+    const fixture = makeFixture();
+    const captured = observation("obs-a", "EXT-1", "Title", {
+      rawContent: "FULL PAGE TEXT",
+    });
+    await fixture.sources.save(captured);
+
+    await processVacancyObservation("obs-a", fixture.dependencies);
+
+    expect(fixture.extractor.extract).toHaveBeenCalledWith(captured);
+  });
+
+  it("uses selected text for canonical evidence while retaining direct provider ID evidence", async () => {
+    const fixture = makeFixture();
+    const captured = observation("obs-a", "EXT-1", "Title", {
+      rawContent: "Nous recrutons pour notre client, Neighbor Employer.",
+      metadata: {
+        acquisition: {
+          contexts: [{
+            kind: "SELECTED_VACANCY",
+            associationMethod: "PROVIDER_LOCATOR",
+            text: "Nous recrutons pour notre client, Selected Employer.",
+          }],
+        },
+      },
+    });
+    await fixture.sources.save(captured);
+    const evidenceExtractor = new CompositeVacancyEvidenceExtractor([
+      new DirectFieldVacancyEvidenceExtractor(),
+      new ExplicitTextVacancyEvidenceExtractor(),
+      new ExplicitEmployerCharacteristicExtractor(),
+    ]);
+
+    await processVacancyObservation("obs-a", {
+      ...fixture.dependencies,
+      evidenceExtractor,
+    });
+
+    const canonical = await fixture.canonicals.findById("canonical-generated");
+    expect(canonical?.organizationRelationships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rawName: "Selected Employer", role: "EMPLOYER" }),
+    ]));
+    expect(canonical?.organizationRelationships).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ rawName: "Neighbor Employer" }),
+    ]));
+    expect(canonical?.evidenceReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceObservationId: "obs-a", kind: "EXTERNAL_IDENTIFIER_EVIDENCE" }),
+    ]));
+  });
+
+  it("rejects ambiguous multiple selected acquisition contexts", async () => {
+    const fixture = makeFixture();
+    await fixture.sources.save(observation("obs-a", "EXT-1", "Title", {
+      metadata: {
+        acquisition: {
+          contexts: [
+            { kind: "SELECTED_VACANCY", associationMethod: "PROVIDER_LOCATOR", text: "First" },
+            { kind: "SELECTED_VACANCY", associationMethod: "PROVIDER_LOCATOR", text: "Second" },
+          ],
+        },
+      },
+    }));
+
+    await expect(
+      processVacancyObservation("obs-a", fixture.dependencies),
+    ).rejects.toThrow(/multiple selected vacancy acquisition contexts/u);
   });
 });
 
@@ -467,7 +561,7 @@ function makeFixture(options: { employerOutcome?: "CREATED_NEW_CLUSTER" | "REVIE
     extract: vi.fn(async (item: SourceObservation) =>
       createExtractedVacancyEvidence({ sourceObservationId: item.id })),
   };
-  const processEmployerObservation = vi.fn(async (item: SourceObservation) => {
+  const processEmployerObservation = vi.fn(async (item: VacancyEvidenceExtractionInput) => {
     if (options.employerOutcome === "REVIEW_REQUIRED") {
       return {
         outcome: "REVIEW_REQUIRED" as const,

@@ -1,4 +1,5 @@
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
+import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { EmployerClusterAssignmentPolicy } from "../../domain/recognition/EmployerClusterAssignmentPolicy.js";
 import type { EmployerClusterDecision } from "../../domain/recognition/EmployerClusterDecision.js";
 import type { EmployerClusterMatcher } from "../../domain/recognition/EmployerClusterMatcher.js";
@@ -38,7 +39,7 @@ export type EvaluateObservationEmployerClusterResult =
   | Extract<EmployerClusterDecision, { outcome: "NO_MATCH" }>;
 
 export async function evaluateObservationEmployerCluster(
-  observation: SourceObservation,
+  observation: VacancyEvidenceExtractionInput,
   dependencies: EvaluateObservationEmployerClusterDependencies,
 ): Promise<EvaluateObservationEmployerClusterResult> {
   const existingMembership = await loadEffectiveEmployerMembership(

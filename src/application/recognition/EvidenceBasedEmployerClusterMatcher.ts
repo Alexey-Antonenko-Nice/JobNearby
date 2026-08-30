@@ -3,6 +3,7 @@ import type {
   SourceObservationId,
 } from "../../domain/capture/SourceObservation.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { EmployerCluster } from "../../domain/recognition/EmployerCluster.js";
 import type { EmployerClusterObservationProvider } from "../../domain/recognition/EmployerClusterObservationProvider.js";
 import type {
@@ -34,7 +35,7 @@ export class EvidenceBasedEmployerClusterMatcher
   ) {}
 
   async findBestMatch(
-    observation: SourceObservation,
+    observation: VacancyEvidenceExtractionInput,
     candidates: readonly EmployerCluster[],
   ): Promise<EvidenceBasedEmployerClusterMatch | null> {
     if (candidates.length === 0) return null;

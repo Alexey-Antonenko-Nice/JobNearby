@@ -5,7 +5,12 @@ import type {
   SourceObservationId,
 } from "../../domain/capture/SourceObservation.js";
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
+import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import {
+  fromSelectedVacancyContext,
+  type VacancyEvidenceExtractionInput,
+} from "../../domain/evidence/VacancyEvidenceInput.js";
 import type {
   EmployerCluster,
   EmployerClusterId,
@@ -117,6 +122,7 @@ export async function processVacancyObservation(
   if (requestedObservation === null) {
     throw new SourceObservationNotFoundError(sourceObservationId);
   }
+  const requestedEvidenceInput = evidenceExtractionInputFor(requestedObservation);
 
   const proposedCanonicalVacancyId =
     (dependencies.generateCanonicalVacancyId ?? randomUUID)();
@@ -138,7 +144,9 @@ export async function processVacancyObservation(
       );
       const extractedEvidence = await Promise.all(
         basis.observations.map((observation) =>
-          dependencies.evidenceExtractor.extract(observation)),
+          dependencies.evidenceExtractor.extract(
+            evidenceExtractionInputFor(observation),
+          )),
       );
       const establishedEmployerCluster = await resolveCanonicalEmployerCluster(
         basis.observationIds.filter((id) => id !== requestedObservation.id),
@@ -148,9 +156,9 @@ export async function processVacancyObservation(
           dependencies.processEmployerObservation !== undefined
         ? await (
           dependencies.processEmployerObservation ?? processObservation
-        )(requestedObservation, dependencies.employerRecognition)
+        )(requestedEvidenceInput, dependencies.employerRecognition)
         : await processEmployerObservationWithCanonicalContinuity(
-          requestedObservation,
+          requestedEvidenceInput,
           establishedEmployerCluster,
           dependencies.employerRecognition,
         );
@@ -199,8 +207,34 @@ export async function processVacancyObservation(
   );
 }
 
-async function processEmployerObservationWithCanonicalContinuity(
+function evidenceExtractionInputFor(
   observation: SourceObservation,
+): VacancyEvidenceExtractionInput {
+  const selectedContexts = acquisitionContexts(observation).filter(
+    (context): context is AcquisitionContext =>
+      isRecord(context) && context.kind === "SELECTED_VACANCY",
+  );
+  if (selectedContexts.length === 0) return observation;
+  if (selectedContexts.length > 1) {
+    throw new CanonicalVacancyIntegrityError(
+      `SourceObservation "${observation.id}" has multiple selected vacancy acquisition contexts.`,
+    );
+  }
+  return fromSelectedVacancyContext(observation, selectedContexts[0]!);
+}
+
+function acquisitionContexts(observation: SourceObservation): readonly unknown[] {
+  const acquisition = observation.metadata.acquisition;
+  if (!isRecord(acquisition) || !Array.isArray(acquisition.contexts)) return [];
+  return acquisition.contexts;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+async function processEmployerObservationWithCanonicalContinuity(
+  observation: VacancyEvidenceExtractionInput,
   establishedEmployerCluster: EmployerCluster,
   dependencies: ProcessObservationDependencies,
 ): Promise<ProcessObservationResult> {
