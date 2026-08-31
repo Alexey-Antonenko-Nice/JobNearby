@@ -214,6 +214,41 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
     });
   });
 
+  it("maps extracted core header facts into existing canonical fields", () => {
+    const provenance = {
+      sourceObservationId: "one",
+      extractionMethod: "TEXT_EXTRACTION" as const,
+      confidence: 0.98,
+      contentOrigin: "SELECTED_VACANCY_CONTEXT" as const,
+    };
+    const evidence = createExtractedVacancyEvidence({
+      sourceObservationId: "one",
+      vacancyTitles: [{ value: "Ingénieur conception mécanique H/F", provenance }],
+      engagements: [{ rawTerms: ["CDD"], normalizedTerms: ["FIXED_TERM"], provenance }],
+      workModes: [{ value: "HYBRID", provenance }],
+      compensations: [{
+        rawText: "Salaire brut : Annuel de 42000 Euros à 46000 Euros",
+        currency: "EUR",
+        minimum: 42000,
+        maximum: 46000,
+        period: "YEAR",
+        provenance,
+      }],
+    });
+
+    const vacancy = canonicalize([observation("one")], [evidence]);
+    expect(vacancy.role).toMatchObject({ status: "RESOLVED", value: { title: "Ingénieur conception mécanique H/F" }, confidence: 0.98 });
+    expect(vacancy.engagement.value).toEqual({ rawTerms: ["CDD"], normalizedTerms: ["FIXED_TERM"] });
+    expect(vacancy.workMode.value).toBe("HYBRID");
+    expect(vacancy.compensation.value).toEqual({
+      rawText: "Salaire brut : Annuel de 42000 Euros à 46000 Euros",
+      currency: "EUR",
+      minimum: 42000,
+      maximum: 46000,
+      period: "YEAR",
+    });
+  });
+
   it("maps only industry characteristics and does not reinterpret fingerprints as requirements", () => {
     const vacancy = canonicalize(
       [observation("one")],

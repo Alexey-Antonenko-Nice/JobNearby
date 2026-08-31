@@ -8,6 +8,10 @@ import type { ExternalIdentifierEvidence } from "../../domain/evidence/ExternalI
 import type { LocationEvidence } from "../../domain/evidence/LocationEvidence.js";
 import type { OrganizationEvidence } from "../../domain/evidence/OrganizationEvidence.js";
 import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
+import type { VacancyTitleEvidence } from "../../domain/evidence/VacancyTitleEvidence.js";
+import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
+import type { VacancyWorkModeEvidence } from "../../domain/evidence/VacancyWorkModeEvidence.js";
+import type { VacancyCompensationEvidence } from "../../domain/evidence/VacancyCompensationEvidence.js";
 import type { EmployerCluster } from "../../domain/recognition/EmployerCluster.js";
 import type { CanonicalEvidenceReference } from "../../domain/vacancies/CanonicalEvidenceReference.js";
 import type { CanonicalDerivationMetadata } from "../../domain/vacancies/CanonicalField.js";
@@ -83,7 +87,14 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     }>[] = [];
     const compensationCandidates: CanonicalCandidate<{
       readonly rawText?: string;
+      readonly currency?: string;
+      readonly minimum?: number;
+      readonly maximum?: number;
+      readonly period?: "HOUR" | "MONTH" | "YEAR";
     }>[] = [];
+    const workModeCandidates: CanonicalCandidate<
+      "ON_SITE" | "HYBRID" | "REMOTE"
+    >[] = [];
 
     for (const observation of input.observations) {
       if (usable(observation.title)) {
@@ -129,6 +140,58 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     const industryContextCandidates: CanonicalCandidate<readonly string[]>[] = [];
 
     for (const aggregate of input.extractedEvidence) {
+      for (const title of aggregate.vacancyTitles) {
+        const { id } = evidenceItemReference(
+          references,
+          "VACANCY_TITLE_EVIDENCE",
+          title,
+        );
+        roleCandidates.push({
+          value: { title: title.value },
+          supportingEvidenceIds: [id],
+          confidence: title.provenance.confidence,
+        });
+      }
+      for (const engagement of aggregate.engagements) {
+        const { id } = evidenceItemReference(
+          references,
+          "VACANCY_ENGAGEMENT_EVIDENCE",
+          engagement,
+        );
+        engagementCandidates.push({
+          value: {
+            rawTerms: engagement.rawTerms,
+            normalizedTerms: engagement.normalizedTerms,
+          },
+          supportingEvidenceIds: [id],
+          confidence: engagement.provenance.confidence,
+        });
+      }
+      for (const workMode of aggregate.workModes) {
+        const { id } = evidenceItemReference(
+          references,
+          "VACANCY_WORK_MODE_EVIDENCE",
+          workMode,
+        );
+        workModeCandidates.push({
+          value: workMode.value,
+          supportingEvidenceIds: [id],
+          confidence: workMode.provenance.confidence,
+        });
+      }
+      for (const compensation of aggregate.compensations) {
+        const { id } = evidenceItemReference(
+          references,
+          "VACANCY_COMPENSATION_EVIDENCE",
+          compensation,
+        );
+        const { provenance: _provenance, ...value } = compensation;
+        compensationCandidates.push({
+          value,
+          supportingEvidenceIds: [id],
+          confidence: compensation.provenance.confidence,
+        });
+      }
       for (const organization of aggregate.organizations) {
         const { id } = evidenceItemReference(
           references,
@@ -236,6 +299,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       locationCandidates,
       engagementCandidates,
       compensationCandidates,
+      workModeCandidates,
       industryContextCandidates,
       derivation: input.derivation,
     };
@@ -273,16 +337,36 @@ function evidenceItemReference(
     | OrganizationEvidence
     | LocationEvidence
     | EmployerCharacteristicEvidence
-    | PersonEvidence,
-  qualifier: string,
+    | PersonEvidence
+    | VacancyTitleEvidence
+    | VacancyEngagementEvidence
+    | VacancyWorkModeEvidence
+    | VacancyCompensationEvidence,
+  qualifier = "",
 ): CollectedReference {
   return collectReference(
     references,
     evidence.provenance,
     kind,
-    evidence.value,
+    evidenceValue(evidence),
     qualifier,
   );
+}
+
+function evidenceValue(
+  evidence:
+    | VacancyTitleEvidence
+    | VacancyEngagementEvidence
+    | VacancyWorkModeEvidence
+    | VacancyCompensationEvidence
+    | OrganizationEvidence
+    | LocationEvidence
+    | EmployerCharacteristicEvidence
+    | PersonEvidence,
+): string {
+  if ("rawTerms" in evidence) return evidence.rawTerms.join("|");
+  if ("rawText" in evidence) return evidence.rawText;
+  return evidence.value;
 }
 
 function externalIdentifierReference(

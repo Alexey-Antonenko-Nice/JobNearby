@@ -11,6 +11,7 @@ import { CompositeVacancyEvidenceExtractor } from "../../application/evidence/Co
 import { DirectFieldVacancyEvidenceExtractor } from "../../application/evidence/DirectFieldVacancyEvidenceExtractor.js";
 import { ExplicitEmployerCharacteristicExtractor } from "../../application/evidence/ExplicitEmployerCharacteristicExtractor.js";
 import { ExplicitTextVacancyEvidenceExtractor } from "../../application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
+import { CoreVacancyHeaderFactsExtractor } from "../../application/evidence/CoreVacancyHeaderFactsExtractor.js";
 import { EvidenceBasedEmployerClusterMatcher } from "../../application/recognition/EvidenceBasedEmployerClusterMatcher.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
@@ -52,6 +53,7 @@ export function createCaptureProcessingRuntime(
     new DirectFieldVacancyEvidenceExtractor(),
     new ExplicitTextVacancyEvidenceExtractor(),
     new ExplicitEmployerCharacteristicExtractor(),
+    new CoreVacancyHeaderFactsExtractor(),
   ]);
   const matcher = new EvidenceBasedEmployerClusterMatcher({
     evidenceExtractor,

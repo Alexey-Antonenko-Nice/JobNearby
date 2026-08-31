@@ -9,6 +9,10 @@ import type { LocationEvidence } from "../../domain/evidence/LocationEvidence.js
 import type { OrganizationEvidence } from "../../domain/evidence/OrganizationEvidence.js";
 import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import type { VacancyTitleEvidence } from "../../domain/evidence/VacancyTitleEvidence.js";
+import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
+import type { VacancyWorkModeEvidence } from "../../domain/evidence/VacancyWorkModeEvidence.js";
+import type { VacancyCompensationEvidence } from "../../domain/evidence/VacancyCompensationEvidence.js";
 import {
   normalizeVacancyEvidenceInput,
   type VacancyEvidenceExtractionInput,
@@ -55,8 +59,28 @@ export class CompositeVacancyEvidenceExtractor
         results.flatMap(({ externalIdentifiers }) => externalIdentifiers),
         externalIdentifierKey,
       ),
+      vacancyTitles: unique(results.flatMap(({ vacancyTitles }) => vacancyTitles), titleKey),
+      engagements: unique(results.flatMap(({ engagements }) => engagements), engagementKey),
+      workModes: unique(results.flatMap(({ workModes }) => workModes), workModeKey),
+      compensations: unique(results.flatMap(({ compensations }) => compensations), compensationKey),
     });
   }
+}
+
+function titleKey(evidence: VacancyTitleEvidence): string {
+  return `${evidence.value}\u0000${provenanceKey(evidence.provenance)}`;
+}
+
+function engagementKey(evidence: VacancyEngagementEvidence): string {
+  return `${evidence.rawTerms.join("|")}\u0000${evidence.normalizedTerms.join("|")}\u0000${provenanceKey(evidence.provenance)}`;
+}
+
+function workModeKey(evidence: VacancyWorkModeEvidence): string {
+  return `${evidence.value}\u0000${provenanceKey(evidence.provenance)}`;
+}
+
+function compensationKey(evidence: VacancyCompensationEvidence): string {
+  return `${evidence.rawText}\u0000${evidence.currency ?? ""}\u0000${evidence.minimum ?? ""}\u0000${evidence.maximum ?? ""}\u0000${evidence.period ?? ""}\u0000${provenanceKey(evidence.provenance)}`;
 }
 
 function provenanceKey(provenance: EvidenceProvenance): string {
