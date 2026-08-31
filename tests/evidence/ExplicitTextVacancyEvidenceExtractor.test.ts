@@ -31,6 +31,7 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
   it("preserves explicit France Travail employer and contextual organization roles", async () => {
     const result = await extractor.extract(selectedContext([
       "Ingénieur Industrialisation Composants Plastiques H/F",
+      "Ingénieur Industrialisation Composants Plastiques H/F",
       "Employeur",
       "Geser Best",
       "Notre agence GESER-BEST recherche un ingénieur.",
@@ -45,7 +46,20 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
     ]));
     expect(new Set(result.organizations.map(({ normalizedName }) => normalizedName))).toEqual(new Set(["geser best"]));
     expect(result.organizations).not.toContainEqual(expect.objectContaining({ role: "CLIENT" }));
+    expect(result.organizations).not.toContainEqual(expect.objectContaining({
+      value: "Ingénieur Industrialisation Composants Plastiques H/F",
+    }));
     expect(result.organizations.every(({ provenance }) => provenance.contentOrigin === "SELECTED_VACANCY_CONTEXT")).toBe(true);
+  });
+
+  it.each([
+    "Technicien de maintenance H/F",
+    "Responsable méthodes F/H",
+    "Ingénieur projet M/F",
+    "Cheffe de projet F/M",
+  ])("does not infer a confidently marked repeated vacancy title as a header organization: %s", async (title) => {
+    const result = await extractor.extract(selectedContext([title, title, "67 - Strasbourg"].join("\n")));
+    expect(result.organizations).toEqual([]);
   });
 
   it("preserves bounded Akkodis organization, recruitment, and consultancy context", async () => {
