@@ -138,6 +138,60 @@ describe("compareEmployerEvidence", () => {
     },
   );
 
+  it.each(["RECRUITER", "CONSULTANCY"] as const)(
+    "suppresses unknown employer identity when the same name has explicit %s context",
+    (contextRole) => {
+      const organizations = [
+        { value: "Akkodis", role: "UNKNOWN" },
+        { value: "Akkodis", role: contextRole },
+      ] as never;
+      const comparison = compareEmployerEvidence(
+        evidence("left", { organizations }),
+        evidence("right", { organizations }),
+      );
+
+      expect(comparison.positiveSignals).not.toContainEqual(
+        expect.objectContaining({ kind: "EMPLOYER_IDENTITY" }),
+      );
+      expect(comparison.contradictions).toEqual([]);
+    },
+  );
+
+  it("applies contextual-role suppression across conservatively normalized spellings", () => {
+    const comparison = compareEmployerEvidence(
+      evidence("left", { organizations: [
+        { value: "Geser Best", normalizedName: "geser best", role: "UNKNOWN" } as never,
+        { value: "GESER-BEST", normalizedName: "geser best", role: "RECRUITER" } as never,
+      ] }),
+      evidence("right", { organizations: [
+        { value: "GESER BEST", normalizedName: "geser best", role: "UNKNOWN" } as never,
+      ] }),
+    );
+
+    expect(comparison.positiveSignals).not.toContainEqual(
+      expect.objectContaining({ kind: "EMPLOYER_IDENTITY" }),
+    );
+  });
+
+  it.each(["RECRUITER", "CONSULTANCY"] as const)(
+    "does not suppress explicit employer evidence when the same name also has %s context",
+    (contextRole) => {
+      const comparison = compareEmployerEvidence(
+        evidence("left", { organizations: [
+          { value: "Geser Best", normalizedName: "geser best", role: "EMPLOYER" } as never,
+          { value: "GESER-BEST", normalizedName: "geser best", role: contextRole } as never,
+        ] }),
+        evidence("right", { organizations: [
+          { value: "GESER BEST", normalizedName: "geser best", role: "UNKNOWN" } as never,
+        ] }),
+      );
+
+      expect(comparison.positiveSignals).toContainEqual(
+        expect.objectContaining({ kind: "EMPLOYER_IDENTITY", strength: "STRONG" }),
+      );
+    },
+  );
+
   it("does not treat an explicit intermediary matching an employer name as employer identity", () => {
     const comparison = compareEmployerEvidence(
       evidence("left", { organizations: [{ value: "ACME", role: "EMPLOYER" } as never] }),

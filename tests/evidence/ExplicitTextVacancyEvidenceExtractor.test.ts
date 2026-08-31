@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
 import { ExplicitTextVacancyEvidenceExtractor } from "../../src/application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
+import { fromSelectedVacancyContext } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 
 function observation(
   overrides: Partial<SourceObservation> = {},
@@ -17,6 +18,82 @@ function observation(
 
 describe("ExplicitTextVacancyEvidenceExtractor", () => {
   const extractor = new ExplicitTextVacancyEvidenceExtractor();
+
+  function selectedContext(text: string) {
+    return fromSelectedVacancyContext(observation(), {
+      kind: "SELECTED_VACANCY",
+      associationMethod: "PROVIDER_LOCATOR",
+      text,
+      associationEvidence: ["bounded fixture"],
+    });
+  }
+
+  it("preserves explicit France Travail employer and contextual organization roles", async () => {
+    const result = await extractor.extract(selectedContext([
+      "Ingénieur Industrialisation Composants Plastiques H/F",
+      "Employeur",
+      "Geser Best",
+      "Notre agence GESER-BEST recherche un ingénieur.",
+      "GESER-BEST accompagne les entreprises pour renforcer leurs équipes en mettant à disposition des experts qualifiés.",
+      "Pour le compte de notre client, nous intervenons sur le projet.",
+    ].join("\n")));
+
+    expect(result.organizations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "Geser Best", normalizedName: "geser best", role: "EMPLOYER" }),
+      expect.objectContaining({ value: "GESER-BEST", normalizedName: "geser best", role: "RECRUITER" }),
+      expect.objectContaining({ value: "GESER-BEST", normalizedName: "geser best", role: "CONSULTANCY" }),
+    ]));
+    expect(new Set(result.organizations.map(({ normalizedName }) => normalizedName))).toEqual(new Set(["geser best"]));
+    expect(result.organizations).not.toContainEqual(expect.objectContaining({ role: "CLIENT" }));
+    expect(result.organizations.every(({ provenance }) => provenance.contentOrigin === "SELECTED_VACANCY_CONTEXT")).toBe(true);
+  });
+
+  it("preserves bounded Akkodis organization, recruitment, and consultancy context", async () => {
+    const result = await extractor.extract(selectedContext([
+      "Akkodis",
+      "Ingénieur conception mécanique H/F",
+      "Promue par un recruteur",
+      "Akkodis recrute pour ce poste.",
+      "Consulting & Solutions d'Akkodis France accompagne ce projet.",
+      "Akkodis recrute de nouveaux talents.",
+    ].join("\n")));
+
+    expect(result.organizations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "Akkodis", role: "UNKNOWN" }),
+      expect.objectContaining({ value: "Akkodis", role: "RECRUITER" }),
+      expect.objectContaining({ value: "Akkodis France", role: "CONSULTANCY" }),
+    ]));
+    expect(result.organizations.filter(({ value, role }) => value === "Akkodis" && role === "RECRUITER")).toHaveLength(1);
+    expect(result.organizations).not.toContainEqual(expect.objectContaining({ role: "CLIENT" }));
+  });
+
+  it("preserves an explicitly labelled named end client without inventing an employer role", async () => {
+    const result = await extractor.extract(selectedContext([
+      "Client final",
+      "ACME Industries",
+      "Le projet concerne une modernisation de ligne.",
+    ].join("\n")));
+
+    expect(result.organizations).toEqual([
+      expect.objectContaining({
+        value: "ACME Industries",
+        normalizedName: "acme industries",
+        role: "CLIENT",
+      }),
+    ]);
+    expect(result.organizations).not.toContainEqual(
+      expect.objectContaining({ role: "EMPLOYER" }),
+    );
+  });
+
+  it.each([
+    "Entreprise client groupe agence",
+    "Notre client recherche un technicien.",
+    "La marque ROBOPAC apparaît dans une description de machine.",
+  ])("does not invent an organization from unbound generic or brand-like prose: %s", async (text) => {
+    const result = await extractor.extract(selectedContext(text));
+    expect(result.organizations).toEqual([]);
+  });
 
   it("extracts HEUFT France as the explicitly named ACTUA client", async () => {
     const result = await extractor.extract(

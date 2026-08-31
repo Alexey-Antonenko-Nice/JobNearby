@@ -4,7 +4,10 @@ import type {
 } from "../evidence/EmployerCharacteristicEvidence.js";
 import type { ExtractedVacancyEvidence } from "../evidence/ExtractedVacancyEvidence.js";
 import type { LocationEvidence } from "../evidence/LocationEvidence.js";
-import type { OrganizationEvidence } from "../evidence/OrganizationEvidence.js";
+import {
+  normalizeOrganizationEvidenceName,
+  type OrganizationEvidence,
+} from "../evidence/OrganizationEvidence.js";
 import type {
   EmployerEvidenceComparison,
   EmployerMatchContradiction,
@@ -48,7 +51,7 @@ function compareOrganizations(
 
   for (const leftEmployer of leftEmployers) {
     const rightEmployer = rightEmployers.find(
-      ({ value }) => normalize(value) === normalize(leftEmployer.value),
+      (candidate) => organizationNameKey(candidate) === organizationNameKey(leftEmployer),
     );
     if (rightEmployer !== undefined) {
       signals.push({
@@ -64,7 +67,7 @@ function compareOrganizations(
   if (
     leftEmployers.length === 1 &&
     rightEmployers.length === 1 &&
-    normalize(leftEmployers[0]!.value) !== normalize(rightEmployers[0]!.value)
+    organizationNameKey(leftEmployers[0]!) !== organizationNameKey(rightEmployers[0]!)
   ) {
     contradictions.push({
       kind: "EMPLOYER_IDENTITY",
@@ -83,7 +86,7 @@ function compareOrganizations(
     const rightIntermediaries = uniqueOrganizations(right.filter((item) => item.role === role));
     for (const leftIntermediary of leftIntermediaries) {
       const rightIntermediary = rightIntermediaries.find(
-        ({ value }) => normalize(value) === normalize(leftIntermediary.value),
+        (candidate) => organizationNameKey(candidate) === organizationNameKey(leftIntermediary),
       );
       if (rightIntermediary !== undefined) {
         signals.push({
@@ -113,14 +116,16 @@ function compareAmbiguousOrganizations(
 
   for (const leftOrganization of leftEligible) {
     const rightOrganization = rightEligible.find(
-      ({ value }) => normalize(value) === normalize(leftOrganization.value),
+      (candidate) => organizationNameKey(candidate) === organizationNameKey(leftOrganization),
     );
     if (
       rightOrganization === undefined ||
       (leftOrganization.role === "EMPLOYER" &&
         rightOrganization.role === "EMPLOYER") ||
-      hasExplicitIntermediaryRole(left, leftOrganization.value) ||
-      hasExplicitIntermediaryRole(right, rightOrganization.value)
+      (leftOrganization.role === "UNKNOWN" &&
+        hasExplicitIntermediaryRole(left, leftOrganization)) ||
+      (rightOrganization.role === "UNKNOWN" &&
+        hasExplicitIntermediaryRole(right, rightOrganization))
     ) {
       continue;
     }
@@ -144,7 +149,7 @@ function preferExplicitEmployer(
 ): OrganizationEvidence[] {
   const values = new Map<string, OrganizationEvidence>();
   for (const organization of organizations) {
-    const key = normalize(organization.value);
+    const key = organizationNameKey(organization);
     const current = values.get(key);
     if (current === undefined || organization.role === "EMPLOYER") {
       values.set(key, organization);
@@ -155,14 +160,20 @@ function preferExplicitEmployer(
 
 function hasExplicitIntermediaryRole(
   organizations: readonly OrganizationEvidence[],
-  value: string,
+  evidence: OrganizationEvidence,
 ): boolean {
   return organizations.some(
     (organization) =>
       (organization.role === "RECRUITMENT_AGENCY" ||
-        organization.role === "STAFFING_AGENCY") &&
-      normalize(organization.value) === normalize(value),
+        organization.role === "STAFFING_AGENCY" ||
+        organization.role === "RECRUITER" ||
+        organization.role === "CONSULTANCY") &&
+      organizationNameKey(organization) === organizationNameKey(evidence),
   );
+}
+
+function organizationNameKey(evidence: OrganizationEvidence): string {
+  return evidence.normalizedName ?? normalizeOrganizationEvidenceName(evidence.value);
 }
 
 function compareLocations(
@@ -273,7 +284,13 @@ function normalize(value: string): string {
 function uniqueOrganizations(
   evidence: readonly OrganizationEvidence[],
 ): OrganizationEvidence[] {
-  return uniqueByNormalizedValue(evidence);
+  const seen = new Set<string>();
+  return evidence.filter((item) => {
+    const key = organizationNameKey(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function uniqueLocations(evidence: readonly LocationEvidence[]): LocationEvidence[] {

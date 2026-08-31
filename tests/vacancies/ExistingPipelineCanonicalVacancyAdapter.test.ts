@@ -101,6 +101,9 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
           { value: "HEUFT France", role: "EMPLOYER" },
           { value: "ADSEARCH", role: "RECRUITMENT_AGENCY" },
           { value: "Temporary Work", role: "STAFFING_AGENCY" },
+          { value: "Akkodis", role: "RECRUITER" },
+          { value: "Engineering Partner", role: "CONSULTANCY" },
+          { value: "Named Customer", role: "CLIENT" },
         ],
       })],
     );
@@ -108,6 +111,9 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
       expect.objectContaining({ rawName: "HEUFT France", role: "EMPLOYER" }),
       expect.objectContaining({ rawName: "ADSEARCH", role: "RECRUITER" }),
       expect.objectContaining({ rawName: "Temporary Work", role: "STAFFING_AGENCY" }),
+      expect.objectContaining({ rawName: "Akkodis", role: "RECRUITER" }),
+      expect.objectContaining({ rawName: "Engineering Partner", role: "CONSULTANCY" }),
+      expect.objectContaining({ rawName: "Named Customer", role: "CLIENT" }),
     ]);
     expect(vacancy.organizationRelationships).not.toContainEqual(
       expect.objectContaining({ rawName: "ADSEARCH", role: "EMPLOYER" }),

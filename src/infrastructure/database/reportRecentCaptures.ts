@@ -291,7 +291,7 @@ async function reportObservation(
         extractionMethod: "DIRECT_FIELD",
       },
       employerEvidence: {
-        organizations: evidence.organizations,
+        organizations: evidence.organizations.slice(0, 10),
         employerCharacteristics: evidence.employerCharacteristics,
       },
       vacancyEvidence: {
