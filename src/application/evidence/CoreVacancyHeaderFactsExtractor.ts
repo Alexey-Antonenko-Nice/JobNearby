@@ -28,7 +28,7 @@ export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor
       ...(contentOrigin === undefined ? {} : { contentOrigin }),
     };
 
-    const title = lines.slice(0, 12).find(isConservativeTitle);
+    const title = lines.slice(0, 12).find(isConservativeVacancyTitle);
     const location = lines.slice(0, 16).map(extractLocation).find((value) => value !== null);
     const engagement = lines.map(extractEngagement).find((value) => value !== null);
     const workMode = lines.map(extractWorkMode).find((value) => value !== null);
@@ -49,7 +49,7 @@ function normalizeLine(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
 }
 
-function isConservativeTitle(line: string): boolean {
+export function isConservativeVacancyTitle(line: string): boolean {
   return line.length >= 5 && line.length <= 160 && !SECTION_HEADING.test(line) && TITLE_MARKER.test(line);
 }
 

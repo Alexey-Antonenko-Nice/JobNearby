@@ -8,6 +8,8 @@ import type { OrganizationEvidence } from "../../src/domain/evidence/Organizatio
 import type { EmployerCluster } from "../../src/domain/recognition/EmployerCluster.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
+import { ExplicitTextVacancyEvidenceExtractor } from "../../src/application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
+import { fromSelectedVacancyContext } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 
 const adapter = new ExistingPipelineCanonicalVacancyAdapter(
   new DeterministicCanonicalVacancyCanonicalizer(),
@@ -132,6 +134,36 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
       expect.objectContaining({ rawName: "Displayed Name", role: "DISPLAYED_COMPANY" }),
       expect.objectContaining({ rawName: "Publication Brand", role: "UNKNOWN" }),
     ]);
+  });
+
+  it("does not project a repeated vacancy title as a displayed company", async () => {
+    const source = observation("one");
+    const evidence = await new ExplicitTextVacancyEvidenceExtractor().extract(
+      fromSelectedVacancyContext(source, {
+        kind: "SELECTED_VACANCY",
+        associationMethod: "PROVIDER_LOCATOR",
+        text: [
+          "Ingénieur Industrialisation Composants Plastiques H/F",
+          "Ingénieur Industrialisation Composants Plastiques H/F",
+          "67 - Strasbourg",
+          "Employeur",
+          "Geser Best",
+          "Notre agence GESER-BEST recherche un ingénieur.",
+        ].join("\n"),
+      }),
+    );
+    const vacancy = canonicalize([source], [evidence]);
+
+    expect(vacancy.organizationRelationships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rawName: "Geser Best", role: "EMPLOYER" }),
+      expect.objectContaining({ rawName: "GESER-BEST", role: "RECRUITER" }),
+    ]));
+    expect(vacancy.organizationRelationships).not.toContainEqual(
+      expect.objectContaining({
+        rawName: "Ingénieur Industrialisation Composants Plastiques H/F",
+        role: "DISPLAYED_COMPANY",
+      }),
+    );
   });
 
   it("adds unresolved employer-cluster context without replacing explicit evidence", () => {

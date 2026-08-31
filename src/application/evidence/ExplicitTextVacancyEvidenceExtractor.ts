@@ -8,6 +8,7 @@ import {
 } from "../../domain/evidence/OrganizationEvidence.js";
 import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import { isConservativeVacancyTitle } from "./CoreVacancyHeaderFactsExtractor.js";
 import {
   normalizeVacancyEvidenceInput,
   textualEvidenceContent,
@@ -132,6 +133,7 @@ function extractBoundedOrganizationRoles(
 
   if (
     lines.length >= 2 &&
+    !isConservativeVacancyTitle(lines[0]!) &&
     looksLikeExplicitOrganizationName(lines[0]!) &&
     /\b(?:h\s*\/\s*f|f\s*\/\s*h|m\s*\/\s*f|f\s*\/\s*m)\b/iu.test(lines[1]!)
   ) {
