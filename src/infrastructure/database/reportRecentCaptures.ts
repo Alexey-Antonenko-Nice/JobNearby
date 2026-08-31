@@ -4,7 +4,10 @@ import { CompositeVacancyEvidenceExtractor } from "../../application/evidence/Co
 import { DirectFieldVacancyEvidenceExtractor } from "../../application/evidence/DirectFieldVacancyEvidenceExtractor.js";
 import { ExplicitEmployerCharacteristicExtractor } from "../../application/evidence/ExplicitEmployerCharacteristicExtractor.js";
 import { ExplicitTextVacancyEvidenceExtractor } from "../../application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
+import { CoreVacancyHeaderFactsExtractor } from "../../application/evidence/CoreVacancyHeaderFactsExtractor.js";
+import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
+import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import { SqliteSourceObservationRepository } from "../persistence/SqliteSourceObservationRepository.js";
 
 interface ObservationRow {
@@ -156,6 +159,7 @@ async function main(): Promise<void> {
       new DirectFieldVacancyEvidenceExtractor(),
       new ExplicitTextVacancyEvidenceExtractor(),
       new ExplicitEmployerCharacteristicExtractor(),
+      new CoreVacancyHeaderFactsExtractor(),
     ]);
     const canonicalIds = [...new Set(rows.flatMap((row) =>
       row.canonical_vacancy_id === null ? [] : [row.canonical_vacancy_id],
@@ -236,7 +240,7 @@ async function reportObservation(
   fieldsByCanonical: ReadonlyMap<string, readonly CanonicalFieldRow[]>,
   organizationsByCanonical: ReadonlyMap<string, readonly CanonicalOrganizationRow[]>,
 ) {
-  const evidence = await evidenceExtractor.extract(observation);
+  const evidence = await evidenceExtractor.extract(evidenceInputForReport(observation));
   const canonicalId = row.canonical_vacancy_id;
   const fields = canonicalId === null ? [] : fieldsByCanonical.get(canonicalId) ?? [];
   const organizations = canonicalId === null
@@ -291,11 +295,33 @@ async function reportObservation(
         employerCharacteristics: evidence.employerCharacteristics,
       },
       vacancyEvidence: {
-        locations: evidence.locations,
+        titles: evidence.vacancyTitles.slice(0, 10),
+        locations: evidence.locations.slice(0, 10),
+        engagements: evidence.engagements.slice(0, 10),
+        workModes: evidence.workModes.slice(0, 10),
+        compensations: evidence.compensations.slice(0, 10),
         externalIdentifiers: evidence.externalIdentifiers,
       },
     },
   };
+}
+
+function evidenceInputForReport(observation: SourceObservation) {
+  const acquisition = observation.metadata.acquisition;
+  if (!isRecord(acquisition) || !Array.isArray(acquisition.contexts)) {
+    return observation;
+  }
+  const selected = acquisition.contexts.filter(
+    (context): context is AcquisitionContext =>
+      isRecord(context) && context.kind === "SELECTED_VACANCY",
+  );
+  if (selected.length === 0) return observation;
+  if (selected.length > 1) {
+    throw new Error(
+      `SourceObservation "${observation.id}" has multiple selected vacancy acquisition contexts.`,
+    );
+  }
+  return fromSelectedVacancyContext(observation, selected[0]!);
 }
 
 function countClusters(db: Database.Database, ...statuses: readonly string[]): number {

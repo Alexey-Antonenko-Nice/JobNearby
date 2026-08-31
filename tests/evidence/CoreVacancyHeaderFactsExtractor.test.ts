@@ -44,7 +44,7 @@ describe("CoreVacancyHeaderFactsExtractor", () => {
     const result = await extractor.extract(selected([
       "Akkodis",
       "Ingénieur conception mécanique H/F",
-      "Pays de la Loire, France",
+      "Pays de la Loire, France · il y a 3 semaines · 27 personnes ont cliqué",
       "Hybride",
       "CDD",
       "À propos de l'offre d'emploi",
@@ -58,6 +58,30 @@ describe("CoreVacancyHeaderFactsExtractor", () => {
     for (const evidence of [...result.vacancyTitles, ...result.locations, ...result.engagements, ...result.workModes]) {
       expect(evidence.provenance).toMatchObject({ sourceObservationId: "selected-observation", extractionMethod: "TEXT_EXTRACTION", confidence: 0.98, contentOrigin: "SELECTED_VACANCY_CONTEXT" });
     }
+  });
+
+  it("extracts an explicit salary range embedded in normalized bounded text", async () => {
+    const result = await extractor.extract(selected(
+      "Conditions proposées · CDI · Salaire brut :  Annuel de 42000.0 Euros à 46000.0 Euros · Prise de poste immédiate",
+    ));
+
+    expect(result.compensations).toEqual([
+      expect.objectContaining({
+        rawText: "Salaire brut : Annuel de 42000.0 Euros à 46000.0 Euros",
+        currency: "EUR",
+        minimum: 42000,
+        maximum: 46000,
+        period: "YEAR",
+      }),
+    ]);
+  });
+
+  it("does not extract a location before France without a conservative header boundary", async () => {
+    const result = await extractor.extract(selected(
+      "Technicien maintenance H/F\nNotre groupe intervient en Pays de la Loire, France auprès de nombreux clients.",
+    ));
+
+    expect(result.locations).toEqual([]);
   });
 
   it("rejects headings, unrelated numbers, and implicit on-site assumptions", async () => {
