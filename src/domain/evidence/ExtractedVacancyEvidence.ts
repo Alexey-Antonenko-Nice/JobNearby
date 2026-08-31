@@ -20,6 +20,22 @@ import {
   type PersonEvidence,
 } from "./PersonEvidence.js";
 import { requireEvidenceText } from "./EvidenceProvenance.js";
+import {
+  createVacancyTitleEvidence,
+  type VacancyTitleEvidence,
+} from "./VacancyTitleEvidence.js";
+import {
+  createVacancyEngagementEvidence,
+  type VacancyEngagementEvidence,
+} from "./VacancyEngagementEvidence.js";
+import {
+  createVacancyWorkModeEvidence,
+  type VacancyWorkModeEvidence,
+} from "./VacancyWorkModeEvidence.js";
+import {
+  createVacancyCompensationEvidence,
+  type VacancyCompensationEvidence,
+} from "./VacancyCompensationEvidence.js";
 
 export interface ExtractedVacancyEvidence {
   readonly sourceObservationId: SourceObservationId;
@@ -28,6 +44,10 @@ export interface ExtractedVacancyEvidence {
   readonly people: readonly PersonEvidence[];
   readonly employerCharacteristics: readonly EmployerCharacteristicEvidence[];
   readonly externalIdentifiers: readonly ExternalIdentifierEvidence[];
+  readonly vacancyTitles: readonly VacancyTitleEvidence[];
+  readonly engagements: readonly VacancyEngagementEvidence[];
+  readonly workModes: readonly VacancyWorkModeEvidence[];
+  readonly compensations: readonly VacancyCompensationEvidence[];
 }
 
 export interface CreateExtractedVacancyEvidenceInput {
@@ -37,6 +57,10 @@ export interface CreateExtractedVacancyEvidenceInput {
   readonly people?: readonly PersonEvidence[];
   readonly employerCharacteristics?: readonly EmployerCharacteristicEvidence[];
   readonly externalIdentifiers?: readonly ExternalIdentifierEvidence[];
+  readonly vacancyTitles?: readonly VacancyTitleEvidence[];
+  readonly engagements?: readonly VacancyEngagementEvidence[];
+  readonly workModes?: readonly VacancyWorkModeEvidence[];
+  readonly compensations?: readonly VacancyCompensationEvidence[];
 }
 
 export function createExtractedVacancyEvidence(
@@ -57,6 +81,12 @@ export function createExtractedVacancyEvidence(
     externalIdentifiers: (input.externalIdentifiers ?? []).map(
       createExternalIdentifierEvidence,
     ),
+    vacancyTitles: (input.vacancyTitles ?? []).map(createVacancyTitleEvidence),
+    engagements: (input.engagements ?? []).map(createVacancyEngagementEvidence),
+    workModes: (input.workModes ?? []).map(createVacancyWorkModeEvidence),
+    compensations: (input.compensations ?? []).map(
+      createVacancyCompensationEvidence,
+    ),
   };
 
   const allEvidence = [
@@ -65,6 +95,10 @@ export function createExtractedVacancyEvidence(
     ...result.people,
     ...result.employerCharacteristics,
     ...result.externalIdentifiers,
+    ...result.vacancyTitles,
+    ...result.engagements,
+    ...result.workModes,
+    ...result.compensations,
   ];
   if (
     allEvidence.some(
