@@ -1,7 +1,11 @@
 import type { ExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import { createExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import type { LocationEvidence } from "../../domain/evidence/LocationEvidence.js";
-import type { OrganizationEvidence } from "../../domain/evidence/OrganizationEvidence.js";
+import {
+  normalizeOrganizationEvidenceName,
+  type OrganizationEvidence,
+  type OrganizationEvidenceRole,
+} from "../../domain/evidence/OrganizationEvidence.js";
 import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
 import {
@@ -31,6 +35,17 @@ export class ExplicitTextVacancyEvidenceExtractor
     for (const value of extractExplicitEmployerNames(vacancyText)) {
       organizations.push({ value, role: "EMPLOYER", provenance });
     }
+
+    organizations.push(
+      ...extractBoundedOrganizationRoles(vacancyText).map(
+        ({ value, role }) => ({
+          value,
+          normalizedName: normalizeOrganizationEvidenceName(value),
+          role,
+          provenance,
+        }),
+      ),
+    );
 
     const intermediaryRole = classifyDisplayedIntermediary(
       vacancyText,
@@ -82,6 +97,84 @@ function extractExplicitEmployerNames(text: string): string[] {
   }
 
   return [...new Set(names)];
+}
+
+interface ExtractedOrganizationRole {
+  readonly value: string;
+  readonly role: OrganizationEvidenceRole;
+}
+
+function extractBoundedOrganizationRoles(
+  text: string,
+): ExtractedOrganizationRole[] {
+  const results: ExtractedOrganizationRole[] = [];
+  const lines = text.split(/\r?\n/u).map(normalizeCapturedValue).filter(Boolean);
+
+  const roleLabels: Readonly<Record<string, OrganizationEvidenceRole>> = {
+    employeur: "EMPLOYER",
+    recruteur: "RECRUITER",
+    client: "CLIENT",
+    "client final": "CLIENT",
+    "end customer": "CLIENT",
+  };
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const label = lines[index]!.replace(/\s*:\s*$/u, "").toLocaleLowerCase();
+    const role = roleLabels[label];
+    if (role !== undefined) addOrganizationRole(results, lines[index + 1]!, role);
+  }
+
+  for (const match of text.matchAll(
+    /(?:^|\n)\s*(Employeur|Recruteur|Client(?:\s+final)?|End\s+customer)\s*:\s*([^\n,;:!?]{2,80})/giu,
+  )) {
+    const role = roleLabels[(match[1] ?? "").toLocaleLowerCase()];
+    if (role !== undefined) addOrganizationRole(results, match[2] ?? "", role);
+  }
+
+  if (
+    lines.length >= 2 &&
+    looksLikeExplicitOrganizationName(lines[0]!) &&
+    /\b(?:h\s*\/\s*f|f\s*\/\s*h|m\s*\/\s*f|f\s*\/\s*m)\b/iu.test(lines[1]!)
+  ) {
+    addOrganizationRole(results, lines[0]!, "UNKNOWN");
+  }
+
+  for (const match of text.matchAll(
+    /\bnotre\s+agence\s+([\p{L}\d][\p{L}\d&'’().\-\s]{1,60}?)\s+(?:recherche|recrute)\b/giu,
+  )) {
+    addOrganizationRole(results, match[1] ?? "", "RECRUITER");
+  }
+  for (const match of text.matchAll(
+    /(?:^|[.!?\n])\s*([\p{Lu}][\p{L}\d&'’().\-]*(?:\s+[\p{Lu}][\p{L}\d&'’().\-]*){0,4})\s+(?:recherche|recrute)\b/gu,
+  )) {
+    addOrganizationRole(results, match[1] ?? "", "RECRUITER");
+  }
+  for (const match of text.matchAll(
+    /\bConsulting\s*&\s*Solutions\s+d['’]([\p{Lu}][\p{L}\d&'’().\-]*(?:\s+[\p{Lu}][\p{L}\d&'’().\-]*){0,4})\b/gu,
+  )) {
+    addOrganizationRole(results, match[1] ?? "", "CONSULTANCY");
+  }
+  for (const match of text.matchAll(
+    /(?:^|[.!?\n])\s*([\p{Lu}][\p{L}\d&'’().\-]*(?:\s+[\p{Lu}][\p{L}\d&'’().\-]*){0,4})\s+(?:accompagne|aide)\s+(?:les\s+)?entreprises\b[^.!?\n]{0,140}\b(?:experts?|ing[eé]nieurs?)\b/gu,
+  )) {
+    addOrganizationRole(results, match[1] ?? "", "CONSULTANCY");
+  }
+
+  return uniqueByRoleAndValue(results);
+}
+
+function addOrganizationRole(
+  results: ExtractedOrganizationRole[],
+  rawValue: string,
+  role: OrganizationEvidenceRole,
+): void {
+  const value = normalizeCapturedValue(rawValue);
+  if (
+    value.length > 0 &&
+    looksLikeExplicitOrganizationName(value) &&
+    !/^(?:entreprise|client|groupe|agence|employeur)$/iu.test(value)
+  ) {
+    results.push({ value, role });
+  }
 }
 
 function classifyDisplayedIntermediary(
@@ -207,7 +300,11 @@ function uniqueByRoleAndValue<T extends { readonly role: string; readonly value:
 ): T[] {
   const seen = new Set<string>();
   return evidence.filter((item) => {
-    const key = `${item.role}\u0000${normalizeForComparison(item.value)}`;
+    const normalizedName = "normalizedName" in item &&
+        typeof item.normalizedName === "string"
+      ? item.normalizedName
+      : normalizeOrganizationEvidenceName(item.value);
+    const key = `${item.role}\u0000${normalizedName}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

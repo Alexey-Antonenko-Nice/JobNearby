@@ -313,6 +313,9 @@ function mapOrganizationRole(
     EMPLOYER: "EMPLOYER",
     RECRUITMENT_AGENCY: "RECRUITER",
     STAFFING_AGENCY: "STAFFING_AGENCY",
+    RECRUITER: "RECRUITER",
+    CONSULTANCY: "CONSULTANCY",
+    CLIENT: "CLIENT",
     PUBLISHER: "UNKNOWN",
     UNKNOWN: "DISPLAYED_COMPANY",
   }[evidence.role] as VacancyOrganizationRelationship["role"];
