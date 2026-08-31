@@ -32,7 +32,7 @@ export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor
     const location = lines.slice(0, 16).map(extractLocation).find((value) => value !== null);
     const engagement = lines.map(extractEngagement).find((value) => value !== null);
     const workMode = lines.map(extractWorkMode).find((value) => value !== null);
-    const compensation = lines.map(extractCompensation).find((value) => value !== null);
+    const compensation = extractCompensation(vacancyText);
 
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
@@ -40,7 +40,7 @@ export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor
       ...(location === undefined ? {} : { locations: [{ value: location, role: "WORKPLACE", provenance }] }),
       ...(engagement === undefined ? {} : { engagements: [{ ...engagement, provenance }] }),
       ...(workMode === undefined ? {} : { workModes: [{ value: workMode, provenance }] }),
-      ...(compensation === undefined ? {} : { compensations: [{ ...compensation, provenance }] }),
+      ...(compensation === null ? {} : { compensations: [{ ...compensation, provenance }] }),
     });
   }
 }
@@ -56,7 +56,8 @@ function isConservativeTitle(line: string): boolean {
 function extractLocation(line: string): string | null {
   const department = /^(?:\d{2,3}|2[AB])\s*-\s*(.{2,100})$/iu.exec(line);
   if (department !== null) return normalizeLine(department[1] ?? "") || null;
-  if (/^[\p{L}][\p{L}\s'’.-]{2,80},\s*France$/u.test(line)) return line;
+  const frenchLocation = /^([\p{L}][\p{L}\s'’.-]{2,80},\s*France)(?=\s*(?:·|$))/u.exec(line);
+  if (frenchLocation !== null) return normalizeLine(frenchLocation[1] ?? "") || null;
   return null;
 }
 
@@ -73,11 +74,16 @@ function extractWorkMode(line: string): VacancyWorkModeEvidence["value"] | null 
   return null;
 }
 
-function extractCompensation(line: string): Omit<VacancyCompensationEvidence, "provenance"> | null {
-  const match = /^Salaire\s+brut\s*:\s*Annuel\s+de\s+(\d+(?:[.,]\d+)?)\s+Euros?\s+[àa]\s+(\d+(?:[.,]\d+)?)\s+Euros?$/iu.exec(line);
+type ExtractedCompensation = Pick<
+  VacancyCompensationEvidence,
+  "rawText" | "currency" | "minimum" | "maximum" | "period"
+>;
+
+function extractCompensation(text: string): ExtractedCompensation | null {
+  const match = /\bSalaire\s+brut\s*:\s*Annuel\s+de\s+(\d+(?:[.,]\d+)?)\s+Euros?\s+[àa]\s+(\d+(?:[.,]\d+)?)\s+Euros?\b/iu.exec(text);
   if (match === null) return null;
   return {
-    rawText: line,
+    rawText: normalizeLine(match[0]),
     currency: "EUR",
     minimum: Number(match[1]!.replace(",", ".")),
     maximum: Number(match[2]!.replace(",", ".")),
