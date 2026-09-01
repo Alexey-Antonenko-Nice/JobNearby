@@ -109,8 +109,28 @@ request is limited to 8 MiB. Oversized content is rejected with an error and is
 never silently truncated. Text remains the M5.1 `rawContent`; optional HTML remains
 preserved in acquisition metadata.
 
-The service binds only to `127.0.0.1:4317`, accepts the single browser-capture path,
-and grants CORS only to requesting Chrome/Firefox extension origins. It assumes a
+The service binds only to `127.0.0.1:4317`. In addition to the browser-capture path,
+M6.4 exposes the local review workflow on the same server:
+
+```text
+GET  /vacancies/:canonicalVacancyId/review
+POST /vacancies/:canonicalVacancyId/interactions
+```
+
+For example, PowerShell-friendly requests can read a review and explicitly record
+actions without implying that a GET means `REVIEWED`:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:4317/vacancies/<id>/review
+Invoke-RestMethod -Method Post -ContentType application/json `
+  -Body '{"type":"REVIEWED"}' `
+  http://127.0.0.1:4317/vacancies/<id>/interactions
+Invoke-RestMethod -Method Post -ContentType application/json `
+  -Body '{"type":"APPLIED","metadata":{"channel":"EMPLOYER_SITE"}}' `
+  http://127.0.0.1:4317/vacancies/<id>/interactions
+```
+
+The service grants CORS only to requesting Chrome/Firefox extension origins. It assumes a
 local user and has no accounts or remote exposure. The extension requests only
 `activeTab`, `scripting`, and access to that localhost endpoint—no history, cookies,
 downloads, or browsing-data permissions.
