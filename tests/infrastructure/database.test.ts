@@ -58,8 +58,26 @@ describe("database migrations", () => {
       { version: 2 },
       { version: 3 },
       { version: 4 },
+      { version: 5 },
     ]);
 
+    db.close();
+  });
+
+  it("creates the private append-only user vacancy interaction history", () => {
+    const db = createDatabase(":memory:");
+    expect(db.prepare(`SELECT version, name FROM schema_migrations WHERE version = 5`).get())
+      .toEqual({ version: 5, name: "create_user_vacancy_interaction_events" });
+    const objects = new Set((db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE name = 'user_vacancy_interaction_events'
+         OR name LIKE 'idx_user_vacancy_interaction_%'
+    `).all() as Array<{ name: string }>).map(({ name }) => name));
+    expect(objects).toEqual(new Set([
+      "user_vacancy_interaction_events",
+      "idx_user_vacancy_interaction_canonical",
+      "idx_user_vacancy_interaction_history",
+    ]));
     db.close();
   });
 
@@ -214,6 +232,7 @@ describe("database migrations", () => {
         { version: 2 },
         { version: 3 },
         { version: 4 },
+        { version: 5 },
       ]);
     db.close();
   });
