@@ -67,8 +67,7 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
       "Akkodis",
       "Ingénieur conception mécanique H/F",
       "Promue par un recruteur",
-      "Akkodis recrute pour ce poste.",
-      "Consulting & Solutions d'Akkodis France accompagne ce projet.",
+      "La ligne de service Consulting & Solutions d'Akkodis France renforce ses équipes et recrute un ingénieur.",
       "Akkodis recrute de nouveaux talents.",
     ].join("\n")));
 
@@ -76,9 +75,24 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
       expect.objectContaining({ value: "Akkodis", role: "UNKNOWN" }),
       expect.objectContaining({ value: "Akkodis", role: "RECRUITER" }),
       expect.objectContaining({ value: "Akkodis France", role: "CONSULTANCY" }),
+      expect.objectContaining({ value: "Akkodis France", role: "RECRUITER" }),
     ]));
     expect(result.organizations.filter(({ value, role }) => value === "Akkodis" && role === "RECRUITER")).toHaveLength(1);
     expect(result.organizations).not.toContainEqual(expect.objectContaining({ role: "CLIENT" }));
+  });
+
+  it("does not bind LinkedIn's generic recruiter promotion text to the header organization", async () => {
+    const result = await extractor.extract(selectedContext([
+      "Akkodis",
+      "Ingénieur conception mécanique H/F",
+      "Promue par un recruteur",
+    ].join("\n")));
+    expect(result.organizations).toContainEqual(
+      expect.objectContaining({ value: "Akkodis", role: "UNKNOWN" }),
+    );
+    expect(result.organizations).not.toContainEqual(
+      expect.objectContaining({ role: "RECRUITER" }),
+    );
   });
 
   it("preserves an explicitly labelled named end client without inventing an employer role", async () => {

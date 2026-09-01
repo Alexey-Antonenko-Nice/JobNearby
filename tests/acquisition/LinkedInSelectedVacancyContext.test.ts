@@ -57,6 +57,37 @@ function linkedInHtml(id: string, options: {
     </main>`;
 }
 
+function directViewHtml(id: string, options: {
+  readonly duplicateHeader?: boolean;
+  readonly competingDetailId?: string;
+} = {}): string {
+  const header = (suffix = "") => `<div data-testid="job-header${suffix}">
+    <a href="/jobs/view/ingenieur-conception-mecanique-h-f-at-akkodis-${id}/">Akkodis</a>
+    <h1>Ingénieur conception mécanique H/F</h1>
+    <p>Pays de la Loire, France · il y a 3 semaines</p>
+    <p>Promue par un recruteur</p><p>Hybride</p><p>CDD</p>
+  </div>`;
+  const competing = options.competingDetailId === undefined ? "" :
+    `<div id="JobDetails_AboutTheJob_${options.competingDetailId}" componentkey="JobDetails_AboutTheJob_${options.competingDetailId}">Other vacancy</div>`;
+  return `<div data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.JobDetails">
+    <main id="workspace">
+      <div data-testid="lazy-column" data-component-type="LazyColumn">
+        <div id="JobDetails_ManageJobBanner_${id}" componentkey="JobDetails_ManageJobBanner_${id}"></div>
+        ${header()}${options.duplicateHeader === true ? header("-duplicate") : ""}
+        <div data-testid="details-and-extras">
+          <div id="JobDetailsPeopleWhoCanHelpSlot_${id}"></div>
+          <div id="JobDetails_AboutTheJob_${id}" componentkey="JobDetails_AboutTheJob_${id}">
+            <h2>À propos de l’offre d’emploi</h2>
+            <p>Consulting &amp; Solutions d'Akkodis France accompagne ce projet.</p>
+          </div>
+          ${competing}
+          <div id="JobDetailsSimilarJobsSlot_${id}">Other vacancy recommendations</div>
+        </div>
+      </div>
+    </main>
+  </div>`;
+}
+
 function locate(id: string, html: string, sourceUrl = `https://www.linkedin.com/jobs/search/?currentJobId=${id}`) {
   return locator.locate({
     providerKey: "LINKEDIN",
@@ -109,6 +140,35 @@ describe("LinkedInSelectedVacancyContextLocator", () => {
     const context = locate("4460344242", linkedInHtml("4460344242", { includeLink: false }));
     expect(context?.associationEvidence).toContain("MATCHING_LINKEDIN_COMPONENT_REFERENCE");
     expect(context?.html).toMatch(/^\s*<div id="JobDetails_AboutTheJob_/u);
+  });
+
+  it("uses the same exact-ID component boundary on a direct jobs/view URL", () => {
+    const id = "4449077982";
+    const context = locate(
+      id,
+      directViewHtml(id),
+      `https://www.linkedin.com/jobs/view/ingenieur-conception-mecanique-h-f-at-akkodis-${id}/`,
+    );
+
+    expect(context).toMatchObject({
+      providerExternalId: id,
+      associationEvidence: expect.arrayContaining([
+        "MATCHING_JOB_DETAILS",
+        "MATCHING_LINKEDIN_JOB_LINK",
+        "LINKEDIN_DIRECT_JOB_DETAILS_SCREEN",
+      ]),
+    });
+    expect(context?.text).toContain("Ingénieur conception mécanique H/F");
+    expect(context?.text).toContain("Consulting & Solutions d'Akkodis France");
+    expect(context?.html).not.toContain("Other vacancy recommendations");
+  });
+
+  it("rejects ambiguous or competing direct-view detail structure", () => {
+    const id = "4449077982";
+    const url = `https://www.linkedin.com/jobs/view/role-${id}/`;
+    expect(locate(id, directViewHtml(id, { duplicateHeader: true }), url)).toBeUndefined();
+    expect(locate(id, directViewHtml(id, { competingDetailId: "4458098323" }), url))
+      .toBeUndefined();
   });
 
   it("uses a self-identifying exact-ID detail section when broad page wrappers include result cards", () => {
@@ -227,6 +287,31 @@ describe("LinkedIn selected-context acquisition integration", () => {
     expect(observation).not.toHaveProperty("title");
     expect(observation).not.toHaveProperty("displayedCompanyName");
     expect(observation).not.toHaveProperty("locationText");
+  });
+
+  it("gives search-results and direct-view captures the same provider identity and bounded context", () => {
+    const id = "4449077982";
+    const urls = [
+      `https://www.linkedin.com/jobs/search-results/?currentJobId=${id}`,
+      `https://www.linkedin.com/jobs/view/ingenieur-conception-mecanique-h-f-at-akkodis-${id}/`,
+    ];
+    const acquisitions = urls.map((pageUrl, index) => adapter.toAcquisitionPackage({
+      pageUrl,
+      pageTitle: "LinkedIn vacancy",
+      visibleText: "Full LinkedIn page",
+      html: index === 0 ? linkedInHtml(id) : directViewHtml(id),
+      capturedAt: "2026-08-31T10:00:00Z",
+    }, `linkedin-url-form-${index}`));
+
+    expect(acquisitions.map(({ source, externalId }) => ({
+      sourceName: source.sourceName,
+      externalId,
+    }))).toEqual([
+      { sourceName: "linkedin.com", externalId: id },
+      { sourceName: "linkedin.com", externalId: id },
+    ]);
+    expect(acquisitions.every(({ contexts }) =>
+      contexts?.[0]?.providerExternalId === id)).toBe(true);
   });
 
   it("keeps missing HTML non-fatal", () => {

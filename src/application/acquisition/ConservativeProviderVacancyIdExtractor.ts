@@ -2,6 +2,7 @@ import type {
   ProviderVacancyIdExtractionInput,
   ProviderVacancyIdExtractor,
 } from "./ProviderVacancyIdExtractor.js";
+import { extractLinkedInVacancyId } from "./LinkedInVacancyUrl.js";
 
 type ExtractionRule = (url: URL) => string | undefined;
 
@@ -43,8 +44,7 @@ function extractMeteojob(url: URL): string | undefined {
 }
 
 function extractLinkedIn(url: URL): string | undefined {
-  if (!url.pathname.startsWith("/jobs/")) return undefined;
-  return nonEmptyParameter(url, "currentJobId");
+  return extractLinkedInVacancyId(url);
 }
 
 function extractJobLeads(url: URL): string | undefined {

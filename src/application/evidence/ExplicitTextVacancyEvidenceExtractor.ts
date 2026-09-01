@@ -156,6 +156,11 @@ function extractBoundedOrganizationRoles(
     addOrganizationRole(results, match[1] ?? "", "CONSULTANCY");
   }
   for (const match of text.matchAll(
+    /\bConsulting\s*&\s*Solutions\s+d['’]([\p{Lu}][\p{L}\d&'’().\-]*(?:\s+[\p{Lu}][\p{L}\d&'’().\-]*){0,4})\b[^.!?\n]{0,140}\brecrute\b/gu,
+  )) {
+    addOrganizationRole(results, match[1] ?? "", "RECRUITER");
+  }
+  for (const match of text.matchAll(
     /(?:^|[.!?\n])\s*([\p{Lu}][\p{L}\d&'’().\-]*(?:\s+[\p{Lu}][\p{L}\d&'’().\-]*){0,4})\s+(?:accompagne|aide)\s+(?:les\s+)?entreprises\b[^.!?\n]{0,140}\b(?:experts?|ing[eé]nieurs?)\b/gu,
   )) {
     addOrganizationRole(results, match[1] ?? "", "CONSULTANCY");

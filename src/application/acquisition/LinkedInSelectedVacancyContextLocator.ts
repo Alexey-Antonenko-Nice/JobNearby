@@ -1,5 +1,6 @@
 import { createAcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
+import { extractLinkedInVacancyId } from "./LinkedInVacancyUrl.js";
 
 const LINK_EVIDENCE = [
   "URL_EXTERNAL_ID",
@@ -13,6 +14,14 @@ const COMPONENT_EVIDENCE = [
   "MATCHING_JOB_DETAILS",
   "BOUNDED_JOB_DETAIL",
   "MATCHING_LINKEDIN_COMPONENT_REFERENCE",
+] as const;
+
+const DIRECT_VIEW_EVIDENCE = [
+  "URL_EXTERNAL_ID",
+  "MATCHING_JOB_DETAILS",
+  "BOUNDED_JOB_DETAIL",
+  "MATCHING_LINKEDIN_JOB_LINK",
+  "LINKEDIN_DIRECT_JOB_DETAILS_SCREEN",
 ] as const;
 
 interface ElementFragment {
@@ -30,6 +39,26 @@ export class LinkedInSelectedVacancyContextLocator implements SelectedVacancyCon
       return undefined;
     }
     const primary = primaryDetails[0]!;
+
+    if (isDirectViewUrl(input.sourceUrl)) {
+      const directView = findDirectViewBoundedContext(
+        input.html,
+        primary.fragment,
+        input.externalId,
+      );
+      if (directView === undefined) return undefined;
+      const text = htmlToText(directView.html);
+      if (text.length === 0) return undefined;
+      return createAcquisitionContext({
+        kind: "SELECTED_VACANCY",
+        associationMethod: "PROVIDER_LOCATOR",
+        providerKey: "LINKEDIN",
+        providerExternalId: input.externalId,
+        associationEvidence: DIRECT_VIEW_EVIDENCE,
+        text,
+        html: directView.html,
+      });
+    }
 
     const matchingLinkExists = containsMatchingJobLink(input.html, input.externalId);
     const matchingComponentExists = containsMatchingComponentReference(input.html, input.externalId);
@@ -63,9 +92,56 @@ export class LinkedInSelectedVacancyContextLocator implements SelectedVacancyCon
   }
 }
 
+function isDirectViewUrl(sourceUrl: string): boolean {
+  try {
+    return /^\/jobs\/view\/[^/]+\/?$/u.test(new URL(sourceUrl).pathname);
+  } catch {
+    return false;
+  }
+}
+
+function findDirectViewBoundedContext(
+  html: string,
+  primary: ElementFragment,
+  externalId: string,
+): ElementFragment | undefined {
+  if (!isSelfIdentifyingPrimaryDetail(primary, externalId)) return undefined;
+  const screens = openingTagMatches(html, "div").flatMap((match) => {
+    if (
+      attribute(match[0], "data-sdui-screen") !==
+      "com.linkedin.sdui.flagshipnav.jobs.JobDetails"
+    ) return [];
+    const screenHtml = balancedElement(html, "div", match.index);
+    return screenHtml === undefined ? [] : [{ start: match.index, html: screenHtml }];
+  });
+  if (screens.length !== 1) return undefined;
+  const screen = screens[0]!;
+  if (!containsPrimaryJobDetails(screen.html, externalId)) return undefined;
+
+  const lazyColumns = openingTagMatches(screen.html, "div").flatMap((match) => {
+    if (attribute(match[0], "data-testid") !== "lazy-column") return [];
+    const columnHtml = balancedElement(screen.html, "div", match.index);
+    return columnHtml === undefined ? [] : [columnHtml];
+  });
+  if (lazyColumns.length !== 1) return undefined;
+  const branches = directChildDivs(lazyColumns[0]!);
+  const detailBranches = branches.filter((branch) =>
+    containsPrimaryJobDetails(branch, externalId));
+  const headerBranches = branches.filter((branch) =>
+    !containsPrimaryJobDetails(branch, externalId) &&
+    matchingJobLinkCount(branch, externalId) > 0);
+  if (detailBranches.length !== 1 || headerBranches.length !== 1) return undefined;
+  const boundedHtml = `<section data-linkedin-selected-vacancy-context="direct-view">${headerBranches[0]!}${primary.html}</section>`;
+  if (
+    containsCompetingJobDetailsId(boundedHtml, externalId) ||
+    containsCompetingJobLink(boundedHtml, externalId)
+  ) return undefined;
+  return { start: screen.start, html: boundedHtml };
+}
+
 function urlHasExternalId(sourceUrl: string, externalId: string): boolean {
   try {
-    return new URL(sourceUrl).searchParams.get("currentJobId") === externalId;
+    return extractLinkedInVacancyId(new URL(sourceUrl)) === externalId;
   } catch {
     return false;
   }
@@ -95,8 +171,9 @@ function containsMatchingJobLink(html: string, externalId: string): boolean {
     const href = attribute(tag, "href");
     if (href === undefined) return false;
     try {
-      const pathname = new URL(href.replaceAll("&amp;", "&"), "https://linkedin.com").pathname;
-      return new RegExp(`^/jobs/view/${escapeRegExp(externalId)}(?:/|$)`, "u").test(pathname);
+      return extractLinkedInVacancyId(
+        new URL(href.replaceAll("&amp;", "&"), "https://linkedin.com"),
+      ) === externalId;
     } catch {
       return false;
     }
@@ -177,8 +254,9 @@ function matchingJobLinkCount(html: string, externalId: string): number {
     const href = attribute(tag, "href");
     if (href === undefined) return false;
     try {
-      const pathname = new URL(href.replaceAll("&amp;", "&"), "https://linkedin.com").pathname;
-      return new RegExp(`^/jobs/view/${escapeRegExp(externalId)}(?:/|$)`, "u").test(pathname);
+      return extractLinkedInVacancyId(
+        new URL(href.replaceAll("&amp;", "&"), "https://linkedin.com"),
+      ) === externalId;
     } catch {
       return false;
     }
@@ -210,8 +288,9 @@ function containsCompetingJobLink(html: string, externalId: string): boolean {
     const href = attribute(tag, "href");
     if (href === undefined) continue;
     try {
-      const pathname = new URL(href.replaceAll("&amp;", "&"), "https://linkedin.com").pathname;
-      const linkedId = /^\/jobs\/view\/(\d+)(?:\/|$)/u.exec(pathname)?.[1];
+      const linkedId = extractLinkedInVacancyId(
+        new URL(href.replaceAll("&amp;", "&"), "https://linkedin.com"),
+      );
       if (linkedId !== undefined && linkedId !== externalId) return true;
     } catch {
       // Ignore unrelated malformed links.
@@ -279,8 +358,4 @@ function decodeEntities(value: string): string {
     if (code.startsWith("#")) return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
     return named[code.toLocaleLowerCase()] ?? entity;
   });
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
