@@ -1252,6 +1252,25 @@ organization roles, and private vacancy interaction histories without merging or
 mutating them. `EmployerMemoryView` has no persistence table and is not
 source-of-truth data; it is reconstructed from the public and private layers.
 
+M6.3 composes a vacancy-centric review projection from the same owned data:
+
+```text
+CanonicalVacancy
+        +
+UserVacancyHistory
+        +
+EmployerMemoryView
+        ↓
+VacancyReviewView
+```
+
+`VacancyReviewView` is derived and read-only. It exposes canonical facts,
+observation recurrence, employer memory, organization roles, private interaction
+history, and transparent review signals. It is not persisted and does not produce
+recommendations, scores, APPLY/SKIP decisions, or new market evidence. A known
+employer conservatively means that the explicit employer cluster contains another
+canonical vacancy; cluster existence or resolved identity alone is insufficient.
+
 Possible types include:
 
 ```text
