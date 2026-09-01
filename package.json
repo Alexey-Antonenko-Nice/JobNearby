@@ -2,7 +2,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "capture:server": "npm run build && node dist/infrastructure/http/runBrowserCaptureServer.js",
-    "diagnose:captures": "npm run build && node dist/infrastructure/database/reportRecentCaptures.js job-nearby.sqlite",
+    "prediagnose:captures": "npm run build",
+    "diagnose:captures": "node dist/infrastructure/database/reportRecentCaptures.js job-nearby.sqlite",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
