@@ -1271,6 +1271,19 @@ recommendations, scores, APPLY/SKIP decisions, or new market evidence. A known
 employer conservatively means that the explicit employer cluster contains another
 canonical vacancy; cluster existence or resolved identity alone is insufficient.
 
+M6.4 exposes the explicit review/action loop without changing ownership:
+
+```text
+CanonicalVacancy
+  -> VacancyReviewView
+  -> explicit UserVacancyInteractionEvent
+  -> refreshed VacancyReviewView
+```
+
+Reading or opening a review never records `REVIEWED`. That event, like every other
+private interaction, must be requested explicitly. Only the append-only USER LAYER
+changes; review and employer-memory signals remain derived.
+
 Possible types include:
 
 ```text
