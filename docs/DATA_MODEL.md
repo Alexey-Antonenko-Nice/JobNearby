@@ -1237,6 +1237,21 @@ is implicitly `NEW`; `NEW` is not stored as an event.
 The vacancy interaction history is intentionally distinct from the future
 employer-level history described below.
 
+M6.2 adds `EmployerMemoryView` as a derived, read-only composition:
+
+```text
+EmployerCluster
+  -> CanonicalVacancy[]
+  -> UserVacancyHistory[]
+  -> EmployerMemoryView
+```
+
+The view includes only canonical vacancies whose explicit employer relationship
+references the cluster. It summarizes immutable observation history, existing
+organization roles, and private vacancy interaction histories without merging or
+mutating them. `EmployerMemoryView` has no persistence table and is not
+source-of-truth data; it is reconstructed from the public and private layers.
+
 Possible types include:
 
 ```text
