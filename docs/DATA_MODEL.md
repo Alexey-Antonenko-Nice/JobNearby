@@ -1217,6 +1217,26 @@ relatedCampaignId?
 
 # 45. User Interaction Types
 
+M6.1 makes the vacancy-specific part of the USER LAYER concrete as a separate,
+private relationship:
+
+```text
+CanonicalVacancy
+        ↓
+UserVacancyInteractionEvent
+```
+
+`UserVacancyInteractionEvent` is append-only and records private actions such as
+reviewing, applying, contacting, interviewing, rejecting, withdrawing, or closing.
+It does not add private state to `CanonicalVacancy`, alter its public evidence, or
+change `SourceObservation` and employer-recognition records. The full event history
+is primary. Current `UserVacancyState` is derived from the latest event ordered by
+`occurredAt`, then `recordedAt`, then event ID. A canonical vacancy with no events
+is implicitly `NEW`; `NEW` is not stored as an event.
+
+The vacancy interaction history is intentionally distinct from the future
+employer-level history described below.
+
 Possible types include:
 
 ```text

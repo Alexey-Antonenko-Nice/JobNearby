@@ -33,7 +33,9 @@ describe("createCaptureProcessingRuntime", () => {
         WHERE canonical_vacancy_id = ?
       `).get(first.processing.canonicalVacancyId)).toEqual({ count: 2 });
       expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all())
-        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }]);
+        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }]);
+      expect(database.prepare("SELECT COUNT(*) AS count FROM user_vacancy_interaction_events").get())
+        .toEqual({ count: 0 });
     } finally {
       database.close();
     }
