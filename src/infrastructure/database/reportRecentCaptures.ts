@@ -9,6 +9,7 @@ import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionCon
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import { SqliteSourceObservationRepository } from "../persistence/SqliteSourceObservationRepository.js";
+import { diagnoseLinkedInDirectViewDom } from "./LinkedInDirectViewDomDiagnostic.js";
 
 interface ObservationRow {
   readonly id: string;
@@ -240,6 +241,7 @@ async function reportObservation(
   fieldsByCanonical: ReadonlyMap<string, readonly CanonicalFieldRow[]>,
   organizationsByCanonical: ReadonlyMap<string, readonly CanonicalOrganizationRow[]>,
 ) {
+  const metadata = parseMetadata(row.metadata_json);
   const evidence = await evidenceExtractor.extract(evidenceInputForReport(observation));
   const canonicalId = row.canonical_vacancy_id;
   const fields = canonicalId === null ? [] : fieldsByCanonical.get(canonicalId) ?? [];
@@ -284,8 +286,13 @@ async function reportObservation(
       explanation: row.assignment_explanation,
     },
     acquisitionAndExtraction: {
-      selectedVacancyContextCaptured: hasSelectedVacancyContext(parseMetadata(row.metadata_json)),
-      selectedVacancyContexts: selectedVacancyContexts(parseMetadata(row.metadata_json)),
+      selectedVacancyContextCaptured: hasSelectedVacancyContext(metadata),
+      selectedVacancyContexts: selectedVacancyContexts(metadata),
+      linkedInDirectViewDomDiagnostic: linkedInDirectViewDiagnostic(
+        row.source_url,
+        row.external_id,
+        metadata,
+      ),
       providerExternalIdExtraction: row.external_id === null ? null : {
         provider: row.source_name, externalVacancyId: row.external_id,
         extractionMethod: "DIRECT_FIELD",
@@ -304,6 +311,31 @@ async function reportObservation(
       },
     },
   };
+}
+
+function linkedInDirectViewDiagnostic(
+  sourceUrl: string | null,
+  externalId: string | null,
+  metadata: Record<string, unknown>,
+) {
+  if (sourceUrl === null || externalId === null) return null;
+  let url: URL;
+  try {
+    url = new URL(sourceUrl);
+  } catch {
+    return null;
+  }
+  if (
+    !/(?:^|\.)linkedin\.com$/iu.test(url.hostname) ||
+    !url.pathname.startsWith("/jobs/view/")
+  ) return null;
+  const acquisition = metadata.acquisition;
+  const html = isRecord(acquisition) && typeof acquisition.html === "string"
+    ? acquisition.html
+    : undefined;
+  return html === undefined
+    ? null
+    : diagnoseLinkedInDirectViewDom(html, externalId);
 }
 
 function evidenceInputForReport(observation: SourceObservation) {

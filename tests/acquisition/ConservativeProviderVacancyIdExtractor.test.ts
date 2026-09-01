@@ -63,6 +63,34 @@ describe("ConservativeProviderVacancyIdExtractor", () => {
       .toBeUndefined();
   });
 
+  it("extracts a trailing numeric ID only from an exact LinkedIn jobs/view route", () => {
+    expect(extract(
+      "linkedin.com",
+      "https://www.linkedin.com/jobs/view/ing%C3%A9nieur-conception-m%C3%A9canique-h-f-at-akkodis-4449077982/",
+    )).toBe("4449077982");
+    expect(extract("linkedin.com", "https://www.linkedin.com/jobs/view/4449077982/"))
+      .toBe("4449077982");
+  });
+
+  it.each([
+    "https://www.linkedin.com/analytics/profile-views/4449077982/",
+    "https://www.linkedin.com/in/profile-4449077982/",
+    "https://www.linkedin.com/feed/update/urn:li:activity:4449077982/",
+    "https://www.linkedin.com/jobs/view/not-a-numeric-id/",
+    "https://www.linkedin.com/jobs/view/123/",
+    "https://www.linkedin.com/jobs/view/role-0004449077982/",
+    "https://www.linkedin.com/jobs/view/role-4449077982/extra",
+  ])("does not extract a direct-view ID from malformed or unrelated URL %s", (url) => {
+    expect(extract("linkedin.com", url)).toBeUndefined();
+  });
+
+  it("rejects conflicting LinkedIn path and query identities", () => {
+    expect(extract(
+      "linkedin.com",
+      "https://www.linkedin.com/jobs/view/role-4449077982/?currentJobId=4459878282",
+    )).toBeUndefined();
+  });
+
   it("extracts exact JobLeads vacancy path segments", () => {
     expect(extract("jobleads.com", "https://www.jobleads.com/job/e83dd012cb1ce77d88ca81cbfe1d3f4a0?campaign=x"))
       .toBe("e83dd012cb1ce77d88ca81cbfe1d3f4a0");
