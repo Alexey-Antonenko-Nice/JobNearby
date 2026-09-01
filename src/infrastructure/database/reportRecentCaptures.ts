@@ -10,6 +10,11 @@ import type { SourceObservation } from "../../domain/capture/SourceObservation.j
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import { SqliteSourceObservationRepository } from "../persistence/SqliteSourceObservationRepository.js";
 import { diagnoseLinkedInDirectViewDom } from "./LinkedInDirectViewDomDiagnostic.js";
+import {
+  buildCaptureDiagnosticSqlFilter,
+  openCaptureDiagnosticDatabase,
+  parseCaptureDiagnosticArgs,
+} from "./reportRecentCapturesCli.js";
 
 interface ObservationRow {
   readonly id: string;
@@ -51,15 +56,6 @@ interface CanonicalOrganizationRow {
 }
 
 const continuityAlgorithm = "canonical-vacancy-employer-continuity";
-
-function parseLimit(argument: string | undefined): number {
-  if (argument === undefined) return 50;
-  const limit = Number(argument);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
-    throw new Error("Limit must be an integer between 1 and 500.");
-  }
-  return limit;
-}
 
 function parseMetadata(value: string): Record<string, unknown> {
   try {
@@ -118,9 +114,9 @@ function parseJson(value: string | null): unknown {
 
 async function main(): Promise<void> {
   const databasePath = process.argv[2] ?? "job-nearby.sqlite";
-  const limit = parseLimit(process.argv[3]);
-  const db = new Database(databasePath, { readonly: true, fileMustExist: true });
-  db.pragma("query_only = ON");
+  const query = parseCaptureDiagnosticArgs(process.argv.slice(3));
+  const sqlFilter = buildCaptureDiagnosticSqlFilter(query);
+  const db = openCaptureDiagnosticDatabase(databasePath);
 
   try {
     const rows = db.prepare(`
@@ -152,9 +148,10 @@ async function main(): Promise<void> {
         AND assignment.status IN ('ACCEPTED', 'USER_CONFIRMED')
       LEFT JOIN employer_clusters AS cluster
         ON cluster.id = assignment.employer_cluster_id
+      ${sqlFilter.whereClause}
       ORDER BY observation.observed_at DESC, observation.id DESC
       LIMIT ?
-    `).all(limit) as ObservationRow[];
+    `).all(...sqlFilter.parameters, query.limit) as ObservationRow[];
     const sourceObservations = new SqliteSourceObservationRepository(db);
     const evidenceExtractor = new CompositeVacancyEvidenceExtractor([
       new DirectFieldVacancyEvidenceExtractor(),
@@ -224,7 +221,14 @@ async function main(): Promise<void> {
       ).length,
     };
     process.stdout.write(`${JSON.stringify({
-      scope: { databasePath, limit, orderedBy: "observedAt descending" },
+      scope: { databasePath },
+      query: {
+        limit: query.limit,
+        latest: query.latest,
+        provider: query.provider ?? null,
+        externalVacancyId: query.externalVacancyId ?? null,
+        orderedBy: "observedAt descending",
+      },
       aggregate,
       observations,
     }, null, 2)}\n`);
