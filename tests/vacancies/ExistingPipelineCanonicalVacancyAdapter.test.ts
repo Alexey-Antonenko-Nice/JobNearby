@@ -9,6 +9,7 @@ import type { EmployerCluster } from "../../src/domain/recognition/EmployerClust
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { ExplicitTextVacancyEvidenceExtractor } from "../../src/application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
+import { ExplicitCandidateRequirementsExtractor } from "../../src/application/evidence/ExplicitCandidateRequirementsExtractor.js";
 import { fromSelectedVacancyContext } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 
 const adapter = new ExistingPipelineCanonicalVacancyAdapter(
@@ -285,6 +286,49 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
       maximum: 46000,
       period: "YEAR",
     });
+  });
+
+  it("projects explicit candidate requirements without collapsing multiple languages", async () => {
+    const source = observation("one", {
+      description: "English required. German preferred. 3 years of experience. frequent international travel required.",
+    });
+    const evidence = await new ExplicitCandidateRequirementsExtractor().extract(source);
+    const vacancy = canonicalize([source], [evidence]);
+
+    expect(vacancy.languageRequirements).toMatchObject({
+      status: "RESOLVED",
+      confidence: 0.98,
+      value: [
+        expect.objectContaining({ language: "English", requirement: "REQUIRED" }),
+        expect.objectContaining({ language: "German", requirement: "PREFERRED" }),
+      ],
+    });
+    expect(vacancy.experienceRequirements.value).toEqual([
+      expect.objectContaining({ minimumYears: 3, unit: "YEAR" }),
+    ]);
+    expect(vacancy.travel.value).toEqual(expect.objectContaining({
+      requirement: "REQUIRED", frequency: "FREQUENT", scope: "INTERNATIONAL",
+      rawText: "frequent international travel required",
+    }));
+    expect(vacancy.evidenceReferences.map(({ kind }) => kind).filter((kind) =>
+      kind.endsWith("REQUIREMENT_EVIDENCE"),
+    )).toEqual(expect.arrayContaining([
+      "LANGUAGE_REQUIREMENT_EVIDENCE",
+      "EXPERIENCE_REQUIREMENT_EVIDENCE",
+      "TRAVEL_REQUIREMENT_EVIDENCE",
+    ]));
+  });
+
+  it("keeps differing requirement evidence as canonical alternatives", async () => {
+    const first = observation("first", { description: "English required." });
+    const second = observation("second", { description: "German preferred." });
+    const requirementExtractor = new ExplicitCandidateRequirementsExtractor();
+    const vacancy = canonicalize(
+      [first, second],
+      [await requirementExtractor.extract(first), await requirementExtractor.extract(second)],
+    );
+    expect(vacancy.languageRequirements.status).toBe("CONFLICTED");
+    expect(vacancy.languageRequirements.alternatives).toHaveLength(2);
   });
 
   it("maps only industry characteristics and does not reinterpret fingerprints as requirements", () => {

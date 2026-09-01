@@ -12,6 +12,11 @@ import type { VacancyTitleEvidence } from "../../domain/evidence/VacancyTitleEvi
 import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
 import type { VacancyWorkModeEvidence } from "../../domain/evidence/VacancyWorkModeEvidence.js";
 import type { VacancyCompensationEvidence } from "../../domain/evidence/VacancyCompensationEvidence.js";
+import type {
+  ExperienceRequirementEvidence,
+  LanguageRequirementEvidence,
+  TravelRequirementEvidence,
+} from "../../domain/evidence/CandidateRequirementEvidence.js";
 import type { EmployerCluster } from "../../domain/recognition/EmployerCluster.js";
 import type { CanonicalEvidenceReference } from "../../domain/vacancies/CanonicalEvidenceReference.js";
 import type { CanonicalDerivationMetadata } from "../../domain/vacancies/CanonicalField.js";
@@ -19,6 +24,9 @@ import type {
   CanonicalVacancy,
   CanonicalVacancyId,
   VacancyOrganizationRelationship,
+  ExperienceRequirement,
+  VacancyLanguageRequirement,
+  VacancyTravel,
 } from "../../domain/vacancies/CanonicalVacancy.js";
 import type {
   CanonicalCandidate,
@@ -95,6 +103,9 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     const workModeCandidates: CanonicalCandidate<
       "ON_SITE" | "HYBRID" | "REMOTE"
     >[] = [];
+    const languageRequirementCandidates: CanonicalCandidate<readonly VacancyLanguageRequirement[]>[] = [];
+    const experienceCandidates: CanonicalCandidate<readonly ExperienceRequirement[]>[] = [];
+    const travelCandidates: CanonicalCandidate<VacancyTravel>[] = [];
 
     for (const observation of input.observations) {
       if (usable(observation.title)) {
@@ -191,6 +202,29 @@ export class ExistingPipelineCanonicalVacancyAdapter {
           supportingEvidenceIds: [id],
           confidence: compensation.provenance.confidence,
         });
+      }
+      if (aggregate.languageRequirements.length > 0) {
+        const ids = aggregate.languageRequirements.map((evidence) =>
+          evidenceItemReference(references, "LANGUAGE_REQUIREMENT_EVIDENCE", evidence).id);
+        languageRequirementCandidates.push({
+          value: aggregate.languageRequirements.map(({ provenance: _provenance, ...value }) => value),
+          supportingEvidenceIds: ids,
+          confidence: Math.min(...aggregate.languageRequirements.map(({ provenance }) => provenance.confidence)),
+        });
+      }
+      if (aggregate.experienceRequirements.length > 0) {
+        const ids = aggregate.experienceRequirements.map((evidence) =>
+          evidenceItemReference(references, "EXPERIENCE_REQUIREMENT_EVIDENCE", evidence).id);
+        experienceCandidates.push({
+          value: aggregate.experienceRequirements.map(({ provenance: _provenance, ...value }) => value),
+          supportingEvidenceIds: ids,
+          confidence: Math.min(...aggregate.experienceRequirements.map(({ provenance }) => provenance.confidence)),
+        });
+      }
+      for (const evidence of aggregate.travelRequirements) {
+        const { id } = evidenceItemReference(references, "TRAVEL_REQUIREMENT_EVIDENCE", evidence);
+        const { provenance: _provenance, ...value } = evidence;
+        travelCandidates.push({ value, supportingEvidenceIds: [id], confidence: evidence.provenance.confidence });
       }
       for (const organization of aggregate.organizations) {
         const { id } = evidenceItemReference(
@@ -301,6 +335,9 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       compensationCandidates,
       workModeCandidates,
       industryContextCandidates,
+      languageRequirementCandidates,
+      experienceCandidates,
+      travelCandidates,
       derivation: input.derivation,
     };
   }
@@ -344,7 +381,10 @@ function evidenceItemReference(
     | VacancyTitleEvidence
     | VacancyEngagementEvidence
     | VacancyWorkModeEvidence
-    | VacancyCompensationEvidence,
+    | VacancyCompensationEvidence
+    | LanguageRequirementEvidence
+    | ExperienceRequirementEvidence
+    | TravelRequirementEvidence,
   qualifier = "",
 ): CollectedReference {
   return collectReference(
@@ -365,7 +405,10 @@ function evidenceValue(
     | OrganizationEvidence
     | LocationEvidence
     | EmployerCharacteristicEvidence
-    | PersonEvidence,
+    | PersonEvidence
+    | LanguageRequirementEvidence
+    | ExperienceRequirementEvidence
+    | TravelRequirementEvidence,
 ): string {
   if ("rawTerms" in evidence) return evidence.rawTerms.join("|");
   if ("rawText" in evidence) return evidence.rawText;

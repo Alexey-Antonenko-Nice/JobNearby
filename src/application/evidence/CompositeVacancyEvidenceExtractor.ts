@@ -13,6 +13,11 @@ import type { VacancyTitleEvidence } from "../../domain/evidence/VacancyTitleEvi
 import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
 import type { VacancyWorkModeEvidence } from "../../domain/evidence/VacancyWorkModeEvidence.js";
 import type { VacancyCompensationEvidence } from "../../domain/evidence/VacancyCompensationEvidence.js";
+import type {
+  ExperienceRequirementEvidence,
+  LanguageRequirementEvidence,
+  TravelRequirementEvidence,
+} from "../../domain/evidence/CandidateRequirementEvidence.js";
 import {
   normalizeVacancyEvidenceInput,
   type VacancyEvidenceExtractionInput,
@@ -63,8 +68,23 @@ export class CompositeVacancyEvidenceExtractor
       engagements: unique(results.flatMap(({ engagements }) => engagements), engagementKey),
       workModes: unique(results.flatMap(({ workModes }) => workModes), workModeKey),
       compensations: unique(results.flatMap(({ compensations }) => compensations), compensationKey),
+      languageRequirements: unique(results.flatMap(({ languageRequirements }) => languageRequirements), languageRequirementKey),
+      experienceRequirements: unique(results.flatMap(({ experienceRequirements }) => experienceRequirements), experienceRequirementKey),
+      travelRequirements: unique(results.flatMap(({ travelRequirements }) => travelRequirements), travelRequirementKey),
     });
   }
+}
+
+function languageRequirementKey(evidence: LanguageRequirementEvidence): string {
+  return `${evidence.language}\u0000${evidence.requirement}\u0000${evidence.level ?? ""}\u0000${evidence.rawText}\u0000${provenanceKey(evidence.provenance)}`;
+}
+
+function experienceRequirementKey(evidence: ExperienceRequirementEvidence): string {
+  return `${evidence.minimumYears}\u0000${evidence.maximumYears ?? ""}\u0000${evidence.rawText}\u0000${provenanceKey(evidence.provenance)}`;
+}
+
+function travelRequirementKey(evidence: TravelRequirementEvidence): string {
+  return `${evidence.requirement}\u0000${evidence.frequency ?? ""}\u0000${evidence.scope ?? ""}\u0000${evidence.percentage ?? ""}\u0000${evidence.rawText}\u0000${provenanceKey(evidence.provenance)}`;
 }
 
 function titleKey(evidence: VacancyTitleEvidence): string {

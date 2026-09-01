@@ -36,6 +36,14 @@ import {
   createVacancyCompensationEvidence,
   type VacancyCompensationEvidence,
 } from "./VacancyCompensationEvidence.js";
+import {
+  createExperienceRequirementEvidence,
+  createLanguageRequirementEvidence,
+  createTravelRequirementEvidence,
+  type ExperienceRequirementEvidence,
+  type LanguageRequirementEvidence,
+  type TravelRequirementEvidence,
+} from "./CandidateRequirementEvidence.js";
 
 export interface ExtractedVacancyEvidence {
   readonly sourceObservationId: SourceObservationId;
@@ -48,6 +56,9 @@ export interface ExtractedVacancyEvidence {
   readonly engagements: readonly VacancyEngagementEvidence[];
   readonly workModes: readonly VacancyWorkModeEvidence[];
   readonly compensations: readonly VacancyCompensationEvidence[];
+  readonly languageRequirements: readonly LanguageRequirementEvidence[];
+  readonly experienceRequirements: readonly ExperienceRequirementEvidence[];
+  readonly travelRequirements: readonly TravelRequirementEvidence[];
 }
 
 export interface CreateExtractedVacancyEvidenceInput {
@@ -61,6 +72,9 @@ export interface CreateExtractedVacancyEvidenceInput {
   readonly engagements?: readonly VacancyEngagementEvidence[];
   readonly workModes?: readonly VacancyWorkModeEvidence[];
   readonly compensations?: readonly VacancyCompensationEvidence[];
+  readonly languageRequirements?: readonly LanguageRequirementEvidence[];
+  readonly experienceRequirements?: readonly ExperienceRequirementEvidence[];
+  readonly travelRequirements?: readonly TravelRequirementEvidence[];
 }
 
 export function createExtractedVacancyEvidence(
@@ -87,6 +101,9 @@ export function createExtractedVacancyEvidence(
     compensations: (input.compensations ?? []).map(
       createVacancyCompensationEvidence,
     ),
+    languageRequirements: (input.languageRequirements ?? []).map(createLanguageRequirementEvidence),
+    experienceRequirements: (input.experienceRequirements ?? []).map(createExperienceRequirementEvidence),
+    travelRequirements: (input.travelRequirements ?? []).map(createTravelRequirementEvidence),
   };
 
   const allEvidence = [
@@ -99,6 +116,9 @@ export function createExtractedVacancyEvidence(
     ...result.engagements,
     ...result.workModes,
     ...result.compensations,
+    ...result.languageRequirements,
+    ...result.experienceRequirements,
+    ...result.travelRequirements,
   ];
   if (
     allEvidence.some(

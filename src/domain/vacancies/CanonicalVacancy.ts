@@ -48,6 +48,10 @@ export type VacancyWorkMode = "ON_SITE" | "HYBRID" | "REMOTE";
 
 export interface VacancyTravel {
   readonly requirement: "REQUIRED" | "NOT_REQUIRED";
+  readonly rawText?: string;
+  readonly frequency?: "OCCASIONAL" | "REGULAR" | "FREQUENT" | "UNKNOWN";
+  readonly scope?: "DOMESTIC" | "INTERNATIONAL" | "BOTH" | "UNKNOWN";
+  readonly percentage?: number;
   readonly scopeText?: string;
   readonly frequencyText?: string;
 }
@@ -67,7 +71,9 @@ export interface VacancyCompensation {
 
 export interface ExperienceRequirement {
   readonly rawText: string;
-  readonly minimumYears?: number;
+  readonly minimumYears: number;
+  readonly maximumYears?: number;
+  readonly unit?: "YEAR";
   readonly context?: string;
 }
 
@@ -83,7 +89,7 @@ export interface SkillRequirement {
 
 export interface VacancyLanguageRequirement {
   readonly language: string;
-  readonly requirement: "REQUIRED" | "PREFERRED" | "ACCEPTABLE";
+  readonly requirement: "REQUIRED" | "PREFERRED" | "PLUS" | "UNKNOWN" | "ACCEPTABLE";
   readonly level?: string;
   readonly rawText?: string;
 }
