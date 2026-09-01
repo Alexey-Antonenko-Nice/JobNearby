@@ -5,6 +5,7 @@ import { DirectFieldVacancyEvidenceExtractor } from "../../application/evidence/
 import { ExplicitEmployerCharacteristicExtractor } from "../../application/evidence/ExplicitEmployerCharacteristicExtractor.js";
 import { ExplicitTextVacancyEvidenceExtractor } from "../../application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
 import { CoreVacancyHeaderFactsExtractor } from "../../application/evidence/CoreVacancyHeaderFactsExtractor.js";
+import { ExplicitCandidateRequirementsExtractor } from "../../application/evidence/ExplicitCandidateRequirementsExtractor.js";
 import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
@@ -158,6 +159,7 @@ async function main(): Promise<void> {
       new ExplicitTextVacancyEvidenceExtractor(),
       new ExplicitEmployerCharacteristicExtractor(),
       new CoreVacancyHeaderFactsExtractor(),
+      new ExplicitCandidateRequirementsExtractor(),
     ]);
     const canonicalIds = [...new Set(rows.flatMap((row) =>
       row.canonical_vacancy_id === null ? [] : [row.canonical_vacancy_id],
@@ -312,6 +314,9 @@ async function reportObservation(
         workModes: evidence.workModes.slice(0, 10),
         compensations: evidence.compensations.slice(0, 10),
         externalIdentifiers: evidence.externalIdentifiers,
+        languageRequirements: evidence.languageRequirements,
+        experienceRequirements: evidence.experienceRequirements,
+        travelRequirements: evidence.travelRequirements,
       },
     },
   };
