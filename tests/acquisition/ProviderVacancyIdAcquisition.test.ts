@@ -28,10 +28,22 @@ describe("provider vacancy ID browser acquisition", () => {
     ["JobLeads", "https://www.jobleads.com/job/e83dd012cb1ce77d88ca81cbfe1d3f4a0", "e83dd012cb1ce77d88ca81cbfe1d3f4a0"],
     ["France Travail legacy route", "https://candidat.francetravail.fr/offres/recherche/detail/213BBCX", "213BBCX"],
     ["France Travail emploirecherche route", "https://candidat.francetravail.fr/offres/recherche/emploirecherche/detail/212YVQL", "212YVQL"],
+    ["Randstad Molsheim", "https://www.randstad.fr/emploi/monteur-assembleur-fh_molsheim_001-mmo-0000054_10l/?utm_source=chatgpt.com", "001-mmo-0000054_10l"],
+    ["Randstad Benfeld", "https://www.randstad.fr/emploi/monteur-assembleur-fh_benfeld_001-sel-1743760_01c/#details", "001-sel-1743760_01c"],
   ])("maps the %s URL ID through AcquisitionPackage into SourceReference", (_provider, url, id) => {
     const { acquisition, observation } = capture(url, `observation-${id}`);
     expect(acquisition.externalId).toBe(id);
     expect(observation.source.externalId).toBe(id);
+  });
+
+  it.each([
+    "https://www.randstad.fr/",
+    "https://www.randstad.fr/emploi/",
+    "https://www.randstad.fr/recherche?utm_source=tracking",
+    "https://www.randstad.fr/emploi/monteur-assembleur-fh_molsheim_partial/",
+    "https://www.randstad.fr/company/emploi/monteur_001-mmo-0000054_10l/",
+  ])("rejects unrelated Randstad URL %s", (url) => {
+    expect(capture(url, "observation-randstad-negative").acquisition.externalId).toBeUndefined();
   });
 
   it("leaves Jooble captures valid and without external identity", () => {

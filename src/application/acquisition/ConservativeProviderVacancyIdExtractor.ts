@@ -3,6 +3,7 @@ import type {
   ProviderVacancyIdExtractor,
 } from "./ProviderVacancyIdExtractor.js";
 import { extractLinkedInVacancyId } from "./LinkedInVacancyUrl.js";
+import { extractRandstadVacancyId } from "./RandstadVacancyUrl.js";
 
 type ExtractionRule = (url: URL) => string | undefined;
 
@@ -13,6 +14,7 @@ const rules: Readonly<Record<string, ExtractionRule>> = {
   "linkedin.com": extractLinkedIn,
   "jobleads.com": extractJobLeads,
   "candidat.francetravail.fr": extractFranceTravail,
+  "randstad.fr": extractRandstadVacancyId,
 };
 
 export class ConservativeProviderVacancyIdExtractor

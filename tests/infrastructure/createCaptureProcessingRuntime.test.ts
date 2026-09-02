@@ -27,13 +27,15 @@ describe("createCaptureProcessingRuntime", () => {
       expect(second.processing.canonicalVacancyId).toBe(first.processing.canonicalVacancyId);
       expect(second.processing.vacancyOutcome).toBe("UPDATED_EXISTING");
       expect(database.prepare("SELECT COUNT(*) AS count FROM source_observations").get())
+        .toEqual({ count: 1 });
+      expect(database.prepare("SELECT COUNT(*) AS count FROM capture_occurrences").get())
         .toEqual({ count: 2 });
       expect(database.prepare(`
         SELECT COUNT(*) AS count FROM canonical_vacancy_source_observations
         WHERE canonical_vacancy_id = ?
-      `).get(first.processing.canonicalVacancyId)).toEqual({ count: 2 });
+      `).get(first.processing.canonicalVacancyId)).toEqual({ count: 1 });
       expect(database.prepare("SELECT version FROM schema_migrations ORDER BY version").all())
-        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }]);
+        .toEqual([{ version: 1 }, { version: 2 }, { version: 3 }, { version: 4 }, { version: 5 }, { version: 6 }]);
       expect(database.prepare("SELECT COUNT(*) AS count FROM user_vacancy_interaction_events").get())
         .toEqual({ count: 0 });
     } finally {

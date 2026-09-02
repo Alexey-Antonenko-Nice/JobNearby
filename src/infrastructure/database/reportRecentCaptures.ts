@@ -10,6 +10,7 @@ import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionCon
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import { SqliteSourceObservationRepository } from "../persistence/SqliteSourceObservationRepository.js";
+import { normalizeRandstadVacancyUrl } from "../../application/acquisition/RandstadVacancyUrl.js";
 import { diagnoseLinkedInDirectViewDom } from "./LinkedInDirectViewDomDiagnostic.js";
 import {
   buildCaptureDiagnosticSqlFilter,
@@ -28,6 +29,7 @@ interface ObservationRow {
   readonly displayed_company_name: string | null;
   readonly location_text: string | null;
   readonly metadata_json: string;
+  readonly content_fingerprint: string | null;
   readonly canonical_vacancy_id: string | null;
   readonly canonicalization_status: string | null;
   readonly employer_cluster_id: string | null;
@@ -124,7 +126,7 @@ async function main(): Promise<void> {
       SELECT observation.id, observation.observed_at, observation.source_type,
         observation.source_name, observation.source_url, observation.external_id,
         observation.title, observation.displayed_company_name, observation.location_text,
-        observation.metadata_json, membership.canonical_vacancy_id,
+        observation.metadata_json, observation.content_fingerprint, membership.canonical_vacancy_id,
         canonical.canonicalization_status, assignment.employer_cluster_id,
         cluster.status AS employer_cluster_status, assignment.status AS assignment_status,
         assignment.confidence AS assignment_confidence,
@@ -167,6 +169,9 @@ async function main(): Promise<void> {
     const membersByCanonical = new Map<string, string[]>();
     const fieldsByCanonical = new Map<string, CanonicalFieldRow[]>();
     const organizationsByCanonical = new Map<string, CanonicalOrganizationRow[]>();
+    const occurrenceCounts = new Map<string, number>((db.prepare(`
+      SELECT source_observation_id, COUNT(*) AS count FROM capture_occurrences GROUP BY source_observation_id
+    `).all() as Array<{ source_observation_id: string; count: number }>).map(({ source_observation_id, count }) => [source_observation_id, count]));
 
     for (const canonicalVacancyId of canonicalIds) {
       membersByCanonical.set(canonicalVacancyId, (db.prepare(`
@@ -201,7 +206,7 @@ async function main(): Promise<void> {
         throw new Error(`SourceObservation "${row.id}" could not be reconstructed.`);
       }
       return reportObservation(row, observation, evidenceExtractor, membersByCanonical,
-        fieldsByCanonical, organizationsByCanonical);
+        fieldsByCanonical, organizationsByCanonical, occurrenceCounts);
     }));
     const displayedCanonicalIds = new Set(canonicalIds);
     const aggregate = {
@@ -246,6 +251,7 @@ async function reportObservation(
   membersByCanonical: ReadonlyMap<string, readonly string[]>,
   fieldsByCanonical: ReadonlyMap<string, readonly CanonicalFieldRow[]>,
   organizationsByCanonical: ReadonlyMap<string, readonly CanonicalOrganizationRow[]>,
+  occurrenceCounts: ReadonlyMap<string, number>,
 ) {
   const metadata = parseMetadata(row.metadata_json);
   const evidence = await evidenceExtractor.extract(evidenceInputForReport(observation));
@@ -258,7 +264,11 @@ async function reportObservation(
     sourceObservation: {
       id: row.id, observedAt: row.observed_at, sourceType: row.source_type,
       provider: row.source_name, externalVacancyId: row.external_id,
-      sourceUrl: row.source_url, title: row.title,
+      sourceUrl: row.source_url,
+      normalizedVacancyUrl: row.source_url === null ? null : normalizeRandstadVacancyUrl(row.source_url),
+      contentFingerprint: row.content_fingerprint,
+      captureOccurrenceCount: occurrenceCounts.get(row.id) ?? 0,
+      title: row.title,
     },
     canonicalVacancy: canonicalId === null ? null : {
       id: canonicalId,

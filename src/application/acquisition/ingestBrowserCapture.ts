@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 
 import type { SourceObservationId } from "../../domain/capture/SourceObservation.js";
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
+import type { BrowserCaptureSnapshotRepository } from "../../domain/capture/SourceObservationRepository.js";
 import type { AcquisitionId } from "../../domain/acquisition/AcquisitionPackage.js";
 import type { AcquisitionCaptureMapper } from "./AcquisitionCaptureMapper.js";
 import type { BrowserCapturePayload } from "./BrowserCapturePayload.js";
 import { BrowserCaptureAcquisitionAdapter } from "./BrowserCaptureAcquisitionAdapter.js";
+import { browserCaptureFingerprint } from "./browserCaptureFingerprint.js";
 
 export interface BrowserCaptureIngestionResult {
   readonly success: true;
@@ -20,6 +22,7 @@ export interface BrowserCaptureIngestionDependencies {
   readonly browserAdapter?: BrowserCaptureAcquisitionAdapter;
   readonly generateAcquisitionId?: () => AcquisitionId;
   readonly generateObservationId?: () => SourceObservationId;
+  readonly generateCaptureOccurrenceId?: () => string;
 }
 
 export async function ingestBrowserCapture(
@@ -30,13 +33,24 @@ export async function ingestBrowserCapture(
   const observationId = (dependencies.generateObservationId ?? randomUUID)();
   const adapter = dependencies.browserAdapter ?? new BrowserCaptureAcquisitionAdapter();
   const acquisition = adapter.toAcquisitionPackage(payload, acquisitionId);
-  const observation = dependencies.acquisitionMapper.toSourceObservation(
+  const mapped = dependencies.acquisitionMapper.toSourceObservation(
     acquisition,
     observationId,
   );
+  const observation = { ...mapped, contentFingerprint: browserCaptureFingerprint(mapped) };
+  let sourceObservationId = observation.id;
 
   try {
-    await dependencies.repository.save(observation);
+    if (isBrowserCaptureSnapshotRepository(dependencies.repository)) {
+      const saved = await dependencies.repository.saveOrReuseBrowserSnapshot(observation, {
+        id: (dependencies.generateCaptureOccurrenceId ?? randomUUID)(),
+        capturedAt: observation.observedAt,
+        capturedUrl: payload.pageUrl,
+      });
+      sourceObservationId = saved.sourceObservationId;
+    } else {
+      await dependencies.repository.save(observation);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown repository error.";
     throw new Error(`Browser capture could not be persisted: ${message}`, { cause: error });
@@ -44,8 +58,14 @@ export async function ingestBrowserCapture(
 
   return {
     success: true,
-    sourceObservationId: observation.id,
+    sourceObservationId,
     acquisitionId,
     observedAt: new Date(observation.observedAt.getTime()),
   };
+}
+
+function isBrowserCaptureSnapshotRepository(
+  repository: SourceObservationRepository,
+): repository is BrowserCaptureSnapshotRepository {
+  return "saveOrReuseBrowserSnapshot" in repository;
 }
