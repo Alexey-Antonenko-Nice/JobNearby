@@ -8,6 +8,19 @@ afterEach(async () => Promise.all(servers.splice(0).map((server) =>
   new Promise<void>((resolve) => server.close(() => resolve())))));
 
 describe("vacancy review HTTP workflow", () => {
+  it("returns the read-only vacancy inbox and validates its query", async () => {
+    const fixture = await start();
+    const response = await fetch(`${fixture.base}/vacancies?limit=10`);
+    const invalid = await fetch(`${fixture.base}/vacancies?limit=not-a-number`);
+    const unknown = await fetch(`${fixture.base}/vacancies?unexpected=value`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ vacancies: [] });
+    expect(fixture.getVacancyInbox).toHaveBeenCalledWith({ limit: 10 });
+    expect(fixture.recordVacancyReviewAction).not.toHaveBeenCalled();
+    expect(invalid.status).toBe(400);
+    expect(unknown.status).toBe(400);
+  });
+
   it("GET returns 404 for an unknown canonical vacancy", async () => {
     const fixture = await start({ getError: new Error('CanonicalVacancy "missing" does not exist.') });
     const response = await fetch(`${fixture.base}/vacancies/missing/review`);
@@ -101,6 +114,7 @@ async function start(options: {
   const getVacancyReview = options.getError === undefined
     ? vi.fn().mockResolvedValue(review)
     : vi.fn().mockRejectedValue(options.getError);
+  const getVacancyInbox = vi.fn().mockResolvedValue([]);
   const type = options.actionType ?? "REVIEWED";
   const recordVacancyReviewAction = options.actionError === undefined
     ? vi.fn().mockResolvedValue({ event: { id: "event-1", type }, review: {
@@ -108,10 +122,10 @@ async function start(options: {
     } })
     : vi.fn().mockRejectedValue(options.actionError);
   const server = createBrowserCaptureServer({
-    captureAndProcessBrowserVacancy: vi.fn(), getVacancyReview, recordVacancyReviewAction,
+    captureAndProcessBrowserVacancy: vi.fn(), getVacancyInbox, getVacancyReview, recordVacancyReviewAction,
   });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
-  return { base: `http://127.0.0.1:${port}`, getVacancyReview, recordVacancyReviewAction };
+  return { base: `http://127.0.0.1:${port}`, getVacancyInbox, getVacancyReview, recordVacancyReviewAction };
 }

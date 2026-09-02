@@ -76,7 +76,10 @@ function setup() {
   const interactions = new InMemoryUserVacancyInteractionRepository();
   let sequence = 0;
   const workflow = createVacancyReviewWorkflow({
-    canonicalVacancyRepository: { findById: async (id) => vacancies.get(id) ?? null },
+    canonicalVacancyRepository: {
+      findAll: async () => [...vacancies.values()],
+      findById: async (id) => vacancies.get(id) ?? null,
+    },
     sourceObservationRepository: { findById: async (id) => observations.get(id) ?? null },
     interactionRepository: interactions,
     employerClusterRepository: { findById: async () => ({

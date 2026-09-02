@@ -13,6 +13,7 @@ export interface BrowserCaptureServerDependencies {
     payload: BrowserCapturePayload,
   ) => Promise<CaptureAndProcessBrowserVacancyResult>;
   readonly getVacancyReview?: VacancyReviewWorkflow["getVacancyReview"];
+  readonly getVacancyInbox?: VacancyReviewWorkflow["getVacancyInbox"];
   readonly recordVacancyReviewAction?: VacancyReviewWorkflow["recordVacancyReviewAction"];
 }
 
@@ -28,6 +29,12 @@ export function createBrowserCaptureServer(
     let operation: "capture" | "review" | "interaction" | "route" = "route";
     try {
       const path = requestPath(request);
+      if (request.method === "GET" && path === "/vacancies" && dependencies.getVacancyInbox !== undefined) {
+        operation = "review";
+        const limit = parseInboxLimit(request);
+        sendJson(response, 200, { vacancies: await dependencies.getVacancyInbox(limit === undefined ? {} : { limit }) });
+        return;
+      }
       if (request.method === "POST" && path === BROWSER_CAPTURE_PATH) {
         operation = "capture";
         const payload = parsePayload(await readJsonBody(request, "Browser capture"));
@@ -135,6 +142,15 @@ function requestPath(request: IncomingMessage): string {
   return new URL(request.url ?? "/", "http://127.0.0.1").pathname;
 }
 
+function parseInboxLimit(request: IncomingMessage): number | undefined {
+  const query = new URL(request.url ?? "/", "http://127.0.0.1").searchParams;
+  for (const key of query.keys()) if (key !== "limit") throw new InvalidRequestError(`Unsupported query parameter "${key}".`);
+  const value = query.get("limit");
+  if (value === null) return undefined;
+  if (!/^\d+$/u.test(value)) throw new InvalidRequestError("Inbox limit must be an integer.");
+  return Number(value);
+}
+
 function decodePathId(value: string): string {
   try {
     const decoded = decodeURIComponent(value);
@@ -156,6 +172,7 @@ function errorStatus(
   }
   if (operation === "route") return 400;
   if (error instanceof InvalidRequestError) return 400;
+  if (message.startsWith("Inbox limit must be")) return 400;
   if (operation === "interaction" && (
     message.startsWith("Metadata field") ||
     message.startsWith("Interaction metadata") ||

@@ -5,6 +5,7 @@ import type { CanonicalVacancyId } from "../../domain/vacancies/CanonicalVacancy
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 import type { EmployerMemoryPublicDataSource } from "./EmployerMemoryPublicDataSource.js";
 import { getVacancyReviewView } from "./getVacancyReviewView.js";
+import { getVacancyInbox } from "./getVacancyInbox.js";
 import {
   recordUserVacancyInteraction,
   type RecordUserVacancyInteractionDependencies,
@@ -12,7 +13,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
-  readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
+  readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll" | "findById">;
   readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
   readonly interactionRepository: UserVacancyInteractionRepository;
   readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
@@ -32,6 +33,7 @@ export function createVacancyReviewWorkflow(
     employerMemoryPublicDataSource: dependencies.employerMemoryPublicDataSource,
   };
   return {
+    getVacancyInbox: (input?: { readonly limit?: number }) => getVacancyInbox(input, reviewDependencies),
     getVacancyReview: (canonicalVacancyId: CanonicalVacancyId) =>
       getVacancyReviewView(canonicalVacancyId, reviewDependencies),
     recordVacancyReviewAction: async (input: RecordUserVacancyInteractionInput) => {
