@@ -214,6 +214,7 @@ browser capture URL matches one of the URL forms established by the real corpus:
 | `linkedin.com` | non-empty `currentJobId` on a `/jobs/` route |
 | `jobleads.com` | exact `/job/<id>` route |
 | `candidat.francetravail.fr` | exact `/offres/recherche/detail/<uppercase-alphanumeric-id>` route |
+| `randstad.fr` | exact `/emploi/<slug>_<native-listing-suffix>` route |
 
 Extraction uses the parsed URL, requires the URL hostname to match the normalized
 source namespace, preserves the identifier as a string, and is non-fatal. Unknown,
@@ -237,6 +238,19 @@ the unchanged M5.1 mapper then places it in `SourceReference.externalId`. Existi
 M3.5 behavior can consequently recognize repeated captures with the same provider
 namespace and exact ID. M5.4 does not change that comparator, inspect DOM content,
 deduplicate captures, migrate the schema, or backfill historical observations.
+
+### Browser snapshot reuse
+
+For supported Randstad vacancy URLs, M7.1 preserves the native listing suffix (for
+example, `001-mmo-0000054_10l`) as the provider external ID. Query parameters and
+fragments do not affect identity; the exact captured URL is retained separately.
+
+A capture occurrence is distinct from an immutable evidence snapshot and a canonical
+vacancy. Browser snapshots use SHA-256 over raw content, direct structured fields,
+selected-vacancy contexts, and structured acquisition payload, excluding capture times
+and generated IDs. Same provider identity plus fingerprint reuses the snapshot and
+stores another occurrence; a changed fingerprint creates a new snapshot on the same
+canonical vacancy.
 
 ## Acquisition contexts
 

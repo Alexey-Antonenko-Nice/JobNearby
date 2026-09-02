@@ -59,6 +59,7 @@ describe("database migrations", () => {
       { version: 3 },
       { version: 4 },
       { version: 5 },
+      { version: 6 },
     ]);
 
     db.close();
@@ -78,6 +79,15 @@ describe("database migrations", () => {
       "idx_user_vacancy_interaction_canonical",
       "idx_user_vacancy_interaction_history",
     ]));
+    db.close();
+  });
+
+  it("creates browser snapshot fingerprints and capture occurrences", () => {
+    const db = createDatabase(":memory:");
+    expect(db.prepare(`SELECT version, name FROM schema_migrations WHERE version = 6`).get())
+      .toEqual({ version: 6, name: "add_browser_capture_snapshot_fingerprints_and_occurrences" });
+    expect(db.prepare(`SELECT name FROM sqlite_master WHERE name = 'capture_occurrences'`).get())
+      .toEqual({ name: "capture_occurrences" });
     db.close();
   });
 
@@ -233,6 +243,7 @@ describe("database migrations", () => {
         { version: 3 },
         { version: 4 },
         { version: 5 },
+        { version: 6 },
       ]);
     db.close();
   });

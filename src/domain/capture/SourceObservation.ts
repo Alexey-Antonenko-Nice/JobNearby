@@ -18,6 +18,7 @@ export interface SourceObservation {
   readonly contactText?: string;
 
   readonly rawContent?: string;
+  readonly contentFingerprint?: string;
 
   readonly metadata: Readonly<Record<string, unknown>>;
 }

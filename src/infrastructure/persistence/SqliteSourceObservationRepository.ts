@@ -6,6 +6,7 @@ import type {
 } from "../../domain/capture/SourceObservation.js";
 
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
+import type { BrowserCaptureOccurrence, BrowserCaptureSnapshotRepository } from "../../domain/capture/SourceObservationRepository.js";
 
 import type {
   SourceReference,
@@ -34,10 +35,11 @@ interface SourceObservationRow {
 
   raw_content: string | null;
   metadata_json: string;
+  content_fingerprint: string | null;
 }
 
 export class SqliteSourceObservationRepository
-  implements SourceObservationRepository
+  implements BrowserCaptureSnapshotRepository
 {
   constructor(private readonly db: Database.Database) {}
 
@@ -64,7 +66,8 @@ export class SqliteSourceObservationRepository
         contact_text,
 
         raw_content,
-        metadata_json
+        metadata_json,
+        content_fingerprint
       )
       VALUES (
         @id,
@@ -87,7 +90,8 @@ export class SqliteSourceObservationRepository
         @contact_text,
 
         @raw_content,
-        @metadata_json
+        @metadata_json,
+        @content_fingerprint
       )
     `);
 
@@ -121,6 +125,7 @@ export class SqliteSourceObservationRepository
 
         raw_content: observation.rawContent ?? null,
         metadata_json: JSON.stringify(observation.metadata),
+        content_fingerprint: observation.contentFingerprint ?? null,
       });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
@@ -159,7 +164,8 @@ export class SqliteSourceObservationRepository
           contact_text,
 
           raw_content,
-          metadata_json
+          metadata_json,
+          content_fingerprint
 
         FROM source_observations
         WHERE id = ?
@@ -171,6 +177,51 @@ export class SqliteSourceObservationRepository
     }
 
     return mapRowToObservation(row);
+  }
+
+  async saveOrReuseBrowserSnapshot(
+    observation: SourceObservation,
+    occurrence: BrowserCaptureOccurrence,
+  ): Promise<{ readonly sourceObservationId: string; readonly snapshotCreated: boolean }> {
+    if (observation.source.externalId === undefined || observation.contentFingerprint === undefined) {
+      await this.save(observation);
+      this.insertOccurrence(observation.id, occurrence);
+      return { sourceObservationId: observation.id, snapshotCreated: true };
+    }
+    const existing = this.findByIdentityAndFingerprint(
+      observation.source.sourceName, observation.source.externalId, observation.contentFingerprint,
+    );
+    if (existing !== undefined) {
+      this.insertOccurrence(existing, occurrence);
+      return { sourceObservationId: existing, snapshotCreated: false };
+    }
+    try {
+      await this.save(observation);
+      this.insertOccurrence(observation.id, occurrence);
+      return { sourceObservationId: observation.id, snapshotCreated: true };
+    } catch (error) {
+      const reused = this.findByIdentityAndFingerprint(
+        observation.source.sourceName, observation.source.externalId, observation.contentFingerprint,
+      );
+      if (reused === undefined) throw error;
+      this.insertOccurrence(reused, occurrence);
+      return { sourceObservationId: reused, snapshotCreated: false };
+    }
+  }
+
+  private findByIdentityAndFingerprint(sourceName: string, externalId: string, fingerprint: string): string | undefined {
+    const row = this.db.prepare(`
+      SELECT id FROM source_observations
+      WHERE source_name = ? AND external_id = ? AND content_fingerprint = ?
+    `).get(sourceName, externalId, fingerprint) as { id: string } | undefined;
+    return row?.id;
+  }
+
+  private insertOccurrence(sourceObservationId: string, occurrence: BrowserCaptureOccurrence): void {
+    this.db.prepare(`
+      INSERT INTO capture_occurrences (id, source_observation_id, captured_at, captured_url)
+      VALUES (?, ?, ?, ?)
+    `).run(occurrence.id, sourceObservationId, occurrence.capturedAt.toISOString(), occurrence.capturedUrl);
   }
 }
 
@@ -207,6 +258,8 @@ function mapRowToObservation(
     ...(row.published_at !== null
       ? { publishedAt: new Date(row.published_at) }
       : {}),
+
+    ...(row.content_fingerprint !== null ? { contentFingerprint: row.content_fingerprint } : {}),
 
     ...(row.title !== null
       ? { title: row.title }
