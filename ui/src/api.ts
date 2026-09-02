@@ -48,3 +48,25 @@ async function apiError(response: Response): Promise<Error & { readonly status: 
   Object.assign(error, { status: response.status });
   return error;
 }
+
+export interface VacancyInboxItem {
+  readonly canonicalVacancyId: string;
+  readonly canonicalizationStatus: string;
+  readonly title: string | null;
+  readonly location: unknown | null;
+  readonly engagement: unknown | null;
+  readonly workMode: unknown | null;
+  readonly latestObservedAt: string | null;
+  readonly sourceObservationCount: number;
+  readonly userState: string;
+  readonly employer: { readonly status: string | null; readonly unresolvedEmployer: boolean };
+  readonly organizations: { readonly employerName: string | null; readonly displayedCompanyNames: readonly string[]; readonly recruiterNames: readonly string[]; readonly consultancyNames: readonly string[] };
+  readonly signals: { readonly sameCanonicalVacancySeenBefore: boolean; readonly hasMultipleSourceObservations: boolean; readonly alreadyAppliedToThisVacancy: boolean };
+}
+
+export async function getVacancyInbox(limit?: number): Promise<readonly VacancyInboxItem[]> {
+  const query = limit === undefined ? "" : `?limit=${encodeURIComponent(limit)}`;
+  const response = await fetch(`${API_ORIGIN}/vacancies${query}`);
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { vacancies: readonly VacancyInboxItem[] }).vacancies;
+}

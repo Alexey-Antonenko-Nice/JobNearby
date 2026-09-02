@@ -62,10 +62,11 @@ Start the local UI in another:
 npm run ui:dev
 ```
 
-Open `http://127.0.0.1:5173/review/<canonicalVacancyId>`, replacing the ID with a
-canonical vacancy ID stored by the capture workflow. Opening this page is read-only;
-only an explicit action button creates a private interaction event. The API allows
-this fixed local UI origin in addition to supported browser-extension origins.
+Open `http://127.0.0.1:5173/` to browse the vacancy inbox, then choose a vacancy to
+review. `http://127.0.0.1:5173/review/<canonicalVacancyId>` remains available for a
+direct review URL. Browsing the inbox and opening a review are read-only; only an
+explicit action button creates a private interaction event. The API allows this fixed
+local UI origin in addition to supported browser-extension origins.
 
 ## License
 

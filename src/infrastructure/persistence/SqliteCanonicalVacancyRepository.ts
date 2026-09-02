@@ -256,6 +256,17 @@ export class SqliteCanonicalVacancyRepository
     });
   }
 
+  async findAll(): Promise<readonly CanonicalVacancy[]> {
+    const ids = (this.db.prepare(`
+      SELECT id FROM canonical_vacancies ORDER BY id
+    `).all() as Array<{ id: string }>).map(({ id }) => id);
+    return Promise.all(ids.map(async (id) => {
+      const vacancy = await this.findById(id);
+      if (vacancy === null) throw new Error(`CanonicalVacancy "${id}" does not exist.`);
+      return vacancy;
+    }));
+  }
+
   async findBySourceObservationId(
     sourceObservationId: SourceObservationId,
   ): Promise<CanonicalVacancy | null> {

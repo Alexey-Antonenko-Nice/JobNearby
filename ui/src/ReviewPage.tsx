@@ -39,6 +39,7 @@ export function ReviewPage(): React.JSX.Element {
   if (review === null) return <main className="page"><p>Loading...</p></main>;
 
   return <main className="page">
+    <a href="/">Back to inbox</a>
     <header><h1>{text(review.vacancy.title)}</h1><p>Current state: <strong>{review.user.currentState}</strong></p></header>
     {error !== null && <p className="error" role="alert">{error}</p>}
     <section><h2>Vacancy</h2><Details values={[

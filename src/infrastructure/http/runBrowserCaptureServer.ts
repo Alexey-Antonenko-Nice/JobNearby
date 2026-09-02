@@ -25,6 +25,7 @@ const reviewWorkflow = createVacancyReviewWorkflow({
 });
 const server = createBrowserCaptureServer({
   captureAndProcessBrowserVacancy: runtime.captureAndProcessBrowserVacancy,
+  getVacancyInbox: reviewWorkflow.getVacancyInbox,
   getVacancyReview: reviewWorkflow.getVacancyReview,
   recordVacancyReviewAction: reviewWorkflow.recordVacancyReviewAction,
 });

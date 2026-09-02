@@ -15,6 +15,7 @@ export interface CanonicalVacancySaveResult {
 
 export interface CanonicalVacancyRepository {
   save(vacancy: CanonicalVacancy): Promise<CanonicalVacancySaveResult>;
+  findAll(): Promise<readonly CanonicalVacancy[]>;
   findById(id: CanonicalVacancyId): Promise<CanonicalVacancy | null>;
   findBySourceObservationId(
     sourceObservationId: SourceObservationId,
