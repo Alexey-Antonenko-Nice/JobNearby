@@ -206,7 +206,10 @@ function parsePayload(value: unknown): BrowserCapturePayload {
 
 function setCorsHeaders(request: IncomingMessage, response: ServerResponse): void {
   const origin = request.headers.origin;
-  if (origin !== undefined && /^(chrome|moz)-extension:\/\//u.test(origin)) {
+  if (origin !== undefined && (
+    /^(chrome|moz)-extension:\/\//u.test(origin) ||
+    origin === "http://127.0.0.1:5173"
+  )) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
   }
