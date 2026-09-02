@@ -48,6 +48,25 @@ Initial direction:
 - SQLite
 - React later for the web interface
 
+## Local vacancy review UI
+
+Start the API server in one terminal:
+
+```text
+npm run capture:server
+```
+
+Start the local UI in another:
+
+```text
+npm run ui:dev
+```
+
+Open `http://127.0.0.1:5173/review/<canonicalVacancyId>`, replacing the ID with a
+canonical vacancy ID stored by the capture workflow. Opening this page is read-only;
+only an explicit action button creates a private interaction event. The API allows
+this fixed local UI origin in addition to supported browser-extension origins.
+
 ## License
 
 To be decided before public release.

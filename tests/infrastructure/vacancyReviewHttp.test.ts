@@ -24,6 +24,18 @@ describe("vacancy review HTTP workflow", () => {
     expect(fixture.recordVacancyReviewAction).not.toHaveBeenCalled();
   });
 
+  it("allows only the configured local UI origin alongside extension origins", async () => {
+    const fixture = await start();
+    const allowed = await fetch(`${fixture.base}/vacancies/canonical-1/review`, {
+      headers: { Origin: "http://127.0.0.1:5173" },
+    });
+    const rejected = await fetch(`${fixture.base}/vacancies/canonical-1/review`, {
+      headers: { Origin: "http://127.0.0.1:5174" },
+    });
+    expect(allowed.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:5173");
+    expect(rejected.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
   it.each(["REVIEWED", "APPLIED"] as const)("POST %s returns the event and refreshed review", async (type) => {
     const fixture = await start({ actionType: type });
     const response = await fetch(`${fixture.base}/vacancies/canonical-1/interactions`, {
