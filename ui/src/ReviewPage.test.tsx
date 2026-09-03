@@ -62,6 +62,21 @@ describe("ReviewPage", () => {
     expect((await screen.findAllByText("Unknown")).length).toBeGreaterThanOrEqual(4);
   });
 
+  it("renders structured facts readably without exposing JSON", async () => {
+    respond({ review: review({
+      location: { rawText: "Benfeld, Bas-Rhin, FR" },
+      engagement: { rawTerms: ["CONTRACTOR"], normalizedTerms: [] },
+      compensation: { rawText: "12.66 - 0 EUR / HOUR" }, workMode: "REMOTE",
+    }) });
+    render(<ReviewPage />);
+    expect(await screen.findByText("Benfeld, Bas-Rhin, FR")).toBeInTheDocument();
+    expect(screen.getByText("Contractor")).toBeInTheDocument();
+    expect(screen.getByText("12.66–0 EUR / hour")).toBeInTheDocument();
+    expect(screen.getByText("Remote")).toBeInTheDocument();
+    expect(screen.queryByText(/\{"rawText"/u)).not.toBeInTheDocument();
+    expect(screen.queryByText(/"normalizedTerms"/u)).not.toBeInTheDocument();
+  });
+
   it("shows an unlinked employer explicitly", async () => {
     respond({ review: review({ employerClusterId: null }) }); render(<ReviewPage />);
     expect(await screen.findByText("Employer unresolved / not linked")).toBeInTheDocument();
