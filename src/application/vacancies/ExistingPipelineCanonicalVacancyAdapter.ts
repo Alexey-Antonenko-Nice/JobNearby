@@ -128,7 +128,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
         engagementCandidates.push({
           value: {
             rawTerms: [observation.contractText.trim()],
-            normalizedTerms: [],
+            normalizedTerms: structuredEngagementTerms(observation.contractText),
           },
           supportingEvidenceIds: [id],
         });
@@ -139,10 +139,8 @@ export class ExistingPipelineCanonicalVacancyAdapter {
           "SOURCE_SALARY_TEXT",
           observation.salaryText,
         );
-        compensationCandidates.push({
-          value: { rawText: observation.salaryText.trim() },
-          supportingEvidenceIds: [id],
-        });
+        const value = structuredCompensation(observation.salaryText);
+        if (!malformedCompensation(value)) compensationCandidates.push({ value, supportingEvidenceIds: [id] });
       }
     }
 
@@ -287,6 +285,9 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       }
     }
 
+    const reconciledEngagementCandidates = reconcileEngagementCandidates(engagementCandidates);
+    const reconciledCompensationCandidates = reconcileCompensationCandidates(compensationCandidates);
+
     const selectedLocations = selectCanonicalLocations(
       input.extractedEvidence.flatMap(({ locations }) => locations),
     );
@@ -331,8 +332,8 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       roleCandidates,
       organizationRelationships,
       locationCandidates,
-      engagementCandidates,
-      compensationCandidates,
+      engagementCandidates: reconciledEngagementCandidates,
+      compensationCandidates: reconciledCompensationCandidates,
       workModeCandidates,
       industryContextCandidates,
       languageRequirementCandidates,
@@ -468,4 +469,52 @@ function normalizeIdentityPart(value: string): string {
 
 function usable(value: string | undefined): value is string {
   return value !== undefined && value.trim().length > 0;
+}
+
+type EngagementValue = { readonly rawTerms: readonly string[]; readonly normalizedTerms: readonly string[] };
+type CompensationValue = { readonly rawText?: string; readonly currency?: string; readonly minimum?: number; readonly maximum?: number; readonly period?: "HOUR" | "MONTH" | "YEAR" };
+
+function structuredEngagementTerms(value: string): string[] {
+  const normalized = value.trim().toLocaleUpperCase();
+  return normalized === "FULL_TIME" || normalized === "PART_TIME" || normalized === "CONTRACTOR" || normalized === "TEMPORARY" ? [normalized] : [];
+}
+
+function structuredCompensation(rawText: string): CompensationValue {
+  const match = /^\s*([\d.]+)\s*-\s*([\d.]+)\s+([A-Z]+)\s*\/\s*(HOUR|MONTH|YEAR)\s*$/u.exec(rawText);
+  if (match === null) return { rawText: rawText.trim() };
+  const currency = match[3];
+  const period = match[4] as CompensationValue["period"] | undefined;
+  return {
+    rawText: rawText.trim(), minimum: Number(match[1]), maximum: Number(match[2]),
+    ...(currency === undefined ? {} : { currency }),
+    ...(period === undefined ? {} : { period }),
+  };
+}
+
+function malformedCompensation(value: CompensationValue): boolean {
+  return value.minimum !== undefined && value.minimum > 0 && value.maximum === 0;
+}
+
+function reconcileEngagementCandidates(candidates: readonly CanonicalCandidate<EngagementValue>[]): CanonicalCandidate<EngagementValue>[] {
+  const contractTerms = new Set(["INDEFINITE", "FIXED_TERM", "INTERIM", "CONTRACTOR", "TEMPORARY"]);
+  const contracts = new Set(candidates.flatMap(({ value }) => value.normalizedTerms.filter((term) => contractTerms.has(term))));
+  if (contracts.size > 1) return [...candidates];
+  const rawTerms = [...new Set(candidates.flatMap(({ value }) => value.rawTerms))];
+  const normalizedTerms = [...new Set(candidates.flatMap(({ value }) => value.normalizedTerms))];
+  if (rawTerms.length === 0) return [];
+  return [{ value: { rawTerms, normalizedTerms }, supportingEvidenceIds: [...new Set(candidates.flatMap(({ supportingEvidenceIds }) => supportingEvidenceIds))] }];
+}
+
+function reconcileCompensationCandidates(candidates: readonly CanonicalCandidate<CompensationValue>[]): CanonicalCandidate<CompensationValue>[] {
+  const groups = new Map<string, CanonicalCandidate<CompensationValue>[]>();
+  for (const candidate of candidates) {
+    const { minimum, maximum, currency, period, rawText } = candidate.value;
+    const key = minimum === undefined ? `raw:${rawText ?? ""}` : `${minimum}|${maximum ?? ""}|${currency ?? ""}|${period ?? ""}`;
+    groups.set(key, [...(groups.get(key) ?? []), candidate]);
+  }
+  return [...groups.values()].map((group) => ({
+    value: group.find(({ value }) => value.minimum !== undefined)?.value ?? group[0]!.value,
+    supportingEvidenceIds: [...new Set(group.flatMap(({ supportingEvidenceIds }) => supportingEvidenceIds))],
+    ...(group.every(({ confidence }) => confidence === group[0]!.confidence) && group[0]!.confidence !== undefined ? { confidence: group[0]!.confidence } : {}),
+  }));
 }

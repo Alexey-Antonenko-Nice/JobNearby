@@ -252,6 +252,21 @@ and generated IDs. Same provider identity plus fingerprint reuses the snapshot a
 stores another occurrence; a changed fingerprint creates a new snapshot on the same
 canonical vacancy.
 
+## Compensation and engagement evidence
+
+Structured JobPosting fields are evidence rather than an automatic winner. A structured
+salary range with a positive minimum and zero maximum is malformed: its raw source value
+is retained, but it cannot resolve canonical compensation. Conservative visible-text
+salary extraction recognizes clear French hourly, monthly, and annual forms and can
+resolve the field when structured evidence is malformed. Two valid materially different
+amounts remain canonical alternatives.
+
+`employmentType` values `FULL_TIME` and `PART_TIME` represent working-time evidence;
+`CDI`, `CDD`, and explicit `intérim` text represent contract evidence. Compatible
+working-time and contract terms are combined rather than made conflicting alternatives.
+`CONTRACTOR` remains a raw structured contract term and is not automatically treated as
+French interim work.
+
 ## Acquisition contexts
 
 M5.5 adds optional bounded acquisition contexts while preserving the original full

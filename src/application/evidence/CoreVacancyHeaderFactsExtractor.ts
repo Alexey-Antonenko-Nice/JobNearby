@@ -62,10 +62,18 @@ function extractLocation(line: string): string | null {
 }
 
 function extractEngagement(line: string): Omit<VacancyEngagementEvidence, "provenance"> | null {
-  const match = /^(CDI|CDD)$/iu.exec(line);
-  if (match === null) return null;
-  const raw = match[1]!.toLocaleUpperCase();
-  return { rawTerms: [raw], normalizedTerms: [raw === "CDI" ? "INDEFINITE" : "FIXED_TERM"] };
+  if (/\b(?:mission\s+d['’]int[eé]rim|contrat\s+int[eé]rimaire|int[eé]rim)\b/iu.test(line)) {
+    return { rawTerms: [normalizeLine(line)], normalizedTerms: ["INTERIM"] };
+  }
+  const terms = [
+    ...(/\bCDI\b/iu.test(line) ? [["CDI", "INDEFINITE"] as const] : []),
+    ...(/\bCDD\b/iu.test(line) ? [["CDD", "FIXED_TERM"] as const] : []),
+    ...(/\btemps\s+plein\b/iu.test(line) ? [["Temps plein", "FULL_TIME"] as const] : []),
+    ...(/\btemps\s+partiel\b/iu.test(line) ? [["Temps partiel", "PART_TIME"] as const] : []),
+  ];
+  return terms.length === 0 ? null : {
+    rawTerms: terms.map(([raw]) => raw), normalizedTerms: terms.map(([, normalized]) => normalized),
+  };
 }
 
 function extractWorkMode(line: string): VacancyWorkModeEvidence["value"] | null {
@@ -80,13 +88,21 @@ type ExtractedCompensation = Pick<
 >;
 
 function extractCompensation(text: string): ExtractedCompensation | null {
-  const match = /\bSalaire\s+brut\s*:\s*Annuel\s+de\s+(\d+(?:[.,]\d+)?)\s+Euros?\s+[àa]\s+(\d+(?:[.,]\d+)?)\s+Euros?\b/iu.exec(text);
+  const annual = /\bSalaire\s+brut\s*:\s*Annuel\s+de\s+([\d ]+(?:[.,]\d+)?)\s+Euros?\s+[àa]\s+([\d ]+(?:[.,]\d+)?)\s+Euros?\b/iu.exec(text);
+  const compactRange = /\b(\d+(?:[.,]\d+)?)k\s*[–-]\s*(\d+(?:[.,]\d+)?)k\s*€\s*\/?\s*(h|heure|mois|an|ann[eé]e)\b/iu.exec(text);
+  const common = compactRange ?? /\b([\d ]+(?:[.,]\d+)?)\s*(?:k)?\s*€\s*(?:[àa\-–]\s*([\d ]+(?:[.,]\d+)?)\s*(k)?\s*€)?\s*\/?\s*(h|heure|mois|an|ann[eé]e)\b/iu.exec(text);
+  const match = annual ?? common;
   if (match === null) return null;
+  const annualMatch = annual !== null;
+  const factor = !annualMatch && /k/iu.test(match[0]) ? 1000 : 1;
+  const minimum = Number(match[1]!.replace(/\s/gu, "").replace(",", ".")) * factor;
+  const maximum = match[2] === undefined ? undefined : Number(match[2].replace(/\s/gu, "").replace(",", ".")) * factor;
+  const unit = annualMatch ? "YEAR" : match[compactRange === null ? 4 : 3]?.toLocaleLowerCase();
   return {
     rawText: normalizeLine(match[0]),
     currency: "EUR",
-    minimum: Number(match[1]!.replace(",", ".")),
-    maximum: Number(match[2]!.replace(",", ".")),
-    period: "YEAR",
+    minimum,
+    ...(maximum === undefined ? {} : { maximum }),
+    period: unit === "h" || unit === "heure" ? "HOUR" : unit === "mois" ? "MONTH" : "YEAR",
   };
 }

@@ -76,6 +76,25 @@ describe("CoreVacancyHeaderFactsExtractor", () => {
     ]);
   });
 
+  it.each([
+    ["12,40€/h + primes", 12.4, undefined, "HOUR"],
+    ["12.40 € / heure", 12.4, undefined, "HOUR"],
+    ["2 100 € / mois", 2100, undefined, "MONTH"],
+    ["30k–35k € / an", 30000, 35000, "YEAR"],
+  ] as const)("extracts explicit compensation %s", async (text, minimum, maximum, period) => {
+    const result = await extractor.extract(selected(`Technicien H/F\n${text}`));
+    expect(result.compensations[0]).toMatchObject({ minimum, ...(maximum === undefined ? {} : { maximum }), period });
+  });
+
+  it.each([
+    ["CDI", ["INDEFINITE"]], ["CDD", ["FIXED_TERM"]], ["intérim", ["INTERIM"]],
+    ["interim", ["INTERIM"]], ["mission d'intérim", ["INTERIM"]],
+    ["temps plein", ["FULL_TIME"]], ["temps partiel", ["PART_TIME"]],
+  ] as const)("extracts explicit engagement %s", async (text, normalizedTerms) => {
+    const result = await extractor.extract(selected(`Technicien H/F\n${text}`));
+    expect(result.engagements[0]).toMatchObject({ normalizedTerms });
+  });
+
   it("does not extract a location before France without a conservative header boundary", async () => {
     const result = await extractor.extract(selected(
       "Technicien maintenance H/F\nNotre groupe intervient en Pays de la Loire, France auprès de nombreux clients.",
