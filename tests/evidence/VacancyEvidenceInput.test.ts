@@ -38,8 +38,8 @@ describe("VacancyEvidenceInput", () => {
     );
 
     expect(result.organizations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ value: "Wrong Description", role: "EMPLOYER" }),
-      expect.objectContaining({ value: "Wrong Full Page", role: "EMPLOYER" }),
+      expect.objectContaining({ value: "Wrong Description", role: "CLIENT" }),
+      expect.objectContaining({ value: "Wrong Full Page", role: "CLIENT" }),
     ]));
     expect(result.people).toContainEqual(expect.objectContaining({
       value: "Wrong Contact",
@@ -65,7 +65,7 @@ describe("VacancyEvidenceInput", () => {
     const textResult = await new ExplicitTextVacancyEvidenceExtractor().extract(input);
     expect(textResult.organizations).toEqual([{
       value: "Selected Employer",
-      role: "EMPLOYER",
+      role: "CLIENT",
       provenance: {
         sourceObservationId: observation.id,
         extractionMethod: "TEXT_EXTRACTION",

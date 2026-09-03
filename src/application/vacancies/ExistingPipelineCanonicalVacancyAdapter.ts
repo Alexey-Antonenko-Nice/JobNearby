@@ -7,6 +7,7 @@ import type { ExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVa
 import type { ExternalIdentifierEvidence } from "../../domain/evidence/ExternalIdentifierEvidence.js";
 import type { LocationEvidence } from "../../domain/evidence/LocationEvidence.js";
 import type { OrganizationEvidence } from "../../domain/evidence/OrganizationEvidence.js";
+import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import type { PersonEvidence } from "../../domain/evidence/PersonEvidence.js";
 import type { VacancyTitleEvidence } from "../../domain/evidence/VacancyTitleEvidence.js";
 import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
@@ -330,7 +331,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
         left.id.localeCompare(right.id),
       ),
       roleCandidates,
-      organizationRelationships,
+      organizationRelationships: uniqueOrganizationRelationships(organizationRelationships),
       locationCandidates,
       engagementCandidates: reconciledEngagementCandidates,
       compensationCandidates: reconciledCompensationCandidates,
@@ -469,6 +470,21 @@ function normalizeIdentityPart(value: string): string {
 
 function usable(value: string | undefined): value is string {
   return value !== undefined && value.trim().length > 0;
+}
+
+function uniqueOrganizationRelationships(
+  relationships: readonly VacancyOrganizationRelationship[],
+): VacancyOrganizationRelationship[] {
+  const seen = new Set<string>();
+  return relationships.filter((relationship) => {
+    const anchor = relationship.rawName === undefined
+      ? relationship.employerClusterId ?? relationship.organizationId ?? ""
+      : normalizeOrganizationEvidenceName(relationship.rawName);
+    const key = `${relationship.role}\u0000${anchor}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 type EngagementValue = { readonly rawTerms: readonly string[]; readonly normalizedTerms: readonly string[] };

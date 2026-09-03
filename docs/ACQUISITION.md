@@ -267,6 +267,15 @@ working-time and contract terms are combined rather than made conflicting altern
 `CONTRACTOR` remains a raw structured contract term and is not automatically treated as
 French interim work.
 
+## Organization roles
+
+`DISPLAYED_COMPANY` records exactly what the source showed; it is not employer proof.
+`STAFFING_AGENCY`, `RECRUITER`, and `CONSULTANCY` remain separate intermediary roles.
+Names introduced as `notre client`, `son client`, or `pour le compte de notre client`
+are recorded as `CLIENT`, not automatically as `EMPLOYER`. Employer clustering consumes
+only explicit `EMPLOYER` evidence. The extractor rejects grammatical fragments such as
+`On`, `Nous`, and articles while retaining plausible short uppercase organization names.
+
 ## Acquisition contexts
 
 M5.5 adds optional bounded acquisition contexts while preserving the original full

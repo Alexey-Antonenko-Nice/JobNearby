@@ -33,7 +33,10 @@ export class ExplicitTextVacancyEvidenceExtractor
     };
 
     const organizations: OrganizationEvidence[] = [];
-    for (const value of extractExplicitEmployerNames(vacancyText)) {
+    for (const value of extractExplicitClientNames(vacancyText)) {
+      organizations.push({ value, role: "CLIENT", provenance });
+    }
+    for (const value of extractDirectEmployerNames(vacancyText)) {
       organizations.push({ value, role: "EMPLOYER", provenance });
     }
 
@@ -81,16 +84,16 @@ export class ExplicitTextVacancyEvidenceExtractor
   }
 }
 
-function extractExplicitEmployerNames(text: string): string[] {
+function extractExplicitClientNames(text: string): string[] {
   const pattern =
-    /pour\s+(?:(?:le\s+compte\s+de\s+)?notre\s+client|l['’]un\s+de\s+nos\s+clients?)\s*,?\s+([^\n,;:!?….]{2,80})/giu;
+    /(?:pour\s+(?:le\s+compte\s+de\s+)?notre\s+client|pour\s+l['’]un\s+de\s+nos\s+clients?|pour\s+son\s+client)\s*,?\s+([^\n,;:!?….]{2,80})/giu;
   const names: string[] = [];
 
   for (const match of text.matchAll(pattern)) {
     const candidate = normalizeCapturedValue(match[1] ?? "");
     if (
       candidate.length > 0 &&
-      looksLikeExplicitOrganizationName(candidate) &&
+      isUsableOrganizationName(candidate) &&
       !/^(?:situ[eé]e?|bas[eé]e?)\s+[àa]\b/iu.test(candidate)
     ) {
       names.push(candidate);
@@ -98,6 +101,13 @@ function extractExplicitEmployerNames(text: string): string[] {
   }
 
   return [...new Set(names)];
+}
+
+function extractDirectEmployerNames(text: string): string[] {
+  const pattern = /\bl['’]entreprise\s+([^\n,;:!?….]{2,80}?)\s+recrute\b/giu;
+  return [...text.matchAll(pattern)]
+    .map((match) => normalizeCapturedValue(match[1] ?? ""))
+    .filter(isUsableOrganizationName);
 }
 
 interface ExtractedOrganizationRole {
@@ -134,7 +144,7 @@ function extractBoundedOrganizationRoles(
   if (
     lines.length >= 2 &&
     !isConservativeVacancyTitle(lines[0]!) &&
-    looksLikeExplicitOrganizationName(lines[0]!) &&
+    isUsableOrganizationName(lines[0]!) &&
     /\b(?:h\s*\/\s*f|f\s*\/\s*h|m\s*\/\s*f|f\s*\/\s*m)\b/iu.test(lines[1]!)
   ) {
     addOrganizationRole(results, lines[0]!, "UNKNOWN");
@@ -177,8 +187,7 @@ function addOrganizationRole(
   const value = normalizeCapturedValue(rawValue);
   if (
     value.length > 0 &&
-    looksLikeExplicitOrganizationName(value) &&
-    !/^(?:entreprise|client|groupe|agence|employeur)$/iu.test(value)
+    isUsableOrganizationName(value)
   ) {
     results.push({ value, role });
   }
@@ -191,6 +200,10 @@ function classifyDisplayedIntermediary(
 ): "RECRUITMENT_AGENCY" | "STAFFING_AGENCY" | null {
   if (displayedCompanyName === undefined) {
     return null;
+  }
+
+  if (/\b(?:randstad|geny\s+interim)\b/iu.test(displayedCompanyName)) {
+    return "STAFFING_AGENCY";
   }
 
   const escapedDisplayedName = escapeRegExp(displayedCompanyName.trim());
@@ -237,13 +250,17 @@ function classifyDisplayedIntermediary(
   return localDescriptions[0]?.role ?? null;
 }
 
-function looksLikeExplicitOrganizationName(value: string): boolean {
-  const words = value.split(/\s+/u);
+export function isUsableOrganizationName(value: string): boolean {
+  const normalized = normalizeCapturedValue(value);
+  if (normalized.length === 0 || /^(?:on|nous|we|le|la|the|pour|de|du|des|un|une|client|entreprise|groupe|agence|employeur)$/iu.test(normalized)) {
+    return false;
+  }
+  const words = normalized.split(/\s+/u);
   const connectorWords = new Set(["de", "du", "des", "la", "le", "et"]);
 
   return (
     words.length <= 8 &&
-    words.some((word) => /^\p{Lu}/u.test(word)) &&
+    words.some((word) => /^[\p{Lu}\d]/u.test(word)) &&
     words.every(
       (word) =>
         connectorWords.has(word.toLocaleLowerCase()) ||
@@ -257,7 +274,7 @@ function extractNamedRecruiters(text: string): string[] {
     /(?:personne\s+en\s+charge\s+du\s+recrutement|contact\s+recrutement|votre\s+recruteur)\s*:\s*([^\n,;:!?….]{2,80})/giu;
   return [...text.matchAll(pattern)]
     .map((match) => normalizeCapturedValue(match[1] ?? ""))
-    .filter((value) => value.length > 0);
+    .filter(isUsableOrganizationName);
 }
 
 function extractExplicitWorkplaces(text: string): string[] {

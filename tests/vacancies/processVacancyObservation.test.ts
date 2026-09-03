@@ -520,7 +520,7 @@ describe("processVacancyObservation", () => {
 
     const canonical = await fixture.canonicals.findById("canonical-generated");
     expect(canonical?.organizationRelationships).toEqual(expect.arrayContaining([
-      expect.objectContaining({ rawName: "Selected Employer", role: "EMPLOYER" }),
+      expect.objectContaining({ rawName: "Selected Employer", role: "CLIENT" }),
     ]));
     expect(canonical?.organizationRelationships).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ rawName: "Neighbor Employer" }),

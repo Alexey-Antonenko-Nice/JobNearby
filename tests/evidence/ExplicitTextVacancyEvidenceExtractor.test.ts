@@ -134,7 +134,7 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
 
     expect(result.organizations).toContainEqual({
       value: "HEUFT France",
-      role: "EMPLOYER",
+      role: "CLIENT",
       provenance: {
         sourceObservationId: "observation-1",
         extractionMethod: "TEXT_EXTRACTION",
@@ -164,11 +164,45 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
     ["Nous recrutons pour notre client ACME.", "ACME"],
     ["Nous recherchons pour l'un de nos clients, Blue Paper...", "Blue Paper"],
     ["Mission pour le compte de notre client Groupe SIAT; démarrage rapide.", "Groupe SIAT"],
-  ])("extracts a conservatively bounded employer from %s", async (description, name) => {
+  ])("extracts a conservatively bounded client from %s", async (description, name) => {
     const result = await extractor.extract(observation({ description }));
     expect(result.organizations).toContainEqual(
-      expect.objectContaining({ value: name, role: "EMPLOYER" }),
+      expect.objectContaining({ value: name, role: "CLIENT" }),
     );
+  });
+
+  it("keeps a named client distinct and extracts explicit direct employer wording", async () => {
+    const result = await extractor.extract(observation({ description: [
+      "Nous recrutons pour le compte de notre client Mercedes Benz Trucks.",
+      "L'entreprise Kiloutou recrute.",
+    ].join("\n") }));
+    expect(result.organizations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "Mercedes Benz Trucks", role: "CLIENT" }),
+      expect.objectContaining({ value: "Kiloutou", role: "EMPLOYER" }),
+    ]));
+  });
+
+  it("does not turn unnamed client wording into an organization", async () => {
+    for (const description of ["Nous recherchons pour son client.", "Pour l'un de nos clients, nous recrutons."]) {
+      expect((await extractor.extract(observation({ description }))).organizations).toEqual([]);
+    }
+  });
+
+  it("rejects grammatical fragments while retaining legitimate short organization names", async () => {
+    const result = await extractor.extract(selectedContext("On recrute.\nNous recrutons.\nIBM recrute.\nEDF recrute.\nSAP recrute."));
+    expect(result.organizations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "IBM", role: "RECRUITER" }),
+      expect.objectContaining({ value: "EDF", role: "RECRUITER" }),
+      expect.objectContaining({ value: "SAP", role: "RECRUITER" }),
+    ]));
+    expect(result.organizations).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "On" }), expect.objectContaining({ value: "Nous" }),
+    ]));
+  });
+
+  it.each(["Randstad France", "Geny Interim"])("classifies known staffing agency %s", async (displayedCompanyName) => {
+    const result = await extractor.extract(observation({ displayedCompanyName, description: "Recruiting for a client." }));
+    expect(result.organizations).toContainEqual(expect.objectContaining({ value: displayedCompanyName, role: "STAFFING_AGENCY" }));
   });
 
   it("classifies a displayed cabinet de recrutement conservatively", async () => {
