@@ -123,6 +123,15 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
     );
   });
 
+  it("deduplicates the same normalized organization role but preserves distinct roles", () => {
+    const vacancy = canonicalize([observation("one")], [extracted("one", { organizations: [
+      { value: "Geny Interim", role: "UNKNOWN" }, { value: "geny-interim", role: "UNKNOWN" },
+      { value: "Geny Interim", role: "STAFFING_AGENCY" },
+    ] })]);
+    expect(vacancy.organizationRelationships.filter(({ role }) => role === "DISPLAYED_COMPANY")).toHaveLength(1);
+    expect(vacancy.organizationRelationships.filter(({ role }) => role === "STAFFING_AGENCY")).toHaveLength(1);
+  });
+
   it("maps unknown display evidence conservatively and publisher evidence as unknown", () => {
     const vacancy = canonicalize(
       [observation("one")],
