@@ -253,6 +253,33 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
     });
   });
 
+  it("does not resolve a malformed zero-upper structured salary without valid evidence", () => {
+    const vacancy = canonicalize([observation("one", { salaryText: "2100 - 0 EUR / MONTH" })]);
+    expect(vacancy.compensation.status).toBe("UNKNOWN");
+  });
+
+  it("uses valid explicit salary evidence when structured salary has a zero upper bound", () => {
+    const provenance = { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION" as const, confidence: 0.98 };
+    const evidence = createExtractedVacancyEvidence({ sourceObservationId: "one", compensations: [{ rawText: "12,40€/h + primes", minimum: 12.4, currency: "EUR", period: "HOUR", provenance }] });
+    const vacancy = canonicalize([observation("one", { salaryText: "12.66 - 0 EUR / HOUR" })], [evidence]);
+    expect(vacancy.compensation).toMatchObject({ status: "RESOLVED", value: { minimum: 12.4, currency: "EUR", period: "HOUR" } });
+  });
+
+  it("combines orthogonal working-time and contract evidence without a conflict", () => {
+    const cdi = createExtractedVacancyEvidence({ sourceObservationId: "one", engagements: [{ rawTerms: ["CDI"], normalizedTerms: ["INDEFINITE"], provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 0.98 } }] });
+    const fullTime = canonicalize([observation("one", { contractText: "FULL_TIME" })], [cdi]);
+    expect(fullTime.engagement).toMatchObject({ status: "RESOLVED", value: { normalizedTerms: expect.arrayContaining(["FULL_TIME", "INDEFINITE"]) } });
+    const cdd = createExtractedVacancyEvidence({ sourceObservationId: "one", engagements: [{ rawTerms: ["CDD"], normalizedTerms: ["FIXED_TERM"], provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 0.98 } }] });
+    const partTime = canonicalize([observation("one", { contractText: "PART_TIME" })], [cdd]);
+    expect(partTime.engagement.status).toBe("RESOLVED");
+  });
+
+  it("retains genuinely conflicting contract types as alternatives", () => {
+    const first = createExtractedVacancyEvidence({ sourceObservationId: "one", engagements: [{ rawTerms: ["CDI"], normalizedTerms: ["INDEFINITE"], provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 0.98 } }] });
+    const second = createExtractedVacancyEvidence({ sourceObservationId: "two", engagements: [{ rawTerms: ["CDD"], normalizedTerms: ["FIXED_TERM"], provenance: { sourceObservationId: "two", extractionMethod: "TEXT_EXTRACTION", confidence: 0.98 } }] });
+    expect(canonicalize([observation("one"), observation("two")], [first, second]).engagement.status).toBe("CONFLICTED");
+  });
+
   it("maps extracted core header facts into existing canonical fields", () => {
     const provenance = {
       sourceObservationId: "one",
