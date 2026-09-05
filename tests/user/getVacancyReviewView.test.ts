@@ -35,6 +35,16 @@ describe("getVacancyReviewView", () => {
     expect(view.reviewSignals).toMatchObject({ isNewVacancy: true, hasMultipleSourceObservations: true });
   });
 
+  it("projects every valid source link", async () => {
+    const view = await query(
+      canonical("current", ["source-1", "source-2"], [employer("cluster-1")]), [], [memory("current")], undefined,
+      [observation("source-1", "2026-09-01", "https://example.com/one"), observation("source-2", "2026-09-02", "https://example.com/two")],
+    );
+    expect(view.vacancy.sourceLinks.map(({ provider, url }) => ({ provider, url }))).toEqual([
+      { provider: "Example", url: "https://example.com/two" }, { provider: "Example", url: "https://example.com/one" },
+    ]);
+  });
+
   it("distinguishes applying to this vacancy from previous employer applications", async () => {
     const view = await query(
       canonical("current", ["source-1"], [employer("cluster-1")]),
@@ -210,8 +220,8 @@ function employer(clusterId: string): VacancyOrganizationRelationship {
   return { employerClusterId: clusterId, role: "EMPLOYER", supportingEvidenceIds: [], derivation };
 }
 
-function observation(id: string, date: string): SourceObservation {
-  return { id, source: { sourceType: "JOB_BOARD", sourceName: "Example" }, observedAt: new Date(`${date}T00:00:00Z`), metadata: {} };
+function observation(id: string, date: string, sourceUrl?: string): SourceObservation {
+  return { id, source: { sourceType: "JOB_BOARD", sourceName: "Example", ...(sourceUrl === undefined ? {} : { sourceUrl }) }, observedAt: new Date(`${date}T00:00:00Z`), metadata: {} };
 }
 
 function event(id: string, vacancyId: string, type: UserVacancyInteractionType, date: string): UserVacancyInteractionEvent {

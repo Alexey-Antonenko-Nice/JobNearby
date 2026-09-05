@@ -6,6 +6,7 @@ import type { VacancyReviewOrganizationRelationship, VacancyReviewView } from ".
 import type { CanonicalVacancyId, VacancyOrganizationRelationship } from "../../domain/vacancies/CanonicalVacancy.js";
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 import type { EmployerMemoryPublicDataSource } from "./EmployerMemoryPublicDataSource.js";
+import { collectVacancySourceLinks } from "./collectVacancySourceLinks.js";
 import { getEmployerMemoryView } from "./getEmployerMemoryView.js";
 import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
 
@@ -59,6 +60,7 @@ export async function getVacancyReviewView(
       compensation: resolvedValue(vacancy.compensation),
       latestObservedAt: latestDate(observations.map(({ observedAt }) => observedAt)),
       sourceObservationCount,
+      sourceLinks: collectVacancySourceLinks(observations),
     },
     user: {
       currentState: history.currentState,

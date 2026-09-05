@@ -1,6 +1,7 @@
 import type { EmployerClusterId, EmployerClusterStatus } from "../recognition/EmployerCluster.js";
 import type { UserVacancyState } from "./UserVacancyInteractionEvent.js";
 import type { CanonicalVacancyId, CanonicalizationStatus, VacancyEngagement, VacancyLocation, VacancyWorkMode } from "../vacancies/CanonicalVacancy.js";
+import type { VacancySourceLink } from "./VacancySourceLink.js";
 
 export interface VacancyInboxItem {
   readonly canonicalVacancyId: CanonicalVacancyId;
@@ -12,6 +13,7 @@ export interface VacancyInboxItem {
   readonly latestObservedAt: Date | null;
   readonly firstObservedAt: Date | null;
   readonly sourceObservationCount: number;
+  readonly sourceLinks: readonly VacancySourceLink[];
   readonly userState: UserVacancyState;
   readonly lastUserInteractionAt: Date | null;
   readonly employer: { readonly employerClusterId: EmployerClusterId | null; readonly status: EmployerClusterStatus | null; readonly knownBefore: boolean; readonly unresolvedEmployer: boolean };

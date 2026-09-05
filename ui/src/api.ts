@@ -5,6 +5,13 @@ export interface OrganizationRelationship {
   readonly role: string;
 }
 
+export interface VacancySourceLink {
+  readonly sourceObservationId: string;
+  readonly provider: string;
+  readonly url: string;
+  readonly observedAt: string;
+}
+
 export interface ReviewView {
   readonly vacancy: {
     readonly canonicalVacancyId: string;
@@ -16,6 +23,7 @@ export interface ReviewView {
     readonly compensation: unknown | null;
     readonly latestObservedAt: string | null;
     readonly sourceObservationCount: number;
+    readonly sourceLinks: readonly VacancySourceLink[];
   };
   readonly user: { readonly currentState: string; readonly lastInteractionAt: string | null; readonly everApplied: boolean; readonly everInterviewed: boolean; readonly everRejected: boolean };
   readonly employer: { readonly employerClusterId: string | null; readonly status: string | null; readonly resolvedEmployerId: string | null; readonly knownBefore: boolean; readonly previousVacancyCount: number; readonly previousInteractedVacancyCount: number; readonly everAppliedToEmployer: boolean; readonly everInterviewedWithEmployer: boolean; readonly everRejectedByEmployer: boolean };
@@ -58,6 +66,7 @@ export interface VacancyInboxItem {
   readonly workMode: unknown | null;
   readonly latestObservedAt: string | null;
   readonly sourceObservationCount: number;
+  readonly sourceLinks: readonly VacancySourceLink[];
   readonly userState: string;
   readonly employer: { readonly status: string | null; readonly unresolvedEmployer: boolean };
   readonly organizations: { readonly employerName: string | null; readonly displayedCompanyNames: readonly string[]; readonly recruiterNames: readonly string[]; readonly consultancyNames: readonly string[] };

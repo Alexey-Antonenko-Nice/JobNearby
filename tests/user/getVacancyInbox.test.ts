@@ -31,13 +31,28 @@ describe("getVacancyInbox", () => {
     expect(inbox[0]!.title).toBeNull();
     await expect(query([], undefined, 0)).rejects.toThrow(/limit/u);
   });
+
+  it("projects valid source links by newest observation, deduplicates exact URLs, and rejects unsafe URLs", async () => {
+    const randstadUrl = "https://www.randstad.fr/emploi/technicien-de-maintenance-fh-en-journee_geispolsheim_307-u24-r000078_01r/";
+    const inbox = await query([vacancy("one", ["duplicate", "old", "new", "malformed", "javascript"])], undefined, undefined, {
+      duplicate: observation("duplicate", "2026-09-03", "Randstad", randstadUrl),
+      old: observation("old", "2026-09-01", "Randstad", randstadUrl),
+      new: observation("new", "2026-09-03", "HelloWork", "https://www.hellowork.com/job"),
+      malformed: observation("malformed", "2026-09-04", "Example", "not a url"),
+      javascript: observation("javascript", "2026-09-05", "Example", "javascript:alert(1)"),
+    });
+    expect(inbox[0]!.sourceLinks).toEqual([
+      { sourceObservationId: "duplicate", provider: "Randstad", url: randstadUrl, observedAt: new Date("2026-09-03") },
+      { sourceObservationId: "new", provider: "HelloWork", url: "https://www.hellowork.com/job", observedAt: new Date("2026-09-03") },
+    ]);
+  });
 });
 
-async function query(vacancies: any[], interactions = new InMemoryUserVacancyInteractionRepository(), limit?: number) {
+async function query(vacancies: any[], interactions = new InMemoryUserVacancyInteractionRepository(), limit?: number, observations: Record<string, any> = {}) {
   const dates: Record<string, Date> = { one: new Date("2026-09-01"), two: new Date("2026-09-01"), three: new Date("2026-09-03") };
   return getVacancyInbox(limit === undefined ? {} : { limit }, {
     canonicalVacancyRepository: { findAll: async () => vacancies },
-    sourceObservationRepository: { findById: async (id: string) => ({ id, source: { sourceType: "JOB_BOARD", sourceName: "Example" }, observedAt: dates[id]!, metadata: {} }) },
+    sourceObservationRepository: { findById: async (id: string) => observations[id] ?? ({ id, source: { sourceType: "JOB_BOARD", sourceName: "Example" }, observedAt: dates[id]!, metadata: {} }) },
     interactionRepository: interactions,
     employerClusterRepository: { findById: async () => null },
     employerMemoryPublicDataSource: { findByEmployerClusterId: async () => [] },
@@ -47,4 +62,8 @@ async function query(vacancies: any[], interactions = new InMemoryUserVacancyInt
 function vacancy(id: string, sourceObservationIds: string[], organizationRelationships: any[] = []) {
   const unknown = { status: "UNKNOWN", supportingEvidenceIds: [], conflictingEvidenceIds: [], derivation: { algorithm: "test", algorithmVersion: "1", derivedAt: new Date("2026-01-01") } };
   return { id, sourceObservationIds, evidenceReferences: [], organizationRelationships, role: unknown, publicationLanguages: unknown, location: unknown, workMode: unknown, remoteEligibleCountries: unknown, travel: unknown, engagement: unknown, compensation: unknown, experienceRequirements: unknown, educationRequirements: unknown, skillRequirements: unknown, languageRequirements: unknown, functionalContexts: unknown, industryContexts: unknown, positionCount: unknown, lifecycleStatus: unknown, canonicalizationStatus: "PARTIAL", derivation: unknown.derivation };
+}
+
+function observation(id: string, observedAt: string, sourceName: string, sourceUrl: string) {
+  return { id, source: { sourceType: "JOB_BOARD", sourceName, sourceUrl }, observedAt: new Date(observedAt), metadata: {} };
 }

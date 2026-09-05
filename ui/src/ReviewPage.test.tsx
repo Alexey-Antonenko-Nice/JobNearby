@@ -19,6 +19,15 @@ describe("ReviewPage", () => {
     expect(fetchMock.mock.calls[0]![1]).toBeUndefined();
   });
 
+  it("renders source links in a new tab and shows Unknown when none are available", async () => {
+    const url = "https://www.randstad.fr/emploi/technicien-de-maintenance-fh-en-journee_geispolsheim_307-u24-r000078_01r/";
+    respond({ review: review({ sourceLinks: [{ sourceObservationId: "source-1", provider: "Randstad", url, observedAt: "2026-09-01T00:00:00.000Z" }] }) }); render(<ReviewPage />);
+    const link = await screen.findByRole("link", { name: "Open vacancy" });
+    expect(link).toHaveAttribute("href", url); expect(link).toHaveAttribute("target", "_blank"); expect(link).toHaveAttribute("rel", "noreferrer");
+    cleanup(); fetchMock.mockReset(); respond({ review: review() }); render(<ReviewPage />);
+    expect((await screen.findAllByText("Unknown")).length).toBeGreaterThan(0);
+  });
+
   it("records REVIEWED and updates from the POST review response", async () => {
     respond({ review: review() }); respond({ review: review({ currentState: "REVIEWED", isNewVacancy: false }) });
     const user = userEvent.setup(); render(<ReviewPage />);
@@ -105,7 +114,7 @@ describe("ReviewPage", () => {
 function respond(body: unknown, status = 200): void { fetchMock.mockResolvedValueOnce(json(body, status)); }
 function json(body: unknown, status = 200): Response { return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }); }
 function review(overrides: Record<string, unknown> = {}) {
-  const vacancy = { canonicalVacancyId: "canonical-1", canonicalizationStatus: "CANONICAL", title: "Developer", location: "Paris", engagement: "FULL_TIME", workMode: "HYBRID", compensation: "50000", latestObservedAt: "2026-09-01T00:00:00.000Z", sourceObservationCount: 1 };
+  const vacancy = { canonicalVacancyId: "canonical-1", canonicalizationStatus: "CANONICAL", title: "Developer", location: "Paris", engagement: "FULL_TIME", workMode: "HYBRID", compensation: "50000", latestObservedAt: "2026-09-01T00:00:00.000Z", sourceObservationCount: 1, sourceLinks: [] };
   const user = { currentState: "NEW", lastInteractionAt: null, everApplied: false, everInterviewed: false, everRejected: false };
   const employer = { employerClusterId: "cluster-1", status: "RESOLVED", resolvedEmployerId: "employer-1", knownBefore: false, previousVacancyCount: 0, previousInteractedVacancyCount: 0, everAppliedToEmployer: false, everInterviewedWithEmployer: false, everRejectedByEmployer: false };
   const organizations = { employerRelationships: [{ role: "EMPLOYER", rawName: "Actual employer" }], displayedCompanies: [], recruiters: [{ role: "RECRUITER", rawName: "Recruiter name" }], consultancies: [{ role: "CONSULTANCY", rawName: "Consultancy name" }], staffingAgencies: [], clients: [], otherRelationships: [] };

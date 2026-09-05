@@ -9,6 +9,7 @@ import type {
   VacancyWorkMode,
 } from "../vacancies/CanonicalVacancy.js";
 import type { UserVacancyState } from "./UserVacancyInteractionEvent.js";
+import type { VacancySourceLink } from "./VacancySourceLink.js";
 
 export interface VacancyReviewOrganizationRelationship {
   readonly organizationId?: string;
@@ -28,6 +29,7 @@ export interface VacancyReviewView {
     readonly compensation: VacancyCompensation | null;
     readonly latestObservedAt: Date | null;
     readonly sourceObservationCount: number;
+    readonly sourceLinks: readonly VacancySourceLink[];
   };
   readonly user: {
     readonly currentState: UserVacancyState;

@@ -20,6 +20,7 @@ function InboxItem({ vacancy }: { readonly vacancy: VacancyInboxItem }): React.J
     {organizations.filter(([, names]) => names !== null && names.length > 0).map(([label, names]) => <p key={label}><strong>{label}:</strong> {names?.join(", ")}</p>)}
     <p><strong>Employer status:</strong> {vacancy.employer.unresolvedEmployer ? "Unresolved" : text(vacancy.employer.status)}</p>
     <p>Latest observed: {date(vacancy.latestObservedAt)} | Source observations: {vacancy.sourceObservationCount}{vacancy.signals.hasMultipleSourceObservations ? " | Seen before" : ""}</p>
+    {vacancy.sourceLinks.length > 0 && <p><a href={vacancy.sourceLinks[0]!.url} target="_blank" rel="noreferrer">Open source vacancy</a>{vacancy.sourceLinks.length > 1 ? ` (${vacancy.sourceLinks.length} sources)` : ""}</p>}
     <a href={`/review/${encodeURIComponent(vacancy.canonicalVacancyId)}`}>Open review</a>
   </article>;
 }
