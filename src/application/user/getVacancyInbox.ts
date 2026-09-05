@@ -6,6 +6,7 @@ import type { VacancyInboxItem } from "../../domain/user/VacancyInboxItem.js";
 import type { CanonicalVacancy, VacancyOrganizationRelationship } from "../../domain/vacancies/CanonicalVacancy.js";
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 import type { EmployerMemoryPublicDataSource } from "./EmployerMemoryPublicDataSource.js";
+import { collectVacancySourceLinks } from "./collectVacancySourceLinks.js";
 import { getEmployerMemoryView } from "./getEmployerMemoryView.js";
 import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
 
@@ -54,7 +55,7 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
   return {
     canonicalVacancyId: vacancy.id, canonicalizationStatus: vacancy.canonicalizationStatus,
     title: resolved(vacancy.role)?.title ?? null, location: resolved(vacancy.location), engagement: resolved(vacancy.engagement), workMode: resolved(vacancy.workMode),
-    latestObservedAt: extremeDate(dates, Math.max), firstObservedAt: extremeDate(dates, Math.min), sourceObservationCount,
+    latestObservedAt: extremeDate(dates, Math.max), firstObservedAt: extremeDate(dates, Math.min), sourceObservationCount, sourceLinks: collectVacancySourceLinks(observations),
     userState: history.currentState, lastUserInteractionAt: history.events.at(-1)?.occurredAt ?? null,
     employer: { employerClusterId: employerRelationship?.employerClusterId ?? null, status: employerMemory?.employerCluster.status ?? null, knownBefore: previousVacancyCount > 0, unresolvedEmployer: employerRelationship?.employerClusterId === undefined || employerMemory?.employerCluster.status === "UNRESOLVED" },
     organizations: { employerName: organizationNames(vacancy.organizationRelationships, "EMPLOYER")[0] ?? null, displayedCompanyNames: organizationNames(vacancy.organizationRelationships, "DISPLAYED_COMPANY"), recruiterNames: organizationNames(vacancy.organizationRelationships, "RECRUITER"), consultancyNames: organizationNames(vacancy.organizationRelationships, "CONSULTANCY") },
