@@ -30,6 +30,7 @@ describe("provider vacancy ID browser acquisition", () => {
     ["France Travail emploirecherche route", "https://candidat.francetravail.fr/offres/recherche/emploirecherche/detail/212YVQL", "212YVQL"],
     ["Randstad Molsheim", "https://www.randstad.fr/emploi/monteur-assembleur-fh_molsheim_001-mmo-0000054_10l/?utm_source=chatgpt.com", "001-mmo-0000054_10l"],
     ["Randstad Benfeld", "https://www.randstad.fr/emploi/monteur-assembleur-fh_benfeld_001-sel-1743760_01c/#details", "001-sel-1743760_01c"],
+    ["Daimler Truck", "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425255", "425255"],
   ])("maps the %s URL ID through AcquisitionPackage into SourceReference", (_provider, url, id) => {
     const { acquisition, observation } = capture(url, `observation-${id}`);
     expect(acquisition.externalId).toBe(id);
