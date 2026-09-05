@@ -123,6 +123,26 @@ describe("ConservativeProviderVacancyIdExtractor", () => {
     )).toBeUndefined();
   });
 
+  it("extracts Daimler Truck numeric job-ad IDs regardless of query order or fragments", () => {
+    const url = "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425255";
+    expect(extract("jobsearch.daimlertruck.com", url)).toBe("425255");
+    expect(extract("jobsearch.daimlertruck.com", `${url}#details`)).toBe("425255");
+    expect(extract("jobsearch.daimlertruck.com", "https://jobsearch.daimlertruck.com/index.php?id=425255&utm_source=alert&ac=jobad"))
+      .toBe("425255");
+  });
+
+  it.each([
+    "https://jobsearch.daimlertruck.com/",
+    "https://jobsearch.daimlertruck.com/index.php?ac=jobad",
+    "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=",
+    "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=abc",
+    "https://jobsearch.daimlertruck.com/index.php?ac=search&id=425255",
+    "https://example.com/index.php?ac=jobad&id=425255",
+    "not a URL",
+  ])("does not extract from invalid Daimler Truck URL %s", (url) => {
+    expect(extract("jobsearch.daimlertruck.com", url)).toBeUndefined();
+  });
+
   it("is non-fatal for unknown providers, malformed URLs, and source-name mismatches", () => {
     expect(extract("example.com", "https://example.com/jobs/123")).toBeUndefined();
     expect(extract("indeed.com", "not a URL")).toBeUndefined();
