@@ -11,6 +11,7 @@ import type {
 
 export type CaptureEmployerStatus =
   | "MATCHED_EXISTING_RECORD"
+  | "IDENTIFIED_NEW_RECORD"
   | "UNRESOLVED_RECORD_CREATED"
   | "REVIEW_REQUIRED";
 
@@ -30,6 +31,7 @@ export type CaptureAndProcessBrowserVacancyResult =
         readonly observationAdded: boolean;
         readonly canonicalizationStatus: "USABLE" | "PARTIAL" | "CONFLICTED";
         readonly employerStatus: CaptureEmployerStatus;
+        readonly employerDisplayName?: string;
       };
     }
   | {
@@ -68,7 +70,7 @@ export async function captureAndProcessBrowserVacancy(
         vacancyOutcome: processing.canonicalVacancyOutcome,
         observationAdded: processing.observationAdded,
         canonicalizationStatus: processing.canonicalizationStatus,
-        employerStatus: mapEmployerStatus(processing.employer),
+        ...mapEmployerFeedback(processing.employer),
       },
     };
   } catch (error) {
@@ -85,12 +87,25 @@ function captureSummary(result: BrowserCaptureIngestionResult): CaptureSummary {
   };
 }
 
-function mapEmployerStatus(
+function mapEmployerFeedback(
   employer: EmployerProcessingSummary,
-): CaptureEmployerStatus {
-  return {
-    MATCHED_EXISTING_CLUSTER: "MATCHED_EXISTING_RECORD",
-    CREATED_NEW_CLUSTER: "UNRESOLVED_RECORD_CREATED",
-    REVIEW_REQUIRED: "REVIEW_REQUIRED",
-  }[employer.outcome] as CaptureEmployerStatus;
+): { readonly employerStatus: CaptureEmployerStatus; readonly employerDisplayName?: string } {
+  if (employer.outcome === "MATCHED_EXISTING_CLUSTER") {
+    return { employerStatus: "MATCHED_EXISTING_RECORD" };
+  }
+  if (employer.outcome === "REVIEW_REQUIRED") {
+    return { employerStatus: "REVIEW_REQUIRED" };
+  }
+  const displayName = usableEmployerDisplayName(employer.employerDisplayLabel);
+  return employer.employerClusterStatus === "PROBABLY_RESOLVED" && displayName !== undefined
+    ? { employerStatus: "IDENTIFIED_NEW_RECORD", employerDisplayName: displayName }
+    : { employerStatus: "UNRESOLVED_RECORD_CREATED" };
+}
+
+function usableEmployerDisplayName(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const name = value.trim();
+  return name.length === 0 || /^unknown\s+employer(?:\s*[—-].*)?$/iu.test(name)
+    ? undefined
+    : name;
 }

@@ -72,11 +72,13 @@ export type EmployerProcessingSummary =
       readonly outcome: "MATCHED_EXISTING_CLUSTER";
       readonly employerClusterId: EmployerClusterId;
       readonly employerClusterStatus: EmployerClusterStatus;
+      readonly employerDisplayLabel?: string;
     }
   | {
       readonly outcome: "CREATED_NEW_CLUSTER";
       readonly employerClusterId: EmployerClusterId;
       readonly employerClusterStatus: EmployerClusterStatus;
+      readonly employerDisplayLabel?: string;
     }
   | {
       readonly outcome: "REVIEW_REQUIRED";
@@ -441,5 +443,8 @@ function summarizeEmployerResult(
     outcome: result.outcome,
     employerClusterId: result.employerCluster.id,
     employerClusterStatus: result.employerCluster.status,
+    ...(result.employerCluster.displayLabel === undefined
+      ? {}
+      : { employerDisplayLabel: result.employerCluster.displayLabel }),
   };
 }

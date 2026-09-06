@@ -4,6 +4,51 @@ import { createDatabase } from "../../src/infrastructure/database/createDatabase
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 
 describe("createCaptureProcessingRuntime", () => {
+  it("canonicalizes Daimler Truck's single structured job location", async () => {
+    const database = createDatabase(":memory:");
+    try {
+      const runtime = createCaptureProcessingRuntime(database);
+      const result = await runtime.captureAndProcessBrowserVacancy({
+        pageUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425026",
+        pageTitle: "Peintre Industriel (H/F)",
+        visibleText: "Peintre Industriel (H/F)",
+        capturedAt: "2026-09-06T10:00:00Z",
+        html: `<script type="application/ld+json">${JSON.stringify({
+          "@type": "JobPosting",
+          title: "Peintre Industriel (H/F)",
+          hiringOrganization: {
+            "@type": "Organization",
+            name: "Mercedes-Benz Trucks Molsheim SASU",
+            address: { addressLocality: "Must not become vacancy location" },
+          },
+          jobLocation: [{
+            "@type": "Place",
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: "MOLSHEIM",
+              addressRegion: "Daimler Truck - FR",
+              postalCode: "67129",
+              addressCountry: "FR",
+            },
+          }],
+          employmentType: "FULL_TIME",
+        })}</script>`,
+      });
+      expect(result.processing.status).toBe("PROCESSED");
+      if (result.processing.status !== "PROCESSED") throw new Error("Expected processing to succeed.");
+      expect(database.prepare(`
+        SELECT status, value_json
+        FROM canonical_vacancy_fields
+        WHERE canonical_vacancy_id = ? AND field_name = 'location'
+      `).get(result.processing.canonicalVacancyId)).toEqual({
+        status: "RESOLVED",
+        value_json: JSON.stringify({ rawText: "MOLSHEIM, Daimler Truck - FR, FR" }),
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   it("preserves Daimler Truck hiring organization as displayed company and explicit employer", async () => {
     const database = createDatabase(":memory:");
     try {
@@ -16,7 +61,11 @@ describe("createCaptureProcessingRuntime", () => {
         capturedAt: "2026-09-05T10:00:00Z",
         html: `<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", hiringOrganization: { "@type": "Organization", name: company } })}</script>`,
       });
-      expect(result.processing).toMatchObject({ status: "PROCESSED", employerStatus: "UNRESOLVED_RECORD_CREATED" });
+      expect(result.processing).toMatchObject({
+        status: "PROCESSED",
+        employerStatus: "IDENTIFIED_NEW_RECORD",
+        employerDisplayName: company,
+      });
       if (result.processing.status !== "PROCESSED") throw new Error("Expected processing to succeed.");
       const relationships = database.prepare(`
         SELECT raw_name, role
