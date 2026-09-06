@@ -522,15 +522,31 @@ function reconcileEngagementCandidates(candidates: readonly CanonicalCandidate<E
 }
 
 function reconcileCompensationCandidates(candidates: readonly CanonicalCandidate<CompensationValue>[]): CanonicalCandidate<CompensationValue>[] {
-  const groups = new Map<string, CanonicalCandidate<CompensationValue>[]>();
+  const reconciled: CanonicalCandidate<CompensationValue>[] = [];
   for (const candidate of candidates) {
-    const { minimum, maximum, currency, period, rawText } = candidate.value;
-    const key = minimum === undefined ? `raw:${rawText ?? ""}` : `${minimum}|${maximum ?? ""}|${currency ?? ""}|${period ?? ""}`;
-    groups.set(key, [...(groups.get(key) ?? []), candidate]);
+    const index = reconciled.findIndex(({ value }) => compensationCompatible(value, candidate.value));
+    if (index < 0) {
+      reconciled.push(candidate);
+      continue;
+    }
+    const current = reconciled[index]!;
+    const value = compensationRangeSize(candidate.value) > compensationRangeSize(current.value)
+      ? candidate.value : current.value;
+    reconciled[index] = {
+      value,
+      supportingEvidenceIds: [...new Set([...current.supportingEvidenceIds, ...candidate.supportingEvidenceIds])],
+    };
   }
-  return [...groups.values()].map((group) => ({
-    value: group.find(({ value }) => value.minimum !== undefined)?.value ?? group[0]!.value,
-    supportingEvidenceIds: [...new Set(group.flatMap(({ supportingEvidenceIds }) => supportingEvidenceIds))],
-    ...(group.every(({ confidence }) => confidence === group[0]!.confidence) && group[0]!.confidence !== undefined ? { confidence: group[0]!.confidence } : {}),
-  }));
+  return reconciled;
 }
+
+function compensationCompatible(left: CompensationValue, right: CompensationValue): boolean {
+  if (left.currency !== right.currency || left.period !== right.period) return false;
+  if (left.minimum === undefined || right.minimum === undefined) return stableCompensation(left) === stableCompensation(right);
+  const leftMax = left.maximum ?? left.minimum;
+  const rightMax = right.maximum ?? right.minimum;
+  return left.minimum <= rightMax && right.minimum <= leftMax;
+}
+
+function compensationRangeSize(value: CompensationValue): number { return value.maximum === undefined || value.minimum === undefined ? 0 : value.maximum - value.minimum; }
+function stableCompensation(value: CompensationValue): string { return JSON.stringify(value); }
