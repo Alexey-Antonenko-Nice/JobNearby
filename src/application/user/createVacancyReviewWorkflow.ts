@@ -1,3 +1,4 @@
+import { decideEmployerMemoryReview } from "./employerMemoryReview.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
 import type { UserVacancyInteractionRepository } from "../../domain/user/UserVacancyInteractionRepository.js";
@@ -19,7 +20,7 @@ export interface VacancyReviewWorkflowDependencies {
   readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll" | "findById">;
   readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
   readonly interactionRepository: UserVacancyInteractionRepository;
-  readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
+  readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
   readonly employerClusterWriter?: EmployerClusterRepository;
   readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
   readonly assignmentRepository?: ObservationClusterAssignmentRepository;
@@ -39,6 +40,12 @@ export function createVacancyReviewWorkflow(
     ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
   return {
+    decideEmployerMemoryReview: async (input: { readonly canonicalVacancyId: string; readonly employerClusterId: string; readonly decision: "CONFIRM" | "REJECT" }) => {
+      const vacancy = await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId);
+      if (!vacancy) throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);
+      await decideEmployerMemoryReview(vacancy, input.employerClusterId, input.decision, reviewDependencies);
+      return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
+    },
     getVacancyInbox: (input?: { readonly limit?: number }) => getVacancyInbox(input, reviewDependencies),
     getVacancyReview: (canonicalVacancyId: CanonicalVacancyId) =>
       getVacancyReviewView(canonicalVacancyId, reviewDependencies),

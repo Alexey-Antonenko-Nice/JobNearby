@@ -1,3 +1,4 @@
+import { hasRejectedEmployerMemory, getEmployerMemoryReviewCandidates } from "./employerMemoryReview.js";
 import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
@@ -18,7 +19,7 @@ export async function getVacancyReviewView(
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
     readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
     readonly interactionRepository: UserVacancyInteractionRepository;
-    readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
+    readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
     readonly assignmentRepository?: import("../../domain/recognition/ObservationClusterAssignmentRepository.js").ObservationClusterAssignmentRepository;
     readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
   },
@@ -53,7 +54,10 @@ export async function getVacancyReviewView(
   const multipleObservations = sourceObservationCount > 1;
   const groupedOrganizations = groupOrganizations(vacancy.organizationRelationships);
 
+  const memoryCandidates = await getEmployerMemoryReviewCandidates(vacancy, dependencies);
+  const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(memoryCandidates.length === 0 ? {} : { employerMemoryReview: { required: true as const, candidates: memoryCandidates } }),
     vacancy: {
       canonicalVacancyId,
       canonicalizationStatus: vacancy.canonicalizationStatus,
@@ -86,7 +90,7 @@ export async function getVacancyReviewView(
       everAppliedToEmployer: employerMemory?.vacancies.some(({ everApplied }) => everApplied) ?? false,
       everInterviewedWithEmployer: employerMemory?.vacancies.some(({ everInterviewed }) => everInterviewed) ?? false,
       everRejectedByEmployer: employerMemory?.vacancies.some(({ everRejected }) => everRejected) ?? false,
-      confirmationCandidate: (employerMemory?.employerCluster.status !== undefined
+      confirmationCandidate: memoryCandidates.length > 0 || rejectedMemory ? null : (employerMemory?.employerCluster.status !== undefined
         && employerMemory.employerCluster.status !== "UNRESOLVED"
         && employerMemory.employerCluster.status !== "PROBABLY_RESOLVED")
         || confirmedAssignment?.status === "USER_CONFIRMED"

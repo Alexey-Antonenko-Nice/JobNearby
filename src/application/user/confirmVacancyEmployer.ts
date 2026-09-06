@@ -1,3 +1,4 @@
+import { hasRejectedEmployerMemory, getEmployerMemoryReviewCandidates } from "./employerMemoryReview.js";
 import { createEmployerCluster } from "../recognition/createEmployerCluster.js";
 import { createObservationClusterAssignment } from "../recognition/createObservationClusterAssignment.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
@@ -19,7 +20,9 @@ export async function confirmVacancyEmployer(
 ): Promise<void> {
   const vacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
   if (vacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
+  if ((await getEmployerMemoryReviewCandidates(vacancy, dependencies)).length > 0) throw new Error("Employer memory candidate must be reviewed before direct confirmation.");
   const candidate = employerConfirmationCandidate(vacancy.organizationRelationships);
+  if (await hasRejectedEmployerMemory(vacancy, candidate, dependencies)) throw new Error("Employer candidate was rejected in employer memory review.");
   if (candidate === null || candidate !== candidateName.trim()) {
     throw new Error("Employer candidate is no longer eligible for confirmation.");
   }

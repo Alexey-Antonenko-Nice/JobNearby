@@ -32,6 +32,7 @@ const server = createBrowserCaptureServer({
   getVacancyReview: reviewWorkflow.getVacancyReview,
   recordVacancyReviewAction: reviewWorkflow.recordVacancyReviewAction,
   confirmVacancyEmployer: reviewWorkflow.confirmVacancyEmployer,
+  decideEmployerMemoryReview: reviewWorkflow.decideEmployerMemoryReview,
 });
 
 server.listen(port, host, () => {
