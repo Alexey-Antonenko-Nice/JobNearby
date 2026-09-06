@@ -1,3 +1,6 @@
+import type { AddressInfo } from "node:net";
+import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
 import { describe, expect, it } from "vitest";
 
 import { confirmVacancyEmployer } from "../../src/application/user/confirmVacancyEmployer.js";
@@ -37,6 +40,65 @@ function dependencies(current = vacancy()) {
 function date(): Date { return new Date("2026-09-06T12:00:00Z"); }
 
 describe("human employer confirmation", () => {
+  it.each([
+    [{ role: "RECRUITER", rawName: "ACTUA Saverne" }, { role: "CLIENT", rawName: "HEUFT France" }],
+    [{ role: "RECRUITER", rawName: "actua saverne" }],
+    [{ role: "RECRUITER", rawName: "ACTUA SAVERNE" }],
+    [{ role: "STAFFING_AGENCY", rawName: "ACTUA Saverne" }],
+    [{ role: "STAFFING_AGENCY", rawName: "ACTUA SAVERNE" }, { role: "CLIENT", rawName: "HEUFT France" }],
+    [{ role: "CLIENT", rawName: "HEUFT France" }],
+  ])("suppresses ACTUA direct confirmation with contradictory roles: %j", (...contradictions) => {
+    expect(employerConfirmationCandidate(vacancy([{ role: "DISPLAYED_COMPANY", rawName: "ACTUA SAVERNE" }, ...contradictions]).organizationRelationships)).toBeNull();
+  });
+
+  it.each(["LINMAN", "CEA", "Air Products", "Direct company"])("preserves clean direct confirmation for %s", (name) => {
+    expect(employerConfirmationCandidate(vacancy([{ role: "DISPLAYED_COMPANY", rawName: name }]).organizationRelationships)).toBe(name);
+  });
+
+  it("rejects direct ACTUA HTTP confirmation and memory review without changing employer or organization evidence", async () => {
+    const current = vacancy([
+      { role: "DISPLAYED_COMPANY", rawName: "ACTUA SAVERNE" },
+      { role: "RECRUITER", rawName: "ACTUA Saverne" },
+      { role: "CLIENT", rawName: "HEUFT France" },
+    ]);
+    const deps = dependencies(current);
+    await deps.clusters.save(oldCluster);
+    const accepted = createObservationClusterAssignment({ sourceObservationId: "observation-1", employerClusterId: oldCluster.id, status: "ACCEPTED", confidence: 1, algorithm: "new-employer-cluster", algorithmVersion: "1" });
+    await deps.assignments.save(accepted);
+    for (const id of ["actua-a", "actua-b"]) {
+      await deps.clusters.save({ id, status: "PROBABLY_RESOLVED", displayLabel: "ACTUA SAVERNE", createdAt: date(), updatedAt: date() });
+      await deps.assignments.save(createObservationClusterAssignment({ sourceObservationId: `prior-${id}`, employerClusterId: id, status: "USER_CONFIRMED", confidence: 1, algorithm: "user-employer-confirmation", algorithmVersion: "1" }));
+    }
+    const original = structuredClone(current);
+    const clusterHistory = await deps.clusters.findCandidates({});
+    const workflow = createVacancyReviewWorkflow({ ...deps, employerClusterRepository: deps.clusters, employerClusterWriter: deps.clusters, assignmentRepository: deps.assignments, interactionRepository: deps.interactions });
+    const server = createBrowserCaptureServer({ captureAndProcessBrowserVacancy: async () => { throw new Error("unused"); }, getVacancyReview: workflow.getVacancyReview, confirmVacancyEmployer: workflow.confirmVacancyEmployer, decideEmployerMemoryReview: workflow.decideEmployerMemoryReview });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/vacancies/${current.id}`;
+    try {
+      const read = async () => (await (await fetch(`${url}/review`)).json()).review;
+      const before = await read();
+      expect(before.employer).toMatchObject({ employerClusterId: oldCluster.id, status: "UNRESOLVED", confirmationCandidate: null });
+      expect(before.employerMemoryReview).toBeUndefined();
+      expect(before.organizations.displayedCompanies).toMatchObject([{ rawName: "ACTUA SAVERNE" }]);
+      expect(before.organizations.recruiters).toMatchObject([{ rawName: "ACTUA Saverne" }]);
+      expect(before.organizations.clients).toMatchObject([{ rawName: "HEUFT France" }]);
+      expect(before.organizations.employerRelationships).toEqual([]);
+      for (const candidateName of ["ACTUA SAVERNE", "ACTUA Saverne", "HEUFT France"]) {
+        const response = await fetch(`${url}/employer-confirmation`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidateName }) });
+        expect(response.status).toBe(409);
+        expect(await response.json()).toMatchObject({ error: "Employer candidate is no longer eligible for confirmation." });
+      }
+      const memoryResponse = await fetch(`${url}/employer-memory-review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employerClusterId: "actua-a", decision: "CONFIRM" }) });
+      expect(memoryResponse.status).toBe(409);
+      expect(await read()).toEqual(before);
+      expect(current).toEqual(original);
+      expect(await deps.assignments.findEffectiveByObservationId("observation-1")).toEqual(accepted);
+      expect(await deps.assignments.findByObservationId("observation-1")).toEqual([accepted]);
+      expect(await deps.clusters.findCandidates({})).toEqual(clusterHistory);
+    } finally { await new Promise<void>((resolve) => server.close(() => resolve())); }
+  });
+
   it("offers only one clean displayed-company candidate", () => {
     const relationship = (role: string, rawName: string) => ({ role, rawName }) as any;
     expect(employerConfirmationCandidate([relationship("DISPLAYED_COMPANY", candidate)])).toBe(candidate);

@@ -188,7 +188,8 @@ function errorStatus(
   if (operation === "capture") {
     return message.startsWith("Browser capture could not be persisted:") ? 500 : 400;
   }
-  if (message === "Employer memory candidate is no longer eligible for review.") return 409;
+  if (message === "Employer memory candidate is no longer eligible for review."
+    || message === "Employer candidate is no longer eligible for confirmation.") return 409;
   if (operation === "route") return 400;
   if (error instanceof InvalidRequestError) return 400;
   if (message.startsWith("Inbox limit must be")) return 400;
