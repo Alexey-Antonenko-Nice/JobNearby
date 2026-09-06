@@ -40,13 +40,8 @@ export class LinkedInSelectedVacancyContextLocator implements SelectedVacancyCon
     }
     const primary = primaryDetails[0]!;
 
-    if (isDirectViewUrl(input.sourceUrl)) {
-      const directView = findDirectViewBoundedContext(
-        input.html,
-        primary.fragment,
-        input.externalId,
-      );
-      if (directView === undefined) return undefined;
+    const directView = findDirectViewBoundedContext(input.html, primary.fragment, input.externalId);
+    if (directView !== undefined && (isDirectViewUrl(input.sourceUrl) || directView.html.includes("data-linkedin-selected-vacancy-context"))) {
       const text = htmlToText(directView.html);
       if (text.length === 0) return undefined;
       return createAcquisitionContext({
@@ -108,8 +103,9 @@ function findDirectViewBoundedContext(
   if (!isSelfIdentifyingPrimaryDetail(primary, externalId)) return undefined;
   const screens = openingTagMatches(html, "div").flatMap((match) => {
     if (
-      attribute(match[0], "data-sdui-screen") !==
-      "com.linkedin.sdui.flagshipnav.jobs.JobDetails"
+      !/com\.linkedin\.sdui\.flagshipnav\.jobs\.(?:JobDetails|SemanticJobDetails)$/u.test(
+        attribute(match[0], "data-sdui-screen") ?? "",
+      )
     ) return [];
     const screenHtml = balancedElement(html, "div", match.index);
     return screenHtml === undefined ? [] : [{ start: match.index, html: screenHtml }];

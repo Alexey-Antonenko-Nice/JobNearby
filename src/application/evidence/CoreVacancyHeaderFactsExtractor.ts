@@ -66,7 +66,7 @@ function extractLocation(line: string): string | null {
   if (isCompensationLike(line)) return null;
   const department = /^(?:\d{2,3}|2[AB])\s*-\s*(.{2,100})$/iu.exec(line);
   if (department !== null) return normalizeLine(department[1] ?? "") || null;
-  const frenchLocation = /^([\p{L}][\p{L}\s'’.-]{2,80},\s*France)(?=\s*(?:·|$))/u.exec(line);
+  const frenchLocation = /^([\p{L}][\p{L}\s'’.-]{2,80}(?:,\s*[\p{L}][\p{L}\s'’.-]{2,80})?,\s*France)(?=\s*(?:·|$))/u.exec(line);
   if (frenchLocation !== null) return normalizeLine(frenchLocation[1] ?? "") || null;
   return null;
 }
