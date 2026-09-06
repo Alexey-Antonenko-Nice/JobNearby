@@ -31,4 +31,10 @@ export interface ObservationClusterAssignmentRepository {
     replacement: ObservationClusterAssignment,
     supersededAt: Date,
   ): Promise<void>;
+
+  supersedeEffectiveAssignment?(
+    existingAssignmentId: ObservationClusterAssignmentId,
+    replacement: ObservationClusterAssignment,
+    supersededAt: Date,
+  ): Promise<void>;
 }

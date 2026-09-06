@@ -18,6 +18,7 @@ export interface ReviewView {
     readonly canonicalizationStatus: string;
     readonly title: string | null;
     readonly location: unknown | null;
+    readonly locationAlternatives: readonly unknown[];
     readonly engagement: unknown | null;
     readonly workMode: unknown | null;
     readonly compensation: unknown | null;
@@ -26,7 +27,7 @@ export interface ReviewView {
     readonly sourceLinks: readonly VacancySourceLink[];
   };
   readonly user: { readonly currentState: string; readonly lastInteractionAt: string | null; readonly everApplied: boolean; readonly everInterviewed: boolean; readonly everRejected: boolean };
-  readonly employer: { readonly employerClusterId: string | null; readonly status: string | null; readonly resolvedEmployerId: string | null; readonly knownBefore: boolean; readonly previousVacancyCount: number; readonly previousInteractedVacancyCount: number; readonly everAppliedToEmployer: boolean; readonly everInterviewedWithEmployer: boolean; readonly everRejectedByEmployer: boolean };
+  readonly employer: { readonly employerClusterId: string | null; readonly status: string | null; readonly resolvedEmployerId: string | null; readonly knownBefore: boolean; readonly previousVacancyCount: number; readonly previousInteractedVacancyCount: number; readonly everAppliedToEmployer: boolean; readonly everInterviewedWithEmployer: boolean; readonly everRejectedByEmployer: boolean; readonly confirmationCandidate?: string | null };
   readonly organizations: Record<string, readonly OrganizationRelationship[]>;
   readonly recognition: { readonly sameCanonicalVacancySeenBefore: boolean; readonly employerSeenBefore: boolean; readonly unresolvedEmployer: boolean };
   readonly reviewSignals: { readonly isNewVacancy: boolean; readonly isKnownEmployer: boolean; readonly alreadyAppliedToThisVacancy: boolean; readonly previouslyAppliedToEmployer: boolean; readonly previouslyInterviewedWithEmployer: boolean; readonly previouslyRejectedByEmployer: boolean; readonly hasMultipleSourceObservations: boolean };
@@ -62,6 +63,7 @@ export interface VacancyInboxItem {
   readonly canonicalizationStatus: string;
   readonly title: string | null;
   readonly location: unknown | null;
+  readonly locationAlternatives: readonly unknown[];
   readonly engagement: unknown | null;
   readonly workMode: unknown | null;
   readonly latestObservedAt: string | null;
@@ -78,4 +80,12 @@ export async function getVacancyInbox(limit?: number): Promise<readonly VacancyI
   const response = await fetch(`${API_ORIGIN}/vacancies${query}`);
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { vacancies: readonly VacancyInboxItem[] }).vacancies;
+}
+
+export async function confirmEmployer(canonicalVacancyId: string, candidateName: string): Promise<ReviewView> {
+  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-confirmation`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidateName }),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { review: ReviewView }).review;
 }

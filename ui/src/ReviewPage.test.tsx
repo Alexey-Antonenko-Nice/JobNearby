@@ -111,6 +111,14 @@ describe("ReviewPage", () => {
     expect(screen.getAllByText("Bürkert Fluid Control Systems").length).toBeGreaterThan(0);
   });
 
+  it("displays Workday title, company, and location", async () => {
+    respond({ review: review({ title: "Chauffeur SPL ADR (H/F)", location: { rawText: "Rouen" }, organizations: { employerRelationships: [], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "Air Products" }], recruiters: [], consultancies: [], staffingAgencies: [], clients: [], otherRelationships: [] } }) });
+    render(<ReviewPage />);
+    expect(await screen.findByText("Chauffeur SPL ADR (H/F)")).toBeInTheDocument();
+    expect(screen.getByText("Rouen")).toBeInTheDocument();
+    expect(screen.getByText("Air Products")).toBeInTheDocument();
+  });
+
   it("displays the canonical Daimler location", async () => {
     respond({ review: review({ location: { rawText: "MOLSHEIM, Daimler Truck - FR, FR" } }) });
     render(<ReviewPage />);
@@ -120,6 +128,16 @@ describe("ReviewPage", () => {
   it("shows an unlinked employer explicitly", async () => {
     respond({ review: review({ employerClusterId: null }) }); render(<ReviewPage />);
     expect(await screen.findByText("Employer unresolved / not linked")).toBeInTheDocument();
+  });
+
+  it("offers and submits a clean employer confirmation candidate", async () => {
+    respond({ review: review({ confirmationCandidate: "Air Products S.A.S (FR)" }) });
+    respond({ review: review({ confirmationCandidate: null, status: "PROBABLY_RESOLVED" }) });
+    const user = userEvent.setup(); render(<ReviewPage />);
+    expect(await screen.findByText(/Employer candidate:/u)).toHaveTextContent("Air Products S.A.S (FR)");
+    await user.click(screen.getByRole("button", { name: "Confirm as employer" }));
+    expect(fetchMock.mock.calls[1]![0]).toContain("/employer-confirmation");
+    expect(await screen.findByText("Employer status", { exact: false })).toBeInTheDocument();
   });
 
   it("renders known-employer history signals", async () => {
@@ -145,7 +163,7 @@ describe("ReviewPage", () => {
 function respond(body: unknown, status = 200): void { fetchMock.mockResolvedValueOnce(json(body, status)); }
 function json(body: unknown, status = 200): Response { return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }); }
 function review(overrides: Record<string, unknown> = {}) {
-  const vacancy = { canonicalVacancyId: "canonical-1", canonicalizationStatus: "CANONICAL", title: "Developer", location: "Paris", engagement: "FULL_TIME", workMode: "HYBRID", compensation: "50000", latestObservedAt: "2026-09-01T00:00:00.000Z", sourceObservationCount: 1, sourceLinks: [] };
+  const vacancy = { canonicalVacancyId: "canonical-1", canonicalizationStatus: "CANONICAL", title: "Developer", location: "Paris", locationAlternatives: [], engagement: "FULL_TIME", workMode: "HYBRID", compensation: "50000", latestObservedAt: "2026-09-01T00:00:00.000Z", sourceObservationCount: 1, sourceLinks: [] };
   const user = { currentState: "NEW", lastInteractionAt: null, everApplied: false, everInterviewed: false, everRejected: false };
   const employer = { employerClusterId: "cluster-1", status: "RESOLVED", resolvedEmployerId: "employer-1", knownBefore: false, previousVacancyCount: 0, previousInteractedVacancyCount: 0, everAppliedToEmployer: false, everInterviewedWithEmployer: false, everRejectedByEmployer: false };
   const organizations = { employerRelationships: [{ role: "EMPLOYER", rawName: "Actual employer" }], displayedCompanies: [], recruiters: [{ role: "RECRUITER", rawName: "Recruiter name" }], consultancies: [{ role: "CONSULTANCY", rawName: "Consultancy name" }], staffingAgencies: [], clients: [], otherRelationships: [] };
@@ -154,7 +172,7 @@ function review(overrides: Record<string, unknown> = {}) {
   for (const [key, value] of Object.entries(overrides)) {
     if (key in vacancy) Object.assign(vacancy, { [key]: value });
     else if (key in user) Object.assign(user, { [key]: value });
-    else if (key in employer) Object.assign(employer, { [key]: value });
+    else if (key in employer || key === "confirmationCandidate") Object.assign(employer, { [key]: value });
     else if (key === "organizations") Object.assign(organizations, value);
     else if (key in recognition) Object.assign(recognition, { [key]: value });
     else Object.assign(reviewSignals, { [key]: value });

@@ -120,6 +120,30 @@ export class SqliteObservationClusterAssignmentRepository
     replace();
   }
 
+  async supersedeEffectiveAssignment(
+    existingAssignmentId: ObservationClusterAssignmentId,
+    replacement: ObservationClusterAssignment,
+    supersededAt: Date,
+  ): Promise<void> {
+    validateAssignment(replacement);
+    if (replacement.status !== "USER_CONFIRMED" || Number.isNaN(supersededAt.getTime())) {
+      throw new Error("Effective assignment replacement is invalid.");
+    }
+    const replace = this.db.transaction(() => {
+      const existing = this.db.prepare(`
+        SELECT source_observation_id, status, superseded_at
+        FROM observation_cluster_assignments WHERE id = ?
+      `).get(existingAssignmentId) as { source_observation_id: string; status: string; superseded_at: string | null } | undefined;
+      if (existing === undefined || existing.superseded_at !== null || (existing.status !== "ACCEPTED" && existing.status !== "USER_CONFIRMED")) {
+        throw new Error(`Assignment "${existingAssignmentId}" is not a current effective assignment.`);
+      }
+      if (existing.source_observation_id !== replacement.sourceObservationId) throw new Error("Replacement assignment must belong to the same SourceObservation.");
+      this.db.prepare("UPDATE observation_cluster_assignments SET superseded_at = ? WHERE id = ?").run(supersededAt.toISOString(), existingAssignmentId);
+      insertObservationClusterAssignment(this.db, replacement);
+    });
+    replace();
+  }
+
   private findCurrent(
     sourceObservationId: SourceObservationId,
     statusPredicate: string,

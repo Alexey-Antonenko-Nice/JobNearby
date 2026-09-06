@@ -8,6 +8,7 @@ import {
   type ExtractedVacancyEvidence,
 } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import { directEmployerOrganizationNames } from "./TrustedDirectEmployerSource.js";
+import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
 
 export class DirectFieldVacancyEvidenceExtractor
   implements VacancyEvidenceExtractor
@@ -46,6 +47,7 @@ export class DirectFieldVacancyEvidenceExtractor
                 provenance,
               },
             ],
+      engagements: directEngagement(observation.contractText, provenance),
       externalIdentifiers:
         observation.source.externalId === undefined
           ? []
@@ -59,4 +61,14 @@ export class DirectFieldVacancyEvidenceExtractor
             ],
     });
   }
+}
+
+function directEngagement(
+  contractText: string | undefined,
+  provenance: { readonly sourceObservationId: string; readonly extractionMethod: "DIRECT_FIELD"; readonly confidence: number },
+): readonly VacancyEngagementEvidence[] {
+  if (contractText === undefined) return [];
+  if (/^full\s+time$/iu.test(contractText.trim())) return [{ rawTerms: [contractText], normalizedTerms: ["FULL_TIME"], provenance }];
+  if (/^part\s+time$/iu.test(contractText.trim())) return [{ rawTerms: [contractText], normalizedTerms: ["PART_TIME"], provenance }];
+  return [];
 }

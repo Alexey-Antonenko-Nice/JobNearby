@@ -24,6 +24,7 @@ export interface VacancyReviewView {
     readonly canonicalizationStatus: CanonicalizationStatus;
     readonly title: string | null;
     readonly location: VacancyLocation | null;
+    readonly locationAlternatives: readonly VacancyLocation[];
     readonly engagement: VacancyEngagement | null;
     readonly workMode: VacancyWorkMode | null;
     readonly compensation: VacancyCompensation | null;
@@ -48,6 +49,7 @@ export interface VacancyReviewView {
     readonly everAppliedToEmployer: boolean;
     readonly everInterviewedWithEmployer: boolean;
     readonly everRejectedByEmployer: boolean;
+    readonly confirmationCandidate: string | null;
   };
   readonly organizations: {
     readonly employerRelationships: readonly VacancyReviewOrganizationRelationship[];

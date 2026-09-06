@@ -4,6 +4,9 @@ import type { UserVacancyInteractionRepository } from "../../domain/user/UserVac
 import type { CanonicalVacancyId } from "../../domain/vacancies/CanonicalVacancy.js";
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 import type { EmployerMemoryPublicDataSource } from "./EmployerMemoryPublicDataSource.js";
+import type { ObservationClusterAssignmentRepository } from "../../domain/recognition/ObservationClusterAssignmentRepository.js";
+import { confirmVacancyEmployer } from "./confirmVacancyEmployer.js";
+import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
 import { getVacancyReviewView } from "./getVacancyReviewView.js";
 import { getVacancyInbox } from "./getVacancyInbox.js";
 import {
@@ -17,7 +20,9 @@ export interface VacancyReviewWorkflowDependencies {
   readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
   readonly interactionRepository: UserVacancyInteractionRepository;
   readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
+  readonly employerClusterWriter?: EmployerClusterRepository;
   readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
+  readonly assignmentRepository?: ObservationClusterAssignmentRepository;
   readonly now?: RecordUserVacancyInteractionDependencies["now"];
   readonly generateId?: RecordUserVacancyInteractionDependencies["generateId"];
 }
@@ -31,11 +36,25 @@ export function createVacancyReviewWorkflow(
     interactionRepository: dependencies.interactionRepository,
     employerClusterRepository: dependencies.employerClusterRepository,
     employerMemoryPublicDataSource: dependencies.employerMemoryPublicDataSource,
+    ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
   return {
     getVacancyInbox: (input?: { readonly limit?: number }) => getVacancyInbox(input, reviewDependencies),
     getVacancyReview: (canonicalVacancyId: CanonicalVacancyId) =>
       getVacancyReviewView(canonicalVacancyId, reviewDependencies),
+    confirmVacancyEmployer: async (input: { readonly canonicalVacancyId: string; readonly candidateName: string }) => {
+      if (dependencies.assignmentRepository === undefined || dependencies.employerClusterWriter === undefined) {
+        throw new Error("Employer confirmation is unavailable.");
+      }
+      await confirmVacancyEmployer(input.canonicalVacancyId, input.candidateName, {
+        canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
+        employerClusterRepository: dependencies.employerClusterWriter,
+        assignmentRepository: dependencies.assignmentRepository,
+        ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+        ...(dependencies.generateId === undefined ? {} : { generateId: dependencies.generateId }),
+      });
+      return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
+    },
     recordVacancyReviewAction: async (input: RecordUserVacancyInteractionInput) => {
       const recorded = await recordUserVacancyInteraction(input, {
         canonicalVacancyRepository: dependencies.canonicalVacancyRepository,

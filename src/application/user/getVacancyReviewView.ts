@@ -10,6 +10,7 @@ import { collectVacancySourceLinks } from "./collectVacancySourceLinks.js";
 import { effectiveEmployerClusterId } from "./effectiveEmployerClusterId.js";
 import { getEmployerMemoryView } from "./getEmployerMemoryView.js";
 import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
+import { employerConfirmationCandidate } from "./employerConfirmation.js";
 
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
@@ -18,6 +19,7 @@ export async function getVacancyReviewView(
     readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
     readonly interactionRepository: UserVacancyInteractionRepository;
     readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
+    readonly assignmentRepository?: import("../../domain/recognition/ObservationClusterAssignmentRepository.js").ObservationClusterAssignmentRepository;
     readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
   },
 ): Promise<VacancyReviewView> {
@@ -33,7 +35,8 @@ export async function getVacancyReviewView(
   }));
   const history = await getUserVacancyHistory(canonicalVacancyId, dependencies.interactionRepository);
   const eventTypes = new Set(history.events.map(({ type }) => type));
-  const employerClusterId = effectiveEmployerClusterId(vacancy.organizationRelationships);
+  const confirmedAssignment = dependencies.assignmentRepository === undefined ? null : await latestEffectiveAssignment(vacancy.sourceObservationIds, dependencies.assignmentRepository);
+  const employerClusterId = confirmedAssignment?.employerClusterId ?? effectiveEmployerClusterId(vacancy.organizationRelationships);
   const employerMemory = employerClusterId === null ? null : await getEmployerMemoryView(
     employerClusterId,
     {
@@ -56,6 +59,7 @@ export async function getVacancyReviewView(
       canonicalizationStatus: vacancy.canonicalizationStatus,
       title: resolvedValue(vacancy.role)?.title ?? null,
       location: resolvedValue(vacancy.location),
+      locationAlternatives: vacancy.location.alternatives?.map(({ value }) => value) ?? [],
       engagement: resolvedValue(vacancy.engagement),
       workMode: resolvedValue(vacancy.workMode),
       compensation: resolvedValue(vacancy.compensation),
@@ -82,6 +86,11 @@ export async function getVacancyReviewView(
       everAppliedToEmployer: employerMemory?.vacancies.some(({ everApplied }) => everApplied) ?? false,
       everInterviewedWithEmployer: employerMemory?.vacancies.some(({ everInterviewed }) => everInterviewed) ?? false,
       everRejectedByEmployer: employerMemory?.vacancies.some(({ everRejected }) => everRejected) ?? false,
+      confirmationCandidate: (employerMemory?.employerCluster.status !== undefined
+        && employerMemory.employerCluster.status !== "UNRESOLVED"
+        && employerMemory.employerCluster.status !== "PROBABLY_RESOLVED")
+        || confirmedAssignment?.status === "USER_CONFIRMED"
+        ? null : employerConfirmationCandidate(vacancy.organizationRelationships),
     },
     organizations: groupedOrganizations,
     recognition: {
@@ -101,6 +110,14 @@ export async function getVacancyReviewView(
       hasMultipleSourceObservations: multipleObservations,
     },
   };
+}
+
+async function latestEffectiveAssignment(
+  observationIds: readonly string[],
+  repository: import("../../domain/recognition/ObservationClusterAssignmentRepository.js").ObservationClusterAssignmentRepository,
+) {
+  const assignments = (await Promise.all(observationIds.map((id) => repository.findEffectiveByObservationId(id)))).filter((value) => value !== null);
+  return assignments.find(({ status }) => status === "USER_CONFIRMED") ?? assignments.at(-1) ?? null;
 }
 
 function resolvedValue<T>(field: { readonly status: string; readonly value?: T }): T | null {
