@@ -86,6 +86,12 @@ describe("ReviewPage", () => {
     expect(screen.queryByText(/"normalizedTerms"/u)).not.toBeInTheDocument();
   });
 
+  it("displays the canonical Daimler location", async () => {
+    respond({ review: review({ location: { rawText: "MOLSHEIM, Daimler Truck - FR, FR" } }) });
+    render(<ReviewPage />);
+    expect(await screen.findByText("MOLSHEIM, Daimler Truck - FR, FR")).toBeInTheDocument();
+  });
+
   it("shows an unlinked employer explicitly", async () => {
     respond({ review: review({ employerClusterId: null }) }); render(<ReviewPage />);
     expect(await screen.findByText("Employer unresolved / not linked")).toBeInTheDocument();

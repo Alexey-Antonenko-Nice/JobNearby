@@ -26,6 +26,10 @@ function organizationName(value: unknown): string | undefined {
 }
 
 function location(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    if (value.length !== 1) return undefined;
+    return location(value[0]);
+  }
   if (!isRecord(value)) return undefined;
   const name = usableString(value.name);
   if (name !== undefined) return name;

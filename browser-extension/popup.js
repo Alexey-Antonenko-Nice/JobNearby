@@ -9,16 +9,26 @@ export function captureFeedback(body) {
       ? "Captured into a new vacancy record."
       : "Captured and added to an existing vacancy record.",
   ];
-  const employerMessages = {
-    MATCHED_EXISTING_RECORD: "Linked to an existing employer record.",
-    UNRESOLVED_RECORD_CREATED: "Employer not identified yet.",
-    REVIEW_REQUIRED: "Employer match needs review.",
-  };
-  messages.push(employerMessages[body.processing.employerStatus]);
+  const employerMessage = body.processing.employerStatus === "MATCHED_EXISTING_RECORD"
+    ? "Linked to an existing employer record."
+    : body.processing.employerStatus === "IDENTIFIED_NEW_RECORD"
+      ? identifiedEmployerMessage(body.processing.employerDisplayName)
+      : body.processing.employerStatus === "REVIEW_REQUIRED"
+        ? "Employer match needs review."
+        : "Employer not identified yet.";
+  messages.push(employerMessage);
   if (body.processing.canonicalizationStatus === "CONFLICTED") {
     messages.push("Some captured vacancy details conflict.");
   }
   return messages.join(" ");
+}
+
+function identifiedEmployerMessage(value) {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (name.length === 0 || /^unknown\s+employer(?:\s*[—-].*)?$/iu.test(name)) {
+    return "Employer not identified yet.";
+  }
+  return `Employer identified: ${name}.`;
 }
 
 function initializePopup(button, status) {

@@ -16,11 +16,26 @@ describe("browser capture popup feedback", () => {
     expect(captureFeedback(processed)).toBe(
       "Captured into a new vacancy record. Linked to an existing employer record.",
     );
-    expect(captureFeedback({ processing: { ...processed.processing, vacancyOutcome: "UPDATED_EXISTING", employerStatus: "UNRESOLVED_RECORD_CREATED" } })).toBe(
-      "Captured and added to an existing vacancy record. Employer not identified yet.",
+    expect(captureFeedback({ processing: { ...processed.processing, employerStatus: "IDENTIFIED_NEW_RECORD", employerDisplayName: "Mercedes-Benz Trucks Molsheim SASU" } })).toBe(
+      "Captured into a new vacancy record. Employer identified: Mercedes-Benz Trucks Molsheim SASU.",
+    );
+    expect(captureFeedback({ processing: { ...processed.processing, vacancyOutcome: "UPDATED_EXISTING", employerStatus: "MATCHED_EXISTING_RECORD" } })).toBe(
+      "Captured and added to an existing vacancy record. Linked to an existing employer record.",
+    );
+    expect(captureFeedback({ processing: { ...processed.processing, employerStatus: "UNRESOLVED_RECORD_CREATED" } })).toBe(
+      "Captured into a new vacancy record. Employer not identified yet.",
     );
     expect(captureFeedback({ processing: { ...processed.processing, employerStatus: "REVIEW_REQUIRED" } })).toBe(
       "Captured into a new vacancy record. Employer match needs review.",
+    );
+  });
+
+  it("does not identify a missing or placeholder employer name", () => {
+    expect(captureFeedback({ processing: { ...processed.processing, employerStatus: "IDENTIFIED_NEW_RECORD" } })).toContain(
+      "Employer not identified yet.",
+    );
+    expect(captureFeedback({ processing: { ...processed.processing, employerStatus: "IDENTIFIED_NEW_RECORD", employerDisplayName: "Unknown employer — Molsheim" } })).toContain(
+      "Employer not identified yet.",
     );
   });
 

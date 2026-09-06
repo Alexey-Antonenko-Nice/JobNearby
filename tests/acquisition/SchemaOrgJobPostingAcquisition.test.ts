@@ -119,6 +119,45 @@ describe("conservative JobPosting projection", () => {
     })).toEqual({ locationText: "Weyersheim, France", salaryText: "16 EUR / HOUR" });
   });
 
+  it("projects the single-item JobPosting jobLocation array used by Daimler Truck", () => {
+    expect(projector.project({
+      "@type": "JobPosting",
+      title: "Peintre Industriel (H/F)",
+      hiringOrganization: {
+        "@type": "Organization",
+        name: "Mercedes-Benz Trucks Molsheim SASU",
+        address: { addressLocality: "Must not become vacancy location" },
+      },
+      jobLocation: [{
+        "@type": "Place",
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: "MOLSHEIM",
+          addressRegion: "Daimler Truck - FR",
+          postalCode: "67129",
+          addressCountry: "FR",
+        },
+      }],
+    })).toEqual({
+      title: "Peintre Industriel (H/F)",
+      displayedCompanyName: "Mercedes-Benz Trucks Molsheim SASU",
+      locationText: "MOLSHEIM, Daimler Truck - FR, FR",
+    });
+  });
+
+  it("fails closed for malformed or ambiguous jobLocation arrays", () => {
+    const base = { "@type": "JobPosting", title: "Role" };
+    expect(projector.project({ ...base, jobLocation: [{ address: { addressLocality: "Molsheim" } }, "bad"] })).toEqual({ title: "Role" });
+    expect(projector.project({ ...base, jobLocation: [{ name: "Molsheim" }, { name: "Strasbourg" }] })).toEqual({ title: "Role" });
+  });
+
+  it("does not reinterpret hiringOrganization.address as jobLocation", () => {
+    expect(projector.project({
+      "@type": "JobPosting",
+      hiringOrganization: { name: "Employer", address: { addressLocality: "Molsheim" } },
+    })).toEqual({ displayedCompanyName: "Employer" });
+  });
+
   it("ignores malformed optional fields rather than failing", () => {
     expect(projector.project({
       "@type": "JobPosting",
@@ -163,6 +202,27 @@ describe("browser JobPosting acquisition integration", () => {
     });
     expect(result.externalId).toBeUndefined();
     expect(result.content.text).toBe("Visible page text remains primary");
+  });
+
+  it("maps the Daimler Truck structured location into SourceObservation", () => {
+    const jobPosting = {
+      "@type": "JobPosting",
+      title: "Peintre Industriel (H/F)",
+      hiringOrganization: { "@type": "Organization", name: "Mercedes-Benz Trucks Molsheim SASU" },
+      jobLocation: [{
+        "@type": "Place",
+        address: { "@type": "PostalAddress", addressLocality: "MOLSHEIM", addressRegion: "Daimler Truck - FR", postalCode: "67129", addressCountry: "FR" },
+      }],
+    };
+    const acquisition = adapter.toAcquisitionPackage(
+      payload(script(jobPosting), "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425026"),
+      "acquisition-daimler-location",
+    );
+    const observation = new DeterministicAcquisitionCaptureMapper().toSourceObservation(
+      acquisition,
+      "observation-daimler-location",
+    );
+    expect(observation.locationText).toBe("MOLSHEIM, Daimler Truck - FR, FR");
   });
 
   it("extracts a Meteojob-style fixture without provider-specific logic", () => {
