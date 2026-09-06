@@ -1,3 +1,4 @@
+import { findConfirmedEmployerMemory } from "./findConfirmedEmployerMemory.js";
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
@@ -64,10 +65,14 @@ export async function processObservation(
   const propagated = await propagateConfirmedEmployerMemory(observation, dependencies);
   if (propagated !== null) return propagated;
 
-  const evaluation = await evaluateObservationEmployerCluster(
-    observation,
-    dependencies,
+  const memory = dependencies.evidenceExtractor === undefined ? null : await findConfirmedEmployerMemory(
+    (await dependencies.evidenceExtractor.extract(observation)).organizations.map((o) => ({ role: o.role === "UNKNOWN" ? "DISPLAYED_COMPANY" : o.role, rawName: o.value })),
+    [observation.id], dependencies.clusterRepository, dependencies.assignmentRepository,
   );
+  // Do not allow the generic matcher to pick an arbitrary winner from ambiguous memory.
+  const ambiguousMemory = memory !== null && memory.matches.length > 0 && (memory.matches.length > 1 || memory.names.length > 1);
+  const rejectedMemory = (await dependencies.assignmentRepository.findByObservationId(observation.id)).some((a) => a.status === "REJECTED" && a.algorithm === "user-employer-memory-review" && memory?.matches.some((m) => m.cluster.id === a.employerClusterId));
+  const evaluation = ambiguousMemory || rejectedMemory ? { outcome: "NO_MATCH" as const } : await evaluateObservationEmployerCluster(observation, dependencies);
 
   if (evaluation.outcome === "AUTO_MATCH") {
     return {
@@ -89,7 +94,7 @@ export async function processObservation(
     };
   }
 
-  const explicitEmployerName = dependencies.evidenceExtractor === undefined
+  const explicitEmployerName = ambiguousMemory || rejectedMemory || dependencies.evidenceExtractor === undefined
     ? undefined
     : await reliableExplicitEmployerName(observation, dependencies.evidenceExtractor);
   const location = observation.locationText?.trim();
@@ -159,25 +164,13 @@ async function propagateConfirmedEmployerMemory(
   dependencies: ProcessObservationDependencies,
 ): Promise<ProcessObservationResult | null> {
   if (dependencies.evidenceExtractor === undefined || dependencies.assignmentRepository.findEffectiveByClusterId === undefined) return null;
-  const evidence = await dependencies.evidenceExtractor.extract(observation);
-  const organizations = evidence.organizations;
-  const displayed = [...new Set(organizations.filter(({ role }) => role === "UNKNOWN").map(({ value }) => normalizeOrganizationEvidenceName(value)))];
-  const employer = [...new Set(organizations.filter(({ role }) => role === "EMPLOYER").map(({ value }) => normalizeOrganizationEvidenceName(value)))];
-  const candidates = [...new Set([...displayed, ...employer])];
-  if (candidates.length !== 1) return null;
-  if (organizations.some(({ role }) => role === "STAFFING_AGENCY" || role === "RECRUITER" || role === "CLIENT")) return null;
-  if (organizations.some(({ role, value }) => role === "EMPLOYER" && normalizeOrganizationEvidenceName(value) !== candidates[0])) return null;
-
-  const matchingClusters = new Map<string, EmployerCluster>();
-  for (const name of candidates) {
-    for (const cluster of await dependencies.clusterRepository.findCandidates({ displayedCompanyNameHint: name })) {
-      if (cluster.status === "CONFLICTED" || cluster.displayLabel === undefined || normalizeOrganizationEvidenceName(cluster.displayLabel) !== name) continue;
-      const assignments = await dependencies.assignmentRepository.findEffectiveByClusterId!(cluster.id);
-      if (assignments.some(({ status }) => status === "USER_CONFIRMED")) matchingClusters.set(cluster.id, cluster);
-    }
-  }
-  if (matchingClusters.size !== 1) return null;
-  const cluster = [...matchingClusters.values()][0]!;
+  const memory = await findConfirmedEmployerMemory(
+    (await dependencies.evidenceExtractor.extract(observation)).organizations.map((o) => ({ role: o.role === "UNKNOWN" ? "DISPLAYED_COMPANY" : o.role, rawName: o.value })),
+    [observation.id], dependencies.clusterRepository, dependencies.assignmentRepository,
+  );
+  if (memory.names.length !== 1 || memory.matches.length !== 1) return null;
+  const cluster = memory.matches[0]!.cluster;
+  if ((await dependencies.assignmentRepository.findByObservationId(observation.id)).some((a) => a.status === "REJECTED" && a.employerClusterId === cluster.id)) return null;
   const assignment = createObservationClusterAssignment({
     sourceObservationId: observation.id,
     employerClusterId: cluster.id,

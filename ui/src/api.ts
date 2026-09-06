@@ -13,6 +13,7 @@ export interface VacancySourceLink {
 }
 
 export interface ReviewView {
+  readonly employerMemoryReview?: { readonly required: boolean; readonly candidates: readonly { employerClusterId: string; displayLabel: string; status: string; currentOrganizationName: string; explanation: string; reasonCodes: readonly string[]; priorConfirmationExists: boolean; priorConfirmationCount: number }[] };
   readonly vacancy: {
     readonly canonicalVacancyId: string;
     readonly canonicalizationStatus: string;
@@ -85,6 +86,13 @@ export async function getVacancyInbox(limit?: number): Promise<readonly VacancyI
 export async function confirmEmployer(canonicalVacancyId: string, candidateName: string): Promise<ReviewView> {
   const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-confirmation`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidateName }),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { review: ReviewView }).review;
+}
+export async function decideEmployerMemory(canonicalVacancyId: string, employerClusterId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
+  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-memory-review`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employerClusterId, decision }),
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;

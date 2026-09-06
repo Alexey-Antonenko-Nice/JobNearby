@@ -14,6 +14,7 @@ export interface BrowserCaptureServerDependencies {
   ) => Promise<CaptureAndProcessBrowserVacancyResult>;
   readonly getVacancyReview?: VacancyReviewWorkflow["getVacancyReview"];
   readonly getVacancyInbox?: VacancyReviewWorkflow["getVacancyInbox"];
+  readonly decideEmployerMemoryReview?: VacancyReviewWorkflow["decideEmployerMemoryReview"];
   readonly confirmVacancyEmployer?: VacancyReviewWorkflow["confirmVacancyEmployer"];
   readonly recordVacancyReviewAction?: VacancyReviewWorkflow["recordVacancyReviewAction"];
 }
@@ -48,6 +49,14 @@ export function createBrowserCaptureServer(
         operation = "review";
         const review = await dependencies.getVacancyReview(decodePathId(reviewMatch[1]!));
         sendJson(response, 200, { review });
+        return;
+      }
+      const memoryReviewMatch = /^\/vacancies\/([^/]+)\/employer-memory-review$/u.exec(path);
+      if (request.method === "POST" && memoryReviewMatch !== null && dependencies.decideEmployerMemoryReview !== undefined) {
+        operation = "review";
+        const body = await readJsonBody(request, "Employer memory review");
+        if (!isRecord(body) || typeof body.employerClusterId !== "string" || !body.employerClusterId.trim() || !["CONFIRM", "REJECT"].includes(String(body.decision)) || Object.keys(body).some((key) => !["employerClusterId", "decision"].includes(key))) throw new InvalidRequestError("Employer memory review payload is invalid.");
+        sendJson(response, 200, { review: await dependencies.decideEmployerMemoryReview({ canonicalVacancyId: decodePathId(memoryReviewMatch[1]!), employerClusterId: body.employerClusterId, decision: body.decision as "CONFIRM" | "REJECT" }) });
         return;
       }
       const employerConfirmationMatch = /^\/vacancies\/([^/]+)\/employer-confirmation$/u.exec(path);
@@ -179,6 +188,7 @@ function errorStatus(
   if (operation === "capture") {
     return message.startsWith("Browser capture could not be persisted:") ? 500 : 400;
   }
+  if (message === "Employer memory candidate is no longer eligible for review.") return 409;
   if (operation === "route") return 400;
   if (error instanceof InvalidRequestError) return 400;
   if (message.startsWith("Inbox limit must be")) return 400;

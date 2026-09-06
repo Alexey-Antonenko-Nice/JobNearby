@@ -35,6 +35,25 @@ describe("confirmed employer memory propagation", () => {
     expect((await deps.assignments.findByObservationId("historical"))[0]).toMatchObject({ status: "USER_CONFIRMED" });
   });
 
+  it("keeps multiple confirmed clusters unresolved even when the generic matcher would choose one", async () => {
+    const deps = setup();
+    for (const id of ["a", "b"]) {
+      await deps.clusters.save({ ...cluster, id });
+      await deps.assignments.save(createObservationClusterAssignment({ sourceObservationId: `prior-${id}`, employerClusterId: id, confidence: 1, status: "USER_CONFIRMED", algorithm: "user", algorithmVersion: "1" }));
+    }
+    const options = {
+      clusterRepository: deps.clusters, assignmentRepository: deps.assignments, recognitionPersistence: deps.persistence,
+      matcher: { findBestMatch: async () => { throw new Error("ambiguous memory must not reach matcher"); } },
+      policy: { automaticAssignmentThreshold: 0.9, reviewThreshold: 0.65 }, algorithm: "matcher", algorithmVersion: "1",
+      evidenceExtractor: { extract: async () => createExtractedVacancyEvidence({ sourceObservationId: "later", organizations: [{ value: "Air Products", role: "UNKNOWN", provenance: { sourceObservationId: "later", extractionMethod: "DIRECT_FIELD", confidence: 1 } }] }) },
+      generateClusterId: () => "anonymous", generateAssignmentId: () => "anonymous-assignment",
+    };
+    expect(await processObservation(source("later"), options)).toMatchObject({ outcome: "CREATED_NEW_CLUSTER", employerCluster: { status: "UNRESOLVED" } });
+    await processObservation(source("later"), options);
+    expect(await deps.assignments.findByObservationId("later")).toHaveLength(1);
+    expect(await deps.assignments.findEffectiveByObservationId("later")).toMatchObject({ employerClusterId: "anonymous", algorithm: "new-employer-cluster" });
+  });
+
   it.each(["STAFFING_AGENCY", "RECRUITER", "CLIENT"] as const)("rejects propagation for %s contradiction", async (role) => {
     const deps = setup(); await deps.clusters.save(cluster);
     await deps.assignments.save(createObservationClusterAssignment({ sourceObservationId: "historical", employerClusterId: cluster.id, confidence: 1, status: "USER_CONFIRMED", algorithm: "user", algorithmVersion: "1" }, { now: date, generateId: () => "historical" }));

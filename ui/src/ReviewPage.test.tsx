@@ -11,6 +11,18 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it.each([ ["Confirm employer", "CONFIRM"], ["Not this employer", "REJECT"] ])("reviews a remembered employer using %s", async (label, decision) => {
+    respond({ review: { ...review(), employerMemoryReview: { required: true, candidates: [{ employerClusterId: "memory-a", displayLabel: "ACME", status: "PROBABLY_RESOLVED", priorConfirmationCount: 2, explanation: "Multiple confirmed clusters match." }] } } });
+    respond({ review: review() });
+    const user = userEvent.setup(); render(<ReviewPage />);
+    expect(await screen.findByText("Possible known employer")).toBeInTheDocument();
+    expect(screen.getByText("Previously confirmed in 2 observations")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: label }));
+    expect(fetchMock.mock.calls[1]![0]).toContain("/employer-memory-review");
+    expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toEqual({ employerClusterId: "memory-a", decision });
+    expect(screen.queryByText("Possible known employer")).not.toBeInTheDocument();
+  });
+
   it("loads a NEW vacancy without creating an interaction", async () => {
     respond({ review: review() });
     render(<ReviewPage />);
