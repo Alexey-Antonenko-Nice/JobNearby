@@ -33,6 +33,19 @@ export class ConservativeProviderVacancyIdExtractor
         return undefined;
       }
     }
+    if (input.sourceName === "jooble.org") {
+      try { return /^\/desc\/(-\d+)\/?$/u.exec(new URL(input.sourceUrl).pathname)?.[1]; } catch { return undefined; }
+    }
+    if (input.sourceName === "cadremploi.fr") {
+      try {
+        const url = new URL(input.sourceUrl);
+        return /^\/emploi\/detail_offre\/?$/u.test(url.pathname) && /^\d+$/.test(url.searchParams.get("offreId") ?? "")
+          ? url.searchParams.get("offreId") ?? undefined : undefined;
+      } catch { return undefined; }
+    }
+    if (input.sourceName === "lhh.com") {
+      try { return /^\/fr-fr\/offres-emploi\/detail\/(\d+)\/?$/iu.exec(new URL(input.sourceUrl).pathname)?.[1]; } catch { return undefined; }
+    }
     const rule = rules[input.sourceName];
     if (rule === undefined) return undefined;
     try {

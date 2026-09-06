@@ -99,8 +99,10 @@ describe("ConservativeProviderVacancyIdExtractor", () => {
     expect(extract("jobleads.com", "https://www.jobleads.com/job/")).toBeUndefined();
   });
 
-  it("intentionally leaves Jooble path IDs unsupported", () => {
+  it("extracts Jooble IDs only from validated desc routes", () => {
     expect(extract("jooble.org", "https://fr.jooble.org/desc/-7778676142537344967"))
+      .toBe("-7778676142537344967");
+    expect(extract("jooble.org", "https://fr.jooble.org/emploi/strasbourg"))
       .toBeUndefined();
   });
 

@@ -47,13 +47,13 @@ describe("provider vacancy ID browser acquisition", () => {
     expect(capture(url, "observation-randstad-negative").acquisition.externalId).toBeUndefined();
   });
 
-  it("leaves Jooble captures valid and without external identity", () => {
+  it("preserves Jooble desc identity through SourceObservation", () => {
     const { acquisition, observation } = capture(
       "https://fr.jooble.org/desc/-7778676142537344967",
       "observation-jooble",
     );
-    expect(acquisition.externalId).toBeUndefined();
-    expect(observation.source.externalId).toBeUndefined();
+    expect(acquisition.externalId).toBe("-7778676142537344967");
+    expect(observation.source.externalId).toBe("-7778676142537344967");
     expect(observation.rawContent).toBe("Visible vacancy text");
   });
 

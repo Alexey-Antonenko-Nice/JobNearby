@@ -6,10 +6,18 @@ import { ExplicitEmployerCharacteristicExtractor } from "./ExplicitEmployerChara
 import { ExplicitTextVacancyEvidenceExtractor } from "./ExplicitTextVacancyEvidenceExtractor.js";
 import { IndeedSelectedVacancyEvidenceExtractor } from "./IndeedSelectedVacancyEvidenceExtractor.js";
 import { WorkdayVacancyEvidenceExtractor } from "./WorkdayVacancyEvidenceExtractor.js";
+import { JoobleSelectedVacancyEvidenceExtractor } from "./JoobleSelectedVacancyEvidenceExtractor.js";
+import { LinkedInSelectedVacancyEvidenceExtractor } from "./LinkedInSelectedVacancyEvidenceExtractor.js";
+import { CadremploiSelectedVacancyEvidenceExtractor } from "./CadremploiSelectedVacancyEvidenceExtractor.js";
+import { LhhSelectedVacancyEvidenceExtractor } from "./LhhSelectedVacancyEvidenceExtractor.js";
 
 export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtractor {
   return new CompositeVacancyEvidenceExtractor([
     new WorkdayVacancyEvidenceExtractor(),
+    new JoobleSelectedVacancyEvidenceExtractor(),
+    new LinkedInSelectedVacancyEvidenceExtractor(),
+    new CadremploiSelectedVacancyEvidenceExtractor(),
+    new LhhSelectedVacancyEvidenceExtractor(),
     new IndeedSelectedVacancyEvidenceExtractor(),
     new DirectFieldVacancyEvidenceExtractor(),
     new ExplicitTextVacancyEvidenceExtractor(),
