@@ -16,6 +16,7 @@ const rules: Readonly<Record<string, ExtractionRule>> = {
   "candidat.francetravail.fr": extractFranceTravail,
   "randstad.fr": extractRandstadVacancyId,
   "jobsearch.daimlertruck.com": extractDaimlerTruck,
+  "burkert.com": extractBurkert,
 };
 
 export class ConservativeProviderVacancyIdExtractor
@@ -43,6 +44,10 @@ function extractDaimlerTruck(url: URL): string | undefined {
   if (action !== null && action !== "jobad") return undefined;
   const id = nonEmptyParameter(url, "id");
   return id === undefined || !/^\d+$/u.test(id) ? undefined : id;
+}
+
+function extractBurkert(url: URL): string | undefined {
+  return /^\/en\/company-career\/career\/job-openings\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/iu.exec(url.pathname)?.[1];
 }
 
 function extractHellowork(url: URL): string | undefined {

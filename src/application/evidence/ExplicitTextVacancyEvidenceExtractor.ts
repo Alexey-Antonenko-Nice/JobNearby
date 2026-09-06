@@ -14,6 +14,7 @@ import {
   textualEvidenceContent,
   type VacancyEvidenceExtractionInput,
 } from "../../domain/evidence/VacancyEvidenceInput.js";
+import { isIndeedSelectedVacancyInput } from "./IndeedSelectedVacancyEvidenceExtractor.js";
 
 const EXPLICIT_TEXT_CONFIDENCE = 0.98;
 
@@ -33,23 +34,25 @@ export class ExplicitTextVacancyEvidenceExtractor
     };
 
     const organizations: OrganizationEvidence[] = [];
-    for (const value of extractExplicitClientNames(vacancyText)) {
-      organizations.push({ value, role: "CLIENT", provenance });
-    }
-    for (const value of extractDirectEmployerNames(vacancyText)) {
-      organizations.push({ value, role: "EMPLOYER", provenance });
-    }
+    if (!isIndeedSelectedVacancyInput(input)) {
+      for (const value of extractExplicitClientNames(vacancyText)) {
+        organizations.push({ value, role: "CLIENT", provenance });
+      }
+      for (const value of extractDirectEmployerNames(vacancyText)) {
+        organizations.push({ value, role: "EMPLOYER", provenance });
+      }
 
-    organizations.push(
-      ...extractBoundedOrganizationRoles(vacancyText).map(
-        ({ value, role }) => ({
-          value,
-          normalizedName: normalizeOrganizationEvidenceName(value),
-          role,
-          provenance,
-        }),
-      ),
-    );
+      organizations.push(
+        ...extractBoundedOrganizationRoles(vacancyText).map(
+          ({ value, role }) => ({
+            value,
+            normalizedName: normalizeOrganizationEvidenceName(value),
+            role,
+            provenance,
+          }),
+        ),
+      );
+    }
 
     const intermediaryRole = classifyDisplayedIntermediary(
       vacancyText,

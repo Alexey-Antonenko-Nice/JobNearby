@@ -8,6 +8,7 @@ import type { BrowserCapturePayload } from "./BrowserCapturePayload.js";
 import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
 import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js";
+import { extractBurkertApplyId } from "./BurkertVacancyIdentity.js";
 import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
 import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProviderRecognizer.js";
 import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
@@ -45,7 +46,10 @@ export class BrowserCaptureAcquisitionAdapter {
       : validateContent(payload.html, "Page HTML", MAX_BROWSER_HTML_BYTES);
     const acquiredAt = parseCapturedAt(payload.capturedAt);
     const sourceName = sourceNameFromUrl(pageUrl);
-    const externalId = this.providerVacancyIdExtractor.extract({ sourceName, sourceUrl: pageUrl });
+    const providerExternalId = this.providerVacancyIdExtractor.extract({ sourceName, sourceUrl: pageUrl });
+    const externalId = sourceName === "burkert.com" && html !== undefined
+      ? extractBurkertApplyId(html) ?? providerExternalId
+      : providerExternalId;
     const providerKey = this.providerRecognizer.recognize({ sourceName, sourceUrl: pageUrl });
     const selectedContext = html === undefined || providerKey === undefined
       ? undefined
@@ -55,9 +59,12 @@ export class BrowserCaptureAcquisitionAdapter {
           ...(externalId !== undefined ? { externalId } : {}),
           html,
         });
-    const jobPostings = html === undefined
+    const jsonLdJobPostings = html === undefined
       ? []
       : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(html));
+    const jobPostings = jsonLdJobPostings.length > 0
+      ? jsonLdJobPostings
+      : html === undefined ? [] : this.jobPostingExtractor.extractHtml(html);
     const structuredFields = jobPostings.length === 1
       ? this.jobPostingProjector.project(jobPostings[0]!)
       : undefined;
