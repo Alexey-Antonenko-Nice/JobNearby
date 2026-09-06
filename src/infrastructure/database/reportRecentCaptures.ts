@@ -1,11 +1,7 @@
 import Database from "better-sqlite3";
 
-import { CompositeVacancyEvidenceExtractor } from "../../application/evidence/CompositeVacancyEvidenceExtractor.js";
-import { DirectFieldVacancyEvidenceExtractor } from "../../application/evidence/DirectFieldVacancyEvidenceExtractor.js";
-import { ExplicitEmployerCharacteristicExtractor } from "../../application/evidence/ExplicitEmployerCharacteristicExtractor.js";
-import { ExplicitTextVacancyEvidenceExtractor } from "../../application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
-import { CoreVacancyHeaderFactsExtractor } from "../../application/evidence/CoreVacancyHeaderFactsExtractor.js";
-import { ExplicitCandidateRequirementsExtractor } from "../../application/evidence/ExplicitCandidateRequirementsExtractor.js";
+import { createVacancyEvidenceExtractor } from "../../application/evidence/createVacancyEvidenceExtractor.js";
+import type { CompositeVacancyEvidenceExtractor } from "../../application/evidence/CompositeVacancyEvidenceExtractor.js";
 import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
@@ -156,13 +152,7 @@ async function main(): Promise<void> {
       LIMIT ?
     `).all(...sqlFilter.parameters, query.limit) as ObservationRow[];
     const sourceObservations = new SqliteSourceObservationRepository(db);
-    const evidenceExtractor = new CompositeVacancyEvidenceExtractor([
-      new DirectFieldVacancyEvidenceExtractor(),
-      new ExplicitTextVacancyEvidenceExtractor(),
-      new ExplicitEmployerCharacteristicExtractor(),
-      new CoreVacancyHeaderFactsExtractor(),
-      new ExplicitCandidateRequirementsExtractor(),
-    ]);
+    const evidenceExtractor = createVacancyEvidenceExtractor();
     const canonicalIds = [...new Set(rows.flatMap((row) =>
       row.canonical_vacancy_id === null ? [] : [row.canonical_vacancy_id],
     ))];
