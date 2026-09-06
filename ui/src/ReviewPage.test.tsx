@@ -142,6 +142,21 @@ describe("ReviewPage", () => {
     expect(await screen.findByText("Employer unresolved / not linked")).toBeInTheDocument();
   });
 
+  it("keeps ACTUA recruiter and HEUFT client visible without offering employer confirmation", async () => {
+    respond({ review: review({
+      title: "Mécanicien Monteur d’Équipements Industriels H/F", employerClusterId: null, status: "UNRESOLVED", confirmationCandidate: null,
+      organizations: { employerRelationships: [], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "ACTUA SAVERNE" }], recruiters: [{ role: "RECRUITER", rawName: "ACTUA Saverne" }], clients: [{ role: "CLIENT", rawName: "HEUFT France" }], consultancies: [] },
+    }) });
+    render(<ReviewPage />);
+    expect(await screen.findByText("ACTUA SAVERNE")).toBeInTheDocument();
+    expect(screen.getByText("ACTUA Saverne")).toBeInTheDocument();
+    expect(screen.getByText("HEUFT France")).toBeInTheDocument();
+    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm employer" })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("offers and submits a clean employer confirmation candidate", async () => {
     respond({ review: review({ confirmationCandidate: "Air Products S.A.S (FR)" }) });
     respond({ review: review({ confirmationCandidate: null, status: "PROBABLY_RESOLVED" }) });
