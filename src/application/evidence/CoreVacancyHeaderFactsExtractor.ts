@@ -63,11 +63,16 @@ export function isConservativeVacancyTitle(line: string): boolean {
 }
 
 function extractLocation(line: string): string | null {
+  if (isCompensationLike(line)) return null;
   const department = /^(?:\d{2,3}|2[AB])\s*-\s*(.{2,100})$/iu.exec(line);
   if (department !== null) return normalizeLine(department[1] ?? "") || null;
   const frenchLocation = /^([\p{L}][\p{L}\s'’.-]{2,80},\s*France)(?=\s*(?:·|$))/u.exec(line);
   if (frenchLocation !== null) return normalizeLine(frenchLocation[1] ?? "") || null;
   return null;
+}
+
+function isCompensationLike(value: string): boolean {
+  return /(?:€|\$|£|\b(?:EUR|USD|GBP)\b)|\/\s*(?:heure|hour|an|year|mois|month)\b|\b\d+(?:[.,]\d+)?\s*[kK]?\s*[–-]\s*\d+(?:[.,]\d+)?\b/iu.test(value);
 }
 
 function extractEngagement(line: string): Omit<VacancyEngagementEvidence, "provenance"> | null {
@@ -98,15 +103,23 @@ type ExtractedCompensation = Pick<
 
 function extractCompensation(text: string): ExtractedCompensation | null {
   const annual = /\bSalaire\s+brut\s*:\s*Annuel\s+de\s+([\d ]+(?:[.,]\d+)?)\s+Euros?\s+[àa]\s+([\d ]+(?:[.,]\d+)?)\s+Euros?\b/iu.exec(text);
-  const compactRange = /\b(\d+(?:[.,]\d+)?)k\s*[–-]\s*(\d+(?:[.,]\d+)?)k\s*€\s*\/?\s*(h|heure|mois|an|ann[eé]e)\b/iu.exec(text);
-  const common = compactRange ?? /\b([\d ]+(?:[.,]\d+)?)\s*(?:k)?\s*€\s*(?:[àa\-–]\s*([\d ]+(?:[.,]\d+)?)\s*(k)?\s*€)?\s*\/?\s*(h|heure|mois|an|ann[eé]e)\b/iu.exec(text);
+  const compactRange = /(?<!\d)(?<![.,])(?<!\d[ \u00a0\u202f])(\d+(?:[.,]\d+)?)k\s*[–-]\s*(\d+(?:[.,]\d+)?)k\s*€\s*\/\s*(h|heure|mois|an|ann[eé]e)\b/iu.exec(text);
+  const groupedNumber = "\\d+(?:[ \\u00a0\\u202f]\\d{3})*(?:[.,]\\d+)?";
+  const range = new RegExp(`(?<!\\d)(?<![.,])(?<!\\d[ \\u00a0\\u202f])(${groupedNumber})\\s*[àa\\-–]\\s*(${groupedNumber})\\s*(?:€|EUR|USD|GBP)\\s*\\/?\\s*(h|heure|mois|an|ann[eé]e|year)\\b`, "iu").exec(text);
+  const common = compactRange ?? range ?? new RegExp(`(?<!\\d)(?<![.,])(?<!\\d[ \\u00a0\\u202f])(${groupedNumber})\\s*(?:k)?\\s*(?:€|EUR|USD|GBP)\\s*(?:[àa\\-–]\\s*(${groupedNumber})\\s*(k)?\\s*(?:€|EUR|USD|GBP))?\\s*\\/?\\s*(h|heure|mois|an|ann[eé]e|year)\\b`, "iu").exec(text);
   const match = annual ?? common;
   if (match === null) return null;
   const annualMatch = annual !== null;
   const factor = !annualMatch && /k/iu.test(match[0]) ? 1000 : 1;
-  const minimum = Number(match[1]!.replace(/\s/gu, "").replace(",", ".")) * factor;
-  const maximum = match[2] === undefined ? undefined : Number(match[2].replace(/\s/gu, "").replace(",", ".")) * factor;
-  const unit = annualMatch ? "YEAR" : match[compactRange === null ? 4 : 3]?.toLocaleLowerCase();
+  const minimum = parseCompensationNumber(match[1]!) * factor;
+  const maximum = match[2] === undefined ? undefined : parseCompensationNumber(match[2]) * (range !== null || compactRange !== null ? factor : match[3] === undefined ? factor : 1000);
+  function parseCompensationNumber(value: string): number {
+    const compact = value.replace(/[ \u00a0\u202f]/gu, "");
+    const grouping = /[.,]\d{3}$/u.test(compact) && !/[.,]\d{1,2}$/u.test(compact);
+    if (grouping) return Number(compact.replace(/[.,]/gu, ""));
+    return Number(compact.replace(",", "."));
+  }
+  const unit = annualMatch ? "YEAR" : match[range !== null || compactRange !== null ? 3 : 4]?.toLocaleLowerCase();
   return {
     rawText: normalizeLine(match[0]),
     currency: "EUR",

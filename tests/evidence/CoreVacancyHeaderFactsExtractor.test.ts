@@ -87,6 +87,23 @@ describe("CoreVacancyHeaderFactsExtractor", () => {
   });
 
   it.each([
+    ["23 678 - 30 600 € / an", 23678, 30600],
+    ["23\u00a0678 - 30\u00a0600 € / an", 23678, 30600],
+    ["23\u202f678 - 30\u202f600 € / an", 23678, 30600],
+    ["17,50 € / heure", 17.5, undefined],
+    ["42 000 € / an", 42000, undefined],
+    ["42,000 EUR/year", 42000, undefined],
+  ] as const)("parses grouped French compensation atomically: %s", async (text, minimum, maximum) => {
+    const result = await extractor.extract(selected(`Technicien H/F\n${text}`));
+    expect(result.compensations).toHaveLength(1);
+    expect(result.compensations[0]).toMatchObject({ minimum, ...(maximum === undefined ? {} : { maximum }) });
+  });
+
+    it("parses the HelloWork estimation label before a narrow-spaced range", async () => {
+      const result = await extractor.extract(selected("Technicien H/F\nEstimation Hellowork → 23\u202f678 - 30\u202f600 € / an"));
+      expect(result.compensations[0]).toMatchObject({ minimum: 23678, maximum: 30600, period: "YEAR" });
+    });
+  it.each([
     ["CDI", ["INDEFINITE"]], ["CDD", ["FIXED_TERM"]], ["intérim", ["INTERIM"]],
     ["interim", ["INTERIM"]], ["mission d'intérim", ["INTERIM"]],
     ["temps plein", ["FULL_TIME"]], ["temps partiel", ["PART_TIME"]],

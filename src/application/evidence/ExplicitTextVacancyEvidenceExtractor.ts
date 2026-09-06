@@ -211,6 +211,20 @@ function classifyDisplayedIntermediary(
 
   const escapedDisplayedName = escapeRegExp(displayedCompanyName.trim());
   if (
+    /\b(?:notre|son)\s+client\b|\bpour\s+(?:le\s+compte\s+de\s+)?notre\s+client\b/iu.test(text) &&
+    /(?:hellowork|meteojob)\.com/iu.test(sourceName)
+  ) {
+    return "STAFFING_AGENCY";
+  }
+
+  if (
+    /\b(?:acquisition|recrutement)\s+et\s+[ée]valuation\s+de\s+talents\b|\bsp[eé]cialiste\s+europ[eé]en\b[^.]{0,80}\btalents?\b/iu.test(text) &&
+    normalizeForComparison(sourceName).includes("meteojob")
+  ) {
+    return "STAFFING_AGENCY";
+  }
+
+  if (
     new RegExp(
       `${escapedDisplayedName}\\s+is\\s+an?\\s+employment\\s+agency\\b`,
       "iu",

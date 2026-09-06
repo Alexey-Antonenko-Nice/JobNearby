@@ -274,6 +274,14 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
     expect(vacancy.compensation).toMatchObject({ status: "RESOLVED", value: { minimum: 12.4, currency: "EUR", period: "HOUR" } });
   });
 
+  it("treats a contained point salary as compatible with an explicit range", () => {
+    const provenance = { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION" as const, confidence: 0.98 };
+    const range = createExtractedVacancyEvidence({ sourceObservationId: "one", compensations: [{ rawText: "14 - 17.5 EUR / HOUR", currency: "EUR", minimum: 14, maximum: 17.5, period: "HOUR", provenance }] });
+    const point = createExtractedVacancyEvidence({ sourceObservationId: "two", compensations: [{ rawText: "17.5 EUR / HOUR", currency: "EUR", minimum: 17.5, period: "HOUR", provenance: { ...provenance, sourceObservationId: "two" } }] });
+    const vacancy = canonicalize([observation("one"), observation("two")], [range, point]);
+    expect(vacancy.compensation).toMatchObject({ status: "RESOLVED", value: { minimum: 14, maximum: 17.5, currency: "EUR", period: "HOUR" } });
+  });
+
   it("combines orthogonal working-time and contract evidence without a conflict", () => {
     const cdi = createExtractedVacancyEvidence({ sourceObservationId: "one", engagements: [{ rawTerms: ["CDI"], normalizedTerms: ["INDEFINITE"], provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 0.98 } }] });
     const fullTime = canonicalize([observation("one", { contractText: "FULL_TIME" })], [cdi]);
