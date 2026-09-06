@@ -117,6 +117,25 @@ describe("getVacancyReviewView", () => {
     expect(view.recognition.unresolvedEmployer).toBe(false);
   });
 
+  it("reports the effective probable cluster while preserving a named employer relationship", async () => {
+    const clusterId = "db8ccdfa-8694-42bb-adda-57567fbcbc81";
+    const view = await query(
+      canonical("c4374b18-a208-4273-9649-d726b578f709", ["source-1"], [
+        relationship("EMPLOYER", "Mercedes-Benz Trucks Molsheim SASU"),
+        employer(clusterId),
+        relationship("DISPLAYED_COMPANY", "Mercedes-Benz Trucks Molsheim SASU"),
+      ]), [], [memory("c4374b18-a208-4273-9649-d726b578f709")], {
+        id: clusterId, status: "PROBABLY_RESOLVED",
+        createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+      }, undefined,
+    );
+    expect(view.employer).toMatchObject({ employerClusterId: clusterId, status: "PROBABLY_RESOLVED" });
+    expect(view.organizations.employerRelationships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rawName: "Mercedes-Benz Trucks Molsheim SASU" }),
+      expect.objectContaining({ employerClusterId: clusterId }),
+    ]));
+  });
+
   it("returns only resolved canonical facts and deterministically groups organization roles", async () => {
     const vacancy = canonical("current", ["source-1"], [
       relationship("RECRUITER", "Zulu"), relationship("RECRUITER", "Alpha"),

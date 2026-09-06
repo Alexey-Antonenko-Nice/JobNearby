@@ -72,6 +72,7 @@ export function createCaptureProcessingRuntime(
       clusterRepository: employerClusterRepository,
       assignmentRepository,
       matcher,
+      evidenceExtractor,
       policy: DEFAULT_EMPLOYER_CLUSTER_ASSIGNMENT_POLICY,
       algorithm: "evidence-based-employer-cluster-matcher",
       algorithmVersion: "0.1.0",

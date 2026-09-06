@@ -7,6 +7,7 @@ import type { CanonicalVacancyId, VacancyOrganizationRelationship } from "../../
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 import type { EmployerMemoryPublicDataSource } from "./EmployerMemoryPublicDataSource.js";
 import { collectVacancySourceLinks } from "./collectVacancySourceLinks.js";
+import { effectiveEmployerClusterId } from "./effectiveEmployerClusterId.js";
 import { getEmployerMemoryView } from "./getEmployerMemoryView.js";
 import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
 
@@ -32,7 +33,7 @@ export async function getVacancyReviewView(
   }));
   const history = await getUserVacancyHistory(canonicalVacancyId, dependencies.interactionRepository);
   const eventTypes = new Set(history.events.map(({ type }) => type));
-  const employerClusterId = explicitEmployerClusterId(vacancy.organizationRelationships);
+  const employerClusterId = effectiveEmployerClusterId(vacancy.organizationRelationships);
   const employerMemory = employerClusterId === null ? null : await getEmployerMemoryView(
     employerClusterId,
     {
@@ -104,17 +105,6 @@ export async function getVacancyReviewView(
 
 function resolvedValue<T>(field: { readonly status: string; readonly value?: T }): T | null {
   return field.status === "RESOLVED" && field.value !== undefined ? field.value : null;
-}
-
-function explicitEmployerClusterId(
-  relationships: readonly VacancyOrganizationRelationship[],
-): string | null {
-  const ids = [...new Set(relationships.flatMap(({ role, employerClusterId }) =>
-    role === "EMPLOYER" && employerClusterId !== undefined ? [employerClusterId] : []))];
-  if (ids.length > 1) {
-    throw new Error("Canonical vacancy has multiple explicit employer-cluster relationships.");
-  }
-  return ids[0] ?? null;
 }
 
 function groupOrganizations(

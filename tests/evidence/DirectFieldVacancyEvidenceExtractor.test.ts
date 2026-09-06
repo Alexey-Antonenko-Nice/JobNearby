@@ -77,6 +77,39 @@ describe("DirectFieldVacancyEvidenceExtractor", () => {
     expect(result.externalIdentifiers).toHaveLength(1);
   });
 
+  it("emits employer evidence while retaining the displayed company for a trusted Daimler Truck source", async () => {
+    const result = await extractor.extract(makeObservation({
+      source: { sourceType: "EMPLOYER_WEBSITE", sourceName: "jobsearch.daimlertruck.com", sourceUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425092" },
+      displayedCompanyName: "Mercedes-Benz Trucks Molsheim SASU",
+    }));
+    expect(result.organizations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "UNKNOWN" }),
+      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "EMPLOYER" }),
+    ]));
+  });
+
+  it("emits trusted structured hiring organizations and preserves disagreement with the displayed company", async () => {
+    const result = await extractor.extract(makeObservation({
+      source: { sourceType: "EMPLOYER_WEBSITE", sourceName: "jobsearch.daimlertruck.com", sourceUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425092" },
+      displayedCompanyName: "Mercedes-Benz Trucks Molsheim SASU",
+      metadata: { acquisition: { structuredPayload: { jobPostings: [{ hiringOrganization: { name: "Daimler Truck AG" } }] } } },
+    }));
+    expect(result.organizations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "UNKNOWN" }),
+      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "EMPLOYER" }),
+      expect.objectContaining({ value: "Daimler Truck AG", role: "EMPLOYER" }),
+    ]));
+  });
+
+  it("does not promote a displayed company from an untrusted source", async () => {
+    const result = await extractor.extract(makeObservation({
+      source: { sourceType: "JOB_BOARD", sourceName: "example.com", sourceUrl: "https://example.com/jobs/425092" },
+      displayedCompanyName: "Mercedes-Benz Trucks Molsheim SASU",
+    }));
+    expect(result.organizations).toEqual([expect.objectContaining({ role: "UNKNOWN" })]);
+    expect(result.organizations).not.toContainEqual(expect.objectContaining({ role: "EMPLOYER" }));
+  });
+
   it("omits location evidence when locationText is absent", async () => {
     const observation = makeObservation();
     const { locationText: _omitted, ...withoutLocation } = observation;

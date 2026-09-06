@@ -1,5 +1,7 @@
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
+import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
+import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import type { EmployerCluster } from "../../domain/recognition/EmployerCluster.js";
 import type { ObservationClusterAssignment } from "../../domain/recognition/ObservationClusterAssignment.js";
 import type { EmployerRecognitionPersistence } from "../../domain/recognition/EmployerRecognitionPersistence.js";
@@ -39,6 +41,7 @@ export type ProcessObservationResult =
 export interface ProcessObservationDependencies
   extends EvaluateObservationEmployerClusterDependencies {
   readonly recognitionPersistence: EmployerRecognitionPersistence;
+  readonly evidenceExtractor?: VacancyEvidenceExtractor;
   readonly generateClusterId?: () => string;
 }
 
@@ -83,15 +86,16 @@ export async function processObservation(
     };
   }
 
+  const explicitEmployerName = dependencies.evidenceExtractor === undefined
+    ? undefined
+    : await reliableExplicitEmployerName(observation, dependencies.evidenceExtractor);
   const location = observation.locationText?.trim();
   const hasLocation = location !== undefined && location.length > 0;
   const employerCluster = createEmployerCluster(
     {
-      status: "UNRESOLVED",
-      displayLabel: hasLocation
-        ? `Unknown employer — ${location}`
-        : "Unknown employer",
-      ...(hasLocation ? { primaryLocationHint: location } : {}),
+      status: explicitEmployerName === undefined ? "UNRESOLVED" : "PROBABLY_RESOLVED",
+      displayLabel: explicitEmployerName ?? (hasLocation ? `Unknown employer — ${location}` : "Unknown employer"),
+      ...(explicitEmployerName === undefined && hasLocation ? { primaryLocationHint: location } : {}),
     },
     {
       ...(dependencies.now !== undefined ? { now: dependencies.now } : {}),
@@ -109,8 +113,9 @@ export async function processObservation(
       confidence: 1,
       algorithm: "new-employer-cluster",
       algorithmVersion: "0.1.0",
-      explanation:
-        "New unresolved employer cluster created for this observation.",
+      explanation: explicitEmployerName === undefined
+        ? "New unresolved employer cluster created for this observation."
+        : "New employer cluster created from explicit employer evidence.",
     },
     {
       ...(dependencies.now !== undefined ? { now: dependencies.now } : {}),
@@ -144,4 +149,17 @@ export async function processObservation(
     employerCluster,
     assignment,
   };
+}
+
+async function reliableExplicitEmployerName(
+  observation: VacancyEvidenceExtractionInput,
+  evidenceExtractor: VacancyEvidenceExtractor,
+): Promise<string | undefined> {
+  const names = new Map<string, string>();
+  for (const evidence of (await evidenceExtractor.extract(observation)).organizations) {
+    if (evidence.role !== "EMPLOYER" || evidence.provenance.confidence !== 1) continue;
+    const value = evidence.value.trim();
+    if (value.length > 0) names.set(normalizeOrganizationEvidenceName(value), value);
+  }
+  return names.size === 1 ? [...names.values()][0] : undefined;
 }
