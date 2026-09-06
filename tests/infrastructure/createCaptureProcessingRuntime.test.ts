@@ -4,6 +4,48 @@ import { createDatabase } from "../../src/infrastructure/database/createDatabase
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 
 describe("createCaptureProcessingRuntime", () => {
+  it("canonicalizes the selected Indeed vacancy facts without UI headings", async () => {
+    const database = createDatabase(":memory:");
+    try {
+      const runtime = createCaptureProcessingRuntime(database);
+      const id = "cdbdba0dee4cec36";
+      const result = await runtime.captureAndProcessBrowserVacancy({
+        pageUrl: `https://fr.indeed.com/?vjk=${id}`,
+        pageTitle: "Indeed",
+        visibleText: "Full Indeed page",
+        capturedAt: "2026-09-06T11:00:00Z",
+        html: `<main>
+          <div class="cardOutline result job_${id} vjs-highlight"><a data-jk="${id}">Selected result</a></div>
+          <section id="job-full-details" class="jobsearch-ViewJobContainerWrapper">
+            <h2 data-testid="jobTitle">Technicien de maintenance H/F - job post</h2>
+            <div data-testid="inlineHeader-companyName"><a href="/cmp/eurobrillance?fromjk=${id}">EUROBRILLANCE</a></div>
+            <div data-testid="inlineHeader-companyLocation">67120 Altorf</div>
+            <p>CDI, Temps plein</p>
+          </section>
+        </main>`,
+      });
+      expect(result.processing.status).toBe("PROCESSED");
+      if (result.processing.status !== "PROCESSED") throw new Error("Expected processing to succeed.");
+      const fields = database.prepare(`
+        SELECT field_name, status, value_json
+        FROM canonical_vacancy_fields
+        WHERE canonical_vacancy_id = ?
+      `).all(result.processing.canonicalVacancyId) as Array<{ field_name: string; status: string; value_json: string | null }>;
+      const field = (name: string) => fields.find(({ field_name }) => field_name === name);
+      expect(field("role")).toMatchObject({ status: "RESOLVED", value_json: JSON.stringify({ title: "Technicien de maintenance H/F" }) });
+      expect(field("location")).toMatchObject({ status: "RESOLVED", value_json: JSON.stringify({ rawText: "67120 Altorf" }) });
+      const relationships = database.prepare(`
+        SELECT raw_name, role
+        FROM canonical_vacancy_organization_relationships
+        WHERE canonical_vacancy_id = ?
+      `).all(result.processing.canonicalVacancyId);
+      expect(relationships).toContainEqual({ raw_name: "EUROBRILLANCE", role: "DISPLAYED_COMPANY" });
+      expect(relationships).not.toContainEqual({ raw_name: "Job Post Details", role: "DISPLAYED_COMPANY" });
+    } finally {
+      database.close();
+    }
+  });
+
   it("canonicalizes Daimler Truck's single structured job location", async () => {
     const database = createDatabase(":memory:");
     try {

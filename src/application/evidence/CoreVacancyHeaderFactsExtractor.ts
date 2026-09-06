@@ -11,6 +11,10 @@ import {
 import type { VacancyCompensationEvidence } from "../../domain/evidence/VacancyCompensationEvidence.js";
 import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
 import type { VacancyWorkModeEvidence } from "../../domain/evidence/VacancyWorkModeEvidence.js";
+import {
+  extractIndeedSelectedVacancyFacts,
+  isIndeedSelectedVacancyInput,
+} from "./IndeedSelectedVacancyEvidenceExtractor.js";
 
 const CONFIDENCE = 0.98;
 const SECTION_HEADING = /^(?:description|profil|missions?|responsabilit[eé]s|comp[eé]tences|[àa]\s+propos\s+de\s+l['’]offre\s+d['’]emploi)$/iu;
@@ -28,8 +32,13 @@ export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor
       ...(contentOrigin === undefined ? {} : { contentOrigin }),
     };
 
-    const title = lines.slice(0, 12).find(isConservativeVacancyTitle);
-    const location = lines.slice(0, 16).map(extractLocation).find((value) => value !== null);
+    const indeedFacts = extractIndeedSelectedVacancyFacts(input);
+    const title = indeedFacts?.title ?? (isIndeedSelectedVacancyInput(input)
+      ? undefined
+      : lines.slice(0, 12).find(isConservativeVacancyTitle));
+    const location = indeedFacts?.location ?? (isIndeedSelectedVacancyInput(input)
+      ? undefined
+      : lines.slice(0, 16).map(extractLocation).find((value) => value !== null));
     const engagement = lines.map(extractEngagement).find((value) => value !== null);
     const workMode = lines.map(extractWorkMode).find((value) => value !== null);
     const compensation = extractCompensation(vacancyText);

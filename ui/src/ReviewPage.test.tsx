@@ -86,6 +86,31 @@ describe("ReviewPage", () => {
     expect(screen.queryByText(/"normalizedTerms"/u)).not.toBeInTheDocument();
   });
 
+  it("displays selected Indeed company and location facts", async () => {
+    respond({ review: review({
+      title: "Technicien de maintenance H/F",
+      location: { rawText: "67120 Altorf" },
+      organizations: { employerRelationships: [], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "EUROBRILLANCE" }], recruiters: [], consultancies: [], staffingAgencies: [], clients: [], otherRelationships: [] },
+    }) });
+    render(<ReviewPage />);
+    expect(await screen.findByText("Technicien de maintenance H/F")).toBeInTheDocument();
+    expect(screen.getByText("67120 Altorf")).toBeInTheDocument();
+    expect(screen.getByText("EUROBRILLANCE")).toBeInTheDocument();
+    expect(screen.queryByText("Job Post Details")).not.toBeInTheDocument();
+  });
+
+  it("displays Bürkert title, company, and location", async () => {
+    respond({ review: review({
+      title: "Teamleiter Kunststofftechnik (m/w/d)",
+      location: { rawText: "Ingelfingen-Criesbach" },
+      organizations: { employerRelationships: [{ role: "EMPLOYER", rawName: "Bürkert Fluid Control Systems" }], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "Bürkert Fluid Control Systems" }], recruiters: [], consultancies: [], staffingAgencies: [], clients: [], otherRelationships: [] },
+    }) });
+    render(<ReviewPage />);
+    expect(await screen.findByText("Teamleiter Kunststofftechnik (m/w/d)")).toBeInTheDocument();
+    expect(screen.getByText("Ingelfingen-Criesbach")).toBeInTheDocument();
+    expect(screen.getAllByText("Bürkert Fluid Control Systems").length).toBeGreaterThan(0);
+  });
+
   it("displays the canonical Daimler location", async () => {
     respond({ review: review({ location: { rawText: "MOLSHEIM, Daimler Truck - FR, FR" } }) });
     render(<ReviewPage />);
@@ -130,6 +155,7 @@ function review(overrides: Record<string, unknown> = {}) {
     if (key in vacancy) Object.assign(vacancy, { [key]: value });
     else if (key in user) Object.assign(user, { [key]: value });
     else if (key in employer) Object.assign(employer, { [key]: value });
+    else if (key === "organizations") Object.assign(organizations, value);
     else if (key in recognition) Object.assign(recognition, { [key]: value });
     else Object.assign(reviewSignals, { [key]: value });
   }

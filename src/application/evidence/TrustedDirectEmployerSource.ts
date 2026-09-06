@@ -1,6 +1,6 @@
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 
-const TRUSTED_DIRECT_EMPLOYER_HOSTS = new Set(["jobsearch.daimlertruck.com"]);
+const TRUSTED_DIRECT_EMPLOYER_HOSTS = new Set(["jobsearch.daimlertruck.com", "burkert.com"]);
 
 export function directEmployerOrganizationNames(
   observation: SourceObservation,
@@ -16,7 +16,8 @@ function isTrustedDirectEmployerSource(observation: SourceObservation): boolean 
   if (!TRUSTED_DIRECT_EMPLOYER_HOSTS.has(observation.source.sourceName)) return false;
   if (observation.source.sourceUrl === undefined) return false;
   try {
-    return new URL(observation.source.sourceUrl).hostname.toLocaleLowerCase() === observation.source.sourceName;
+    const hostname = new URL(observation.source.sourceUrl).hostname.toLocaleLowerCase();
+    return (hostname.startsWith("www.") ? hostname.slice(4) : hostname) === observation.source.sourceName;
   } catch {
     return false;
   }
