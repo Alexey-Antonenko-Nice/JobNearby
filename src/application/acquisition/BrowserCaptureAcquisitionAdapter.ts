@@ -15,6 +15,9 @@ import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelec
 import { IndeedSelectedVacancyContextLocator } from "./IndeedSelectedVacancyContextLocator.js";
 import { LinkedInSelectedVacancyContextLocator } from "./LinkedInSelectedVacancyContextLocator.js";
 import { extractWorkdayStructuredFields, isWorkdaySource } from "./WorkdayVacancy.js";
+import { JoobleSelectedVacancyContextLocator } from "./JoobleSelectedVacancyContextLocator.js";
+import { CadremploiSelectedVacancyContextLocator } from "./CadremploiSelectedVacancyContextLocator.js";
+import { LhhSelectedVacancyContextLocator } from "./LhhSelectedVacancyContextLocator.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
@@ -30,6 +33,9 @@ export class BrowserCaptureAcquisitionAdapter {
     FRANCE_TRAVAIL: new FranceTravailSelectedVacancyContextLocator(),
     INDEED: new IndeedSelectedVacancyContextLocator(),
     LINKEDIN: new LinkedInSelectedVacancyContextLocator(),
+    JOOBLE: new JoobleSelectedVacancyContextLocator(),
+    CADREMPLOI: new CadremploiSelectedVacancyContextLocator(),
+    LHH: new LhhSelectedVacancyContextLocator(),
   };
 
   toAcquisitionPackage(

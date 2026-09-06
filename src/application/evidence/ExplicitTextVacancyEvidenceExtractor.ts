@@ -97,6 +97,12 @@ function franceTravailAgencyContext(sourceName: string, text: string): boolean {
     /\b(?:recrute|contrats?\s+de\s+l['’]int[eé]rim\s+au\s+CDI|agences?\s+de\s+travail\s+temporaire|missions?\s+adapt[ée]es)\b/iu.test(text);
 }
 
+function isLinkedInSelectedVacancyInput(input: VacancyEvidenceExtractionInput): boolean {
+  const evidence = "evidenceContent" in input ? input.evidenceContent : undefined;
+  return evidence?.kind === "SELECTED_VACANCY_CONTEXT" && evidence.context.providerKey === "LINKEDIN" &&
+    /(?:data-linkedin-selected-vacancy-context|data-testid=["']job-header)/iu.test(evidence.context.html ?? "");
+}
+
 function extractExplicitClientNames(text: string): string[] {
   const pattern =
     /(?:pour\s+(?:le\s+compte\s+de\s+)?notre\s+client|pour\s+l['’]un\s+de\s+nos\s+clients?|pour\s+son\s+client)\s*,?\s+([^\n,;:!?….]{2,80})/giu;
@@ -200,6 +206,7 @@ function addOrganizationRole(
   const value = normalizeCapturedValue(rawValue);
   if (
     value.length > 0 &&
+    !/^(?:bonjour\s+|mon\s+(?:profil|compte)|d[eé]connexion\b)/iu.test(value) &&
     isUsableOrganizationName(value)
   ) {
     results.push({ value, role });
@@ -301,7 +308,7 @@ function extractNamedRecruiters(text: string): string[] {
     /(?:personne\s+en\s+charge\s+du\s+recrutement|contact\s+recrutement|votre\s+recruteur)\s*:\s*([^\n,;:!?….]{2,80})/giu;
   return [...text.matchAll(pattern)]
     .map((match) => normalizeCapturedValue(match[1] ?? ""))
-    .filter(isUsableOrganizationName);
+    .filter((value) => isUsableOrganizationName(value) && !/^(?:bonjour\b|nouvelle\b|mon\s+(?:profil|compte)|d[eé]connexion\b)/iu.test(value));
 }
 
 function extractExplicitWorkplaces(text: string): string[] {
