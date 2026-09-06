@@ -7,6 +7,7 @@ import type { CanonicalVacancy, VacancyOrganizationRelationship } from "../../do
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 import type { EmployerMemoryPublicDataSource } from "./EmployerMemoryPublicDataSource.js";
 import { collectVacancySourceLinks } from "./collectVacancySourceLinks.js";
+import { effectiveEmployerClusterId } from "./effectiveEmployerClusterId.js";
 import { getEmployerMemoryView } from "./getEmployerMemoryView.js";
 import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
 
@@ -44,8 +45,8 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
     return observation;
   }));
   const history = await getUserVacancyHistory(vacancy.id, dependencies.interactionRepository);
-  const employerRelationship = vacancy.organizationRelationships.find(({ role }) => role === "EMPLOYER");
-  const employerMemory = employerRelationship?.employerClusterId === undefined ? null : await getEmployerMemoryView(employerRelationship.employerClusterId, {
+  const employerClusterId = effectiveEmployerClusterId(vacancy.organizationRelationships);
+  const employerMemory = employerClusterId === null ? null : await getEmployerMemoryView(employerClusterId, {
     employerClusterRepository: dependencies.employerClusterRepository, publicDataSource: dependencies.employerMemoryPublicDataSource, interactionRepository: dependencies.interactionRepository,
   });
   const eventTypes = new Set(history.events.map(({ type }) => type));
@@ -57,7 +58,7 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
     title: resolved(vacancy.role)?.title ?? null, location: resolved(vacancy.location), engagement: resolved(vacancy.engagement), workMode: resolved(vacancy.workMode),
     latestObservedAt: extremeDate(dates, Math.max), firstObservedAt: extremeDate(dates, Math.min), sourceObservationCount, sourceLinks: collectVacancySourceLinks(observations),
     userState: history.currentState, lastUserInteractionAt: history.events.at(-1)?.occurredAt ?? null,
-    employer: { employerClusterId: employerRelationship?.employerClusterId ?? null, status: employerMemory?.employerCluster.status ?? null, knownBefore: previousVacancyCount > 0, unresolvedEmployer: employerRelationship?.employerClusterId === undefined || employerMemory?.employerCluster.status === "UNRESOLVED" },
+    employer: { employerClusterId, status: employerMemory?.employerCluster.status ?? null, knownBefore: previousVacancyCount > 0, unresolvedEmployer: employerClusterId === null || employerMemory?.employerCluster.status === "UNRESOLVED" },
     organizations: { employerName: organizationNames(vacancy.organizationRelationships, "EMPLOYER")[0] ?? null, displayedCompanyNames: organizationNames(vacancy.organizationRelationships, "DISPLAYED_COMPANY"), recruiterNames: organizationNames(vacancy.organizationRelationships, "RECRUITER"), consultancyNames: organizationNames(vacancy.organizationRelationships, "CONSULTANCY") },
     signals: { sameCanonicalVacancySeenBefore: sourceObservationCount > 1, hasMultipleSourceObservations: sourceObservationCount > 1, alreadyAppliedToThisVacancy: eventTypes.has("APPLIED") },
   };

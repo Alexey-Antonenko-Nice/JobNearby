@@ -25,6 +25,34 @@ describe("getVacancyInbox", () => {
     expect(inbox[0]!.organizations).toMatchObject({ employerName: null, recruiterNames: ["Recruiter"], consultancyNames: ["Consultancy"] });
   });
 
+  it("reports the effective probable employer cluster separately from its raw employer name", async () => {
+    const inbox = await query([
+      vacancy("c4374b18-a208-4273-9649-d726b578f709", ["one"], [
+        { role: "EMPLOYER", rawName: "Mercedes-Benz Trucks Molsheim SASU" },
+        { role: "EMPLOYER", employerClusterId: "db8ccdfa-8694-42bb-adda-57567fbcbc81" },
+        { role: "DISPLAYED_COMPANY", rawName: "Mercedes-Benz Trucks Molsheim SASU" },
+      ]),
+    ], undefined, undefined, {}, {
+      id: "db8ccdfa-8694-42bb-adda-57567fbcbc81", status: "PROBABLY_RESOLVED",
+      createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+    });
+    expect(inbox[0]!.employer).toMatchObject({
+      employerClusterId: "db8ccdfa-8694-42bb-adda-57567fbcbc81",
+      status: "PROBABLY_RESOLVED", unresolvedEmployer: false,
+    });
+    expect(inbox[0]!.organizations.employerName).toBe("Mercedes-Benz Trucks Molsheim SASU");
+  });
+
+  it("keeps an effective unresolved employer cluster unresolved", async () => {
+    const inbox = await query([vacancy("randstad", ["one"], [
+      { role: "EMPLOYER", rawName: "Randstad France", employerClusterId: "randstad-cluster" },
+    ])], undefined, undefined, {}, {
+      id: "randstad-cluster", status: "UNRESOLVED",
+      createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
+    });
+    expect(inbox[0]!.employer).toMatchObject({ status: "UNRESOLVED", unresolvedEmployer: true });
+  });
+
   it("returns null for unknown fields and honors a limit", async () => {
     const inbox = await query([vacancy("a", ["one"]), vacancy("b", ["two"])], undefined, 1);
     expect(inbox).toHaveLength(1);
@@ -48,13 +76,13 @@ describe("getVacancyInbox", () => {
   });
 });
 
-async function query(vacancies: any[], interactions = new InMemoryUserVacancyInteractionRepository(), limit?: number, observations: Record<string, any> = {}) {
+async function query(vacancies: any[], interactions = new InMemoryUserVacancyInteractionRepository(), limit?: number, observations: Record<string, any> = {}, cluster: any = null) {
   const dates: Record<string, Date> = { one: new Date("2026-09-01"), two: new Date("2026-09-01"), three: new Date("2026-09-03") };
   return getVacancyInbox(limit === undefined ? {} : { limit }, {
     canonicalVacancyRepository: { findAll: async () => vacancies },
     sourceObservationRepository: { findById: async (id: string) => observations[id] ?? ({ id, source: { sourceType: "JOB_BOARD", sourceName: "Example" }, observedAt: dates[id]!, metadata: {} }) },
     interactionRepository: interactions,
-    employerClusterRepository: { findById: async () => null },
+    employerClusterRepository: { findById: async () => cluster },
     employerMemoryPublicDataSource: { findByEmployerClusterId: async () => [] },
   });
 }

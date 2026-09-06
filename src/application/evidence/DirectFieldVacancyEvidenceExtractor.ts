@@ -7,6 +7,7 @@ import {
   createExtractedVacancyEvidence,
   type ExtractedVacancyEvidence,
 } from "../../domain/evidence/ExtractedVacancyEvidence.js";
+import { directEmployerOrganizationNames } from "./TrustedDirectEmployerSource.js";
 
 export class DirectFieldVacancyEvidenceExtractor
   implements VacancyEvidenceExtractor
@@ -23,16 +24,18 @@ export class DirectFieldVacancyEvidenceExtractor
 
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
-      organizations:
-        observation.displayedCompanyName === undefined
-          ? []
-          : [
-              {
-                value: observation.displayedCompanyName,
-                role: "UNKNOWN",
-                provenance,
-              },
-            ],
+      organizations: [
+        ...(observation.displayedCompanyName === undefined ? [] : [{
+          value: observation.displayedCompanyName,
+          role: "UNKNOWN" as const,
+          provenance,
+        }]),
+        ...directEmployerOrganizationNames(observation).map((value) => ({
+          value,
+          role: "EMPLOYER" as const,
+          provenance,
+        })),
+      ],
       locations:
         observation.locationText === undefined
           ? []

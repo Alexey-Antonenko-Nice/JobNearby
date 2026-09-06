@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
+import type { VacancyEvidenceExtractor } from "../../src/domain/evidence/VacancyEvidenceExtractor.js";
+import type { OrganizationEvidenceRole } from "../../src/domain/evidence/OrganizationEvidence.js";
 import type { EmployerCluster } from "../../src/domain/recognition/EmployerCluster.js";
 import type { EmployerClusterMatcher } from "../../src/domain/recognition/EmployerClusterMatcher.js";
 import type { EmployerClusterRepository } from "../../src/domain/recognition/EmployerClusterRepository.js";
@@ -20,7 +22,7 @@ function observation(locationText?: string): SourceObservation {
   };
 }
 
-async function setup(matchConfidence: number | null, locationText?: string) {
+async function setup(matchConfidence: number | null, locationText?: string, organizations: readonly { readonly value: string; readonly role: OrganizationEvidenceRole; readonly confidence: number }[] = []) {
   const clusterRepository = new InMemoryEmployerClusterRepository();
   const assignmentRepository =
     new InMemoryObservationClusterAssignmentRepository();
@@ -49,6 +51,15 @@ async function setup(matchConfidence: number | null, locationText?: string) {
           };
     },
   };
+  const evidenceExtractor: VacancyEvidenceExtractor = {
+    async extract(input) {
+      return {
+        sourceObservationId: input.id,
+        organizations: organizations.map(({ value, role, confidence }) => ({ value, role, provenance: { sourceObservationId: input.id, extractionMethod: "DIRECT_FIELD" as const, confidence } })),
+        locations: [], people: [], employerCharacteristics: [], externalIdentifiers: [], vacancyTitles: [], engagements: [], workModes: [], compensations: [], languageRequirements: [], experienceRequirements: [], travelRequirements: [],
+      };
+    },
+  };
 
   const result = await processObservation(observation(locationText), {
     clusterRepository,
@@ -58,6 +69,7 @@ async function setup(matchConfidence: number | null, locationText?: string) {
     policy: { automaticAssignmentThreshold: 0.9, reviewThreshold: 0.65 },
     algorithm: "controlled-matcher",
     algorithmVersion: "1",
+    evidenceExtractor,
     now: () => new Date("2026-08-21T12:00:00.000Z"),
     generateClusterId: () => "new-cluster",
     generateAssignmentId: () => "new-assignment",
@@ -67,6 +79,34 @@ async function setup(matchConfidence: number | null, locationText?: string) {
 }
 
 describe("processObservation", () => {
+  it("creates a probably resolved cluster from one high-confidence explicit employer", async () => {
+    const name = "Mercedes-Benz Trucks Molsheim SASU";
+    const { result } = await setup(null, undefined, [{ value: name, role: "EMPLOYER", confidence: 1 }]);
+    expect(result).toMatchObject({
+      outcome: "CREATED_NEW_CLUSTER",
+      employerCluster: { status: "PROBABLY_RESOLVED", displayLabel: name },
+      assignment: { status: "ACCEPTED", explanation: "New employer cluster created from explicit employer evidence." },
+    });
+    if (result.outcome !== "CREATED_NEW_CLUSTER") throw new Error("unexpected result");
+    expect(result.employerCluster).not.toHaveProperty("resolvedEmployerId");
+  });
+
+  it.each([
+    [[]],
+    [[{ value: "Client only", role: "CLIENT", confidence: 1 }]],
+    [[{ value: "Displayed company", role: "UNKNOWN", confidence: 1 }]],
+    [[{ value: "Staffing agency", role: "STAFFING_AGENCY", confidence: 1 }]],
+    [[{ value: "Low confidence employer", role: "EMPLOYER", confidence: 0.99 }]],
+  ] as const)("keeps unknown clusters unresolved without reliable explicit employer evidence", async (organizations) => {
+    const { result } = await setup(null, undefined, organizations);
+    expect(result).toMatchObject({ outcome: "CREATED_NEW_CLUSTER", employerCluster: { status: "UNRESOLVED", displayLabel: "Unknown employer" } });
+  });
+
+  it("keeps ambiguous explicit employer names unresolved", async () => {
+    const { result } = await setup(null, undefined, [{ value: "Mercedes-Benz Trucks Molsheim SASU", role: "EMPLOYER", confidence: 1 }, { value: "Daimler Truck AG", role: "EMPLOYER", confidence: 1 }]);
+    expect(result).toMatchObject({ outcome: "CREATED_NEW_CLUSTER", employerCluster: { status: "UNRESOLVED", displayLabel: "Unknown employer" } });
+  });
+
   it("creates an unresolved cluster with location hints after no match", async () => {
     const { result, clusterRepository } = await setup(null, "Molsheim");
 

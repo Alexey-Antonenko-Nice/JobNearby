@@ -4,6 +4,46 @@ import { createDatabase } from "../../src/infrastructure/database/createDatabase
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 
 describe("createCaptureProcessingRuntime", () => {
+  it("preserves Daimler Truck hiring organization as displayed company and explicit employer", async () => {
+    const database = createDatabase(":memory:");
+    try {
+      const runtime = createCaptureProcessingRuntime(database);
+      const company = "Mercedes-Benz Trucks Molsheim SASU";
+      const result = await runtime.captureAndProcessBrowserVacancy({
+        pageUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425092",
+        pageTitle: "Daimler Truck vacancy",
+        visibleText: "Technicien de maintenance",
+        capturedAt: "2026-09-05T10:00:00Z",
+        html: `<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", hiringOrganization: { "@type": "Organization", name: company } })}</script>`,
+      });
+      expect(result.processing).toMatchObject({ status: "PROCESSED", employerStatus: "UNRESOLVED_RECORD_CREATED" });
+      if (result.processing.status !== "PROCESSED") throw new Error("Expected processing to succeed.");
+      const relationships = database.prepare(`
+        SELECT raw_name, role
+        FROM canonical_vacancy_organization_relationships
+        WHERE canonical_vacancy_id = ?
+      `).all(result.processing.canonicalVacancyId);
+      expect(relationships).toEqual(expect.arrayContaining([
+        { raw_name: company, role: "DISPLAYED_COMPANY" },
+        { raw_name: company, role: "EMPLOYER" },
+      ]));
+      expect(database.prepare(`
+        SELECT status, display_label
+        FROM employer_clusters
+        WHERE id = (
+          SELECT employer_cluster_id
+          FROM observation_cluster_assignments
+          WHERE source_observation_id = ?
+        )
+      `).get(result.capture.observationId)).toEqual({
+        status: "PROBABLY_RESOLVED",
+        display_label: company,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   it("uses one migrated SQLite database to persist repeated exact-identity captures into one history", async () => {
     const database = createDatabase(":memory:");
     try {
