@@ -15,7 +15,7 @@ export class InMemoryEmployerClusterObservationProvider
   async findObservationsByClusterId(
     clusterId: EmployerClusterId,
   ): Promise<readonly SourceObservation[]> {
-    const assignments = this.assignmentRepository.findEffectiveByClusterId(clusterId);
+    const assignments = await this.assignmentRepository.findEffectiveByClusterId(clusterId);
     const observations: SourceObservation[] = [];
     for (const assignment of assignments) {
       const observation = await this.sourceObservationRepository.findById(

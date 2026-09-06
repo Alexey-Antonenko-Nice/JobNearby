@@ -61,6 +61,9 @@ export async function processObservation(
     };
   }
 
+  const propagated = await propagateConfirmedEmployerMemory(observation, dependencies);
+  if (propagated !== null) return propagated;
+
   const evaluation = await evaluateObservationEmployerCluster(
     observation,
     dependencies,
@@ -149,6 +152,52 @@ export async function processObservation(
     employerCluster,
     assignment,
   };
+}
+
+async function propagateConfirmedEmployerMemory(
+  observation: VacancyEvidenceExtractionInput,
+  dependencies: ProcessObservationDependencies,
+): Promise<ProcessObservationResult | null> {
+  if (dependencies.evidenceExtractor === undefined || dependencies.assignmentRepository.findEffectiveByClusterId === undefined) return null;
+  const evidence = await dependencies.evidenceExtractor.extract(observation);
+  const organizations = evidence.organizations;
+  const displayed = [...new Set(organizations.filter(({ role }) => role === "UNKNOWN").map(({ value }) => normalizeOrganizationEvidenceName(value)))];
+  const employer = [...new Set(organizations.filter(({ role }) => role === "EMPLOYER").map(({ value }) => normalizeOrganizationEvidenceName(value)))];
+  const candidates = [...new Set([...displayed, ...employer])];
+  if (candidates.length !== 1) return null;
+  if (organizations.some(({ role }) => role === "STAFFING_AGENCY" || role === "RECRUITER" || role === "CLIENT")) return null;
+  if (organizations.some(({ role, value }) => role === "EMPLOYER" && normalizeOrganizationEvidenceName(value) !== candidates[0])) return null;
+
+  const matchingClusters = new Map<string, EmployerCluster>();
+  for (const name of candidates) {
+    for (const cluster of await dependencies.clusterRepository.findCandidates({ displayedCompanyNameHint: name })) {
+      if (cluster.status === "CONFLICTED" || cluster.displayLabel === undefined || normalizeOrganizationEvidenceName(cluster.displayLabel) !== name) continue;
+      const assignments = await dependencies.assignmentRepository.findEffectiveByClusterId!(cluster.id);
+      if (assignments.some(({ status }) => status === "USER_CONFIRMED")) matchingClusters.set(cluster.id, cluster);
+    }
+  }
+  if (matchingClusters.size !== 1) return null;
+  const cluster = [...matchingClusters.values()][0]!;
+  const assignment = createObservationClusterAssignment({
+    sourceObservationId: observation.id,
+    employerClusterId: cluster.id,
+    status: "ACCEPTED",
+    confidence: 1,
+    algorithm: "confirmed-employer-memory",
+    algorithmVersion: "0.1.0",
+    explanation: `Reused employer cluster from prior user-confirmed employer memory for matching organization "${cluster.displayLabel}".`,
+  }, {
+    ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+    ...(dependencies.generateAssignmentId === undefined ? {} : { generateId: dependencies.generateAssignmentId }),
+  });
+  try {
+    await dependencies.assignmentRepository.save(assignment);
+  } catch (error) {
+    if (!(error instanceof EffectiveAssignmentConflictError)) throw error;
+    const winning = await loadEffectiveEmployerMembership(observation.id, dependencies);
+    return winning === null ? null : { outcome: "MATCHED_EXISTING_CLUSTER", employerCluster: winning.cluster, assignment: winning.assignment };
+  }
+  return { outcome: "MATCHED_EXISTING_CLUSTER", employerCluster: cluster, assignment };
 }
 
 async function reliableExplicitEmployerName(

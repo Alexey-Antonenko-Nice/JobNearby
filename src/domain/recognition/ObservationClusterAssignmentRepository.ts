@@ -4,6 +4,7 @@ import type {
   ObservationClusterAssignment,
   ObservationClusterAssignmentId,
 } from "./ObservationClusterAssignment.js";
+import type { EmployerClusterId } from "./EmployerCluster.js";
 
 export interface ObservationClusterAssignmentRepository {
   save(
@@ -21,6 +22,10 @@ export interface ObservationClusterAssignmentRepository {
   findEffectiveByObservationId(
     sourceObservationId: SourceObservationId,
   ): Promise<ObservationClusterAssignment | null>;
+
+  findEffectiveByClusterId?(
+    employerClusterId: EmployerClusterId,
+  ): Promise<readonly ObservationClusterAssignment[]>;
 
   findCurrentProposalByObservationId(
     sourceObservationId: SourceObservationId,
