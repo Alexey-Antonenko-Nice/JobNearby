@@ -4,6 +4,7 @@ import type {
 } from "./ProviderVacancyIdExtractor.js";
 import { extractLinkedInVacancyId } from "./LinkedInVacancyUrl.js";
 import { extractRandstadVacancyId } from "./RandstadVacancyUrl.js";
+import { extractWorkdayVacancyId } from "./WorkdayVacancy.js";
 
 type ExtractionRule = (url: URL) => string | undefined;
 
@@ -23,6 +24,15 @@ export class ConservativeProviderVacancyIdExtractor
   implements ProviderVacancyIdExtractor
 {
   extract(input: ProviderVacancyIdExtractionInput): string | undefined {
+    if (input.sourceName.endsWith(".myworkdayjobs.com")) {
+      try {
+        const url = new URL(input.sourceUrl);
+        if (normalizeHostname(url.hostname) !== input.sourceName) return undefined;
+        return extractWorkdayVacancyId(input.sourceUrl);
+      } catch {
+        return undefined;
+      }
+    }
     const rule = rules[input.sourceName];
     if (rule === undefined) return undefined;
     try {

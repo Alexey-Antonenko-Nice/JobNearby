@@ -10,6 +10,7 @@ import { collectVacancySourceLinks } from "./collectVacancySourceLinks.js";
 import { effectiveEmployerClusterId } from "./effectiveEmployerClusterId.js";
 import { getEmployerMemoryView } from "./getEmployerMemoryView.js";
 import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
+import type { ObservationClusterAssignmentRepository } from "../../domain/recognition/ObservationClusterAssignmentRepository.js";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -21,6 +22,7 @@ export async function getVacancyInbox(
     readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
     readonly interactionRepository: UserVacancyInteractionRepository;
     readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
+    readonly assignmentRepository?: ObservationClusterAssignmentRepository;
     readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
   },
 ): Promise<readonly VacancyInboxItem[]> {
@@ -45,7 +47,8 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
     return observation;
   }));
   const history = await getUserVacancyHistory(vacancy.id, dependencies.interactionRepository);
-  const employerClusterId = effectiveEmployerClusterId(vacancy.organizationRelationships);
+  const confirmedAssignment = dependencies.assignmentRepository === undefined ? null : await latestEffectiveAssignment(vacancy.sourceObservationIds, dependencies.assignmentRepository);
+  const employerClusterId = confirmedAssignment?.employerClusterId ?? effectiveEmployerClusterId(vacancy.organizationRelationships);
   const employerMemory = employerClusterId === null ? null : await getEmployerMemoryView(employerClusterId, {
     employerClusterRepository: dependencies.employerClusterRepository, publicDataSource: dependencies.employerMemoryPublicDataSource, interactionRepository: dependencies.interactionRepository,
   });
@@ -55,7 +58,7 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
   const previousVacancyCount = employerMemory?.vacancies.filter(({ canonicalVacancyId }) => canonicalVacancyId !== vacancy.id).length ?? 0;
   return {
     canonicalVacancyId: vacancy.id, canonicalizationStatus: vacancy.canonicalizationStatus,
-    title: resolved(vacancy.role)?.title ?? null, location: resolved(vacancy.location), engagement: resolved(vacancy.engagement), workMode: resolved(vacancy.workMode),
+    title: resolved(vacancy.role)?.title ?? null, location: resolved(vacancy.location), locationAlternatives: alternatives(vacancy.location), engagement: resolved(vacancy.engagement), workMode: resolved(vacancy.workMode),
     latestObservedAt: extremeDate(dates, Math.max), firstObservedAt: extremeDate(dates, Math.min), sourceObservationCount, sourceLinks: collectVacancySourceLinks(observations),
     userState: history.currentState, lastUserInteractionAt: history.events.at(-1)?.occurredAt ?? null,
     employer: { employerClusterId, status: employerMemory?.employerCluster.status ?? null, knownBefore: previousVacancyCount > 0, unresolvedEmployer: employerClusterId === null || employerMemory?.employerCluster.status === "UNRESOLVED" },
@@ -64,7 +67,16 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
   };
 }
 
+async function latestEffectiveAssignment(
+  observationIds: readonly string[],
+  repository: ObservationClusterAssignmentRepository,
+) {
+  const assignments = (await Promise.all(observationIds.map((id) => repository.findEffectiveByObservationId(id)))).filter((value) => value !== null);
+  return assignments.find(({ status }) => status === "USER_CONFIRMED") ?? assignments.at(-1) ?? null;
+}
+
 function resolved<T>(field: { readonly status: string; readonly value?: T }): T | null { return field.status === "RESOLVED" ? field.value ?? null : null; }
+function alternatives<T>(field: { readonly alternatives?: readonly { readonly value: T }[] }): readonly T[] { return field.alternatives?.map(({ value }) => value) ?? []; }
 function extremeDate(values: readonly Date[], operation: (...values: number[]) => number): Date | null { if (values.length === 0) return null; return new Date(operation(...values.map((value) => value.getTime()))); }
 function organizationNames(relationships: readonly VacancyOrganizationRelationship[], role: VacancyOrganizationRelationship["role"]): string[] { const names = new Map<string, string>(); for (const { rawName, role: relationshipRole } of relationships) if (relationshipRole === role && rawName !== undefined) { const value = rawName.trim(); if (value) { const key = normalizeOrganizationEvidenceName(value); const existing = names.get(key); if (existing === undefined || value.localeCompare(existing) < 0) names.set(key, value); } } return [...names.values()].sort((left, right) => normalizeOrganizationEvidenceName(left).localeCompare(normalizeOrganizationEvidenceName(right)) || left.localeCompare(right)); }
 function compareItems(left: VacancyInboxItem, right: VacancyInboxItem): number { return (right.latestObservedAt?.getTime() ?? Number.NEGATIVE_INFINITY) - (left.latestObservedAt?.getTime() ?? Number.NEGATIVE_INFINITY) || left.canonicalVacancyId.localeCompare(right.canonicalVacancyId); }

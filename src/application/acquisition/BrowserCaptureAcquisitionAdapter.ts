@@ -14,6 +14,7 @@ import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProv
 import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
 import { IndeedSelectedVacancyContextLocator } from "./IndeedSelectedVacancyContextLocator.js";
 import { LinkedInSelectedVacancyContextLocator } from "./LinkedInSelectedVacancyContextLocator.js";
+import { extractWorkdayStructuredFields, isWorkdaySource } from "./WorkdayVacancy.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
@@ -65,9 +66,16 @@ export class BrowserCaptureAcquisitionAdapter {
     const jobPostings = jsonLdJobPostings.length > 0
       ? jsonLdJobPostings
       : html === undefined ? [] : this.jobPostingExtractor.extractHtml(html);
-    const structuredFields = jobPostings.length === 1
+    const genericStructuredFields = jobPostings.length === 1
       ? this.jobPostingProjector.project(jobPostings[0]!)
       : undefined;
+    const workdayFields = html !== undefined && isWorkdaySource(sourceName, pageUrl)
+      ? extractWorkdayStructuredFields(html, pageUrl)
+      : undefined;
+    const structuredFields = workdayFields === undefined ? genericStructuredFields : {
+      ...genericStructuredFields,
+      ...workdayFields,
+    };
 
     return createAcquisitionPackage({
       acquisitionId,

@@ -14,6 +14,7 @@ export interface BrowserCaptureServerDependencies {
   ) => Promise<CaptureAndProcessBrowserVacancyResult>;
   readonly getVacancyReview?: VacancyReviewWorkflow["getVacancyReview"];
   readonly getVacancyInbox?: VacancyReviewWorkflow["getVacancyInbox"];
+  readonly confirmVacancyEmployer?: VacancyReviewWorkflow["confirmVacancyEmployer"];
   readonly recordVacancyReviewAction?: VacancyReviewWorkflow["recordVacancyReviewAction"];
 }
 
@@ -47,6 +48,14 @@ export function createBrowserCaptureServer(
         operation = "review";
         const review = await dependencies.getVacancyReview(decodePathId(reviewMatch[1]!));
         sendJson(response, 200, { review });
+        return;
+      }
+      const employerConfirmationMatch = /^\/vacancies\/([^/]+)\/employer-confirmation$/u.exec(path);
+      if (request.method === "POST" && employerConfirmationMatch !== null && dependencies.confirmVacancyEmployer !== undefined) {
+        operation = "review";
+        const body = await readJsonBody(request, "Employer confirmation");
+        if (!isRecord(body) || typeof body.candidateName !== "string") throw new InvalidRequestError("Employer candidate is required.");
+        sendJson(response, 201, { review: await dependencies.confirmVacancyEmployer({ canonicalVacancyId: decodePathId(employerConfirmationMatch[1]!), candidateName: body.candidateName }) });
         return;
       }
       const interactionMatch = /^\/vacancies\/([^/]+)\/interactions$/u.exec(path);

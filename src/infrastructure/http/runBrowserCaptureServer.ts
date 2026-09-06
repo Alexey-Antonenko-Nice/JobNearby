@@ -6,6 +6,7 @@ import { SqliteSourceObservationRepository } from "../persistence/SqliteSourceOb
 import { SqliteEmployerClusterRepository } from "../persistence/SqliteEmployerClusterRepository.js";
 import { SqliteEmployerMemoryPublicDataSource } from "../persistence/SqliteEmployerMemoryPublicDataSource.js";
 import { SqliteUserVacancyInteractionRepository } from "../persistence/SqliteUserVacancyInteractionRepository.js";
+import { SqliteObservationClusterAssignmentRepository } from "../persistence/SqliteObservationClusterAssignmentRepository.js";
 import { createBrowserCaptureServer } from "./createBrowserCaptureServer.js";
 
 const host = "127.0.0.1";
@@ -21,13 +22,16 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   sourceObservationRepository: new SqliteSourceObservationRepository(database),
   interactionRepository: new SqliteUserVacancyInteractionRepository(database),
   employerClusterRepository: new SqliteEmployerClusterRepository(database),
+  employerClusterWriter: new SqliteEmployerClusterRepository(database),
   employerMemoryPublicDataSource: new SqliteEmployerMemoryPublicDataSource(database),
+  assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
 const server = createBrowserCaptureServer({
   captureAndProcessBrowserVacancy: runtime.captureAndProcessBrowserVacancy,
   getVacancyInbox: reviewWorkflow.getVacancyInbox,
   getVacancyReview: reviewWorkflow.getVacancyReview,
   recordVacancyReviewAction: reviewWorkflow.recordVacancyReviewAction,
+  confirmVacancyEmployer: reviewWorkflow.confirmVacancyEmployer,
 });
 
 server.listen(port, host, () => {

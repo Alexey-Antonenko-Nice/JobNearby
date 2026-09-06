@@ -16,7 +16,7 @@ export function InboxPage(): React.JSX.Element {
 function InboxItem({ vacancy }: { readonly vacancy: VacancyInboxItem }): React.JSX.Element {
   const organizations = [["Employer", vacancy.organizations.employerName === null ? null : [vacancy.organizations.employerName]], ["Displayed company", vacancy.organizations.displayedCompanyNames], ["Recruiter", vacancy.organizations.recruiterNames], ["Consultancy", vacancy.organizations.consultancyNames]] as const;
   return <article className="inbox-item"><div className="inbox-heading"><h2>{text(vacancy.title)}</h2><strong>{vacancy.userState}</strong></div>
-    <p>{formatLocation(vacancy.location)} {vacancy.engagement === null ? "" : `| ${formatEngagement(vacancy.engagement)}`} {vacancy.workMode === null ? "" : `| ${formatWorkMode(vacancy.workMode)}`}</p>
+    <p>{locationText(vacancy.location, vacancy.locationAlternatives)} {vacancy.engagement === null ? "" : `| ${formatEngagement(vacancy.engagement)}`} {vacancy.workMode === null ? "" : `| ${formatWorkMode(vacancy.workMode)}`}</p>
     {organizations.filter(([, names]) => names !== null && names.length > 0).map(([label, names]) => <p key={label}><strong>{label}:</strong> {names?.join(", ")}</p>)}
     <p><strong>Employer status:</strong> {vacancy.employer.unresolvedEmployer ? "Unresolved" : text(vacancy.employer.status)}</p>
     <p>Latest observed: {date(vacancy.latestObservedAt)} | Source observations: {vacancy.sourceObservationCount}{vacancy.signals.hasMultipleSourceObservations ? " | Seen before" : ""}</p>
@@ -27,3 +27,4 @@ function InboxItem({ vacancy }: { readonly vacancy: VacancyInboxItem }): React.J
 
 function text(value: unknown): string { if (value === null || value === undefined || value === "") return "Unknown"; return String(value); }
 function date(value: string | null): string { return value === null ? "Unknown" : new Date(value).toLocaleDateString(); }
+function locationText(value: unknown, alternatives: readonly unknown[]): string { return alternatives.length > 1 ? `Multiple locations (${alternatives.map(formatLocation).join("; ")})` : formatLocation(value); }

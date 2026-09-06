@@ -8,6 +8,7 @@ export interface VacancyInboxItem {
   readonly canonicalizationStatus: CanonicalizationStatus;
   readonly title: string | null;
   readonly location: VacancyLocation | null;
+  readonly locationAlternatives: readonly VacancyLocation[];
   readonly engagement: VacancyEngagement | null;
   readonly workMode: VacancyWorkMode | null;
   readonly latestObservedAt: Date | null;

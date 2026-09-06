@@ -125,4 +125,20 @@ describe("local browser capture HTTP boundary", () => {
     expect(await response.json()).toMatchObject({ success: false });
     expect(captureAndProcessBrowserVacancy).not.toHaveBeenCalled();
   });
+
+  it("posts a validated employer confirmation action", async () => {
+    const confirmVacancyEmployer = vi.fn().mockResolvedValue({ vacancy: { canonicalVacancyId: "canonical-1" } });
+    const server = createBrowserCaptureServer({
+      captureAndProcessBrowserVacancy: vi.fn(),
+      confirmVacancyEmployer,
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${port}/vacancies/canonical-1/employer-confirmation`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidateName: "Air Products S.A.S (FR)" }),
+    });
+    expect(response.status).toBe(201);
+    expect(confirmVacancyEmployer).toHaveBeenCalledWith({ canonicalVacancyId: "canonical-1", candidateName: "Air Products S.A.S (FR)" });
+  });
 });

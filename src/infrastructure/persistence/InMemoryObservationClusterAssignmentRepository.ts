@@ -138,6 +138,26 @@ export class InMemoryObservationClusterAssignmentRepository
       throw error;
     }
   }
+
+  async supersedeEffectiveAssignment(
+    existingAssignmentId: ObservationClusterAssignmentId,
+    replacement: ObservationClusterAssignment,
+    supersededAt: Date,
+  ): Promise<void> {
+    validateAssignment(replacement);
+    if (!isEffective(replacement) || Number.isNaN(supersededAt.getTime())) {
+      throw new Error("Effective assignment replacement is invalid.");
+    }
+    const existing = this.assignments.get(existingAssignmentId);
+    if (existing === undefined || existing.supersededAt !== null || !isEffective(existing.assignment)) {
+      throw new Error(`Assignment "${existingAssignmentId}" is not a current effective assignment.`);
+    }
+    if (existing.assignment.sourceObservationId !== replacement.sourceObservationId) {
+      throw new Error("Replacement assignment must belong to the same SourceObservation.");
+    }
+    existing.supersededAt = new Date(supersededAt);
+    try { await this.save(replacement); } catch (error) { existing.supersededAt = null; throw error; }
+  }
 }
 
 interface AssignmentRecord {

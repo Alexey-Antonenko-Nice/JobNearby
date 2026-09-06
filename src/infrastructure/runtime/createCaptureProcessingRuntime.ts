@@ -13,6 +13,7 @@ import { ExplicitEmployerCharacteristicExtractor } from "../../application/evide
 import { ExplicitTextVacancyEvidenceExtractor } from "../../application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
 import { CoreVacancyHeaderFactsExtractor } from "../../application/evidence/CoreVacancyHeaderFactsExtractor.js";
 import { ExplicitCandidateRequirementsExtractor } from "../../application/evidence/ExplicitCandidateRequirementsExtractor.js";
+import { WorkdayVacancyEvidenceExtractor } from "../../application/evidence/WorkdayVacancyEvidenceExtractor.js";
 import { IndeedSelectedVacancyEvidenceExtractor } from "../../application/evidence/IndeedSelectedVacancyEvidenceExtractor.js";
 import { EvidenceBasedEmployerClusterMatcher } from "../../application/recognition/EvidenceBasedEmployerClusterMatcher.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
@@ -52,6 +53,7 @@ export function createCaptureProcessingRuntime(
   const assignmentRepository =
     new SqliteObservationClusterAssignmentRepository(database);
   const evidenceExtractor = new CompositeVacancyEvidenceExtractor([
+    new WorkdayVacancyEvidenceExtractor(),
     new IndeedSelectedVacancyEvidenceExtractor(),
     new DirectFieldVacancyEvidenceExtractor(),
     new ExplicitTextVacancyEvidenceExtractor(),
