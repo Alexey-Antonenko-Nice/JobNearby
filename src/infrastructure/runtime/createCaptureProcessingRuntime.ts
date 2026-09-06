@@ -7,14 +7,7 @@ import {
 } from "../../application/acquisition/captureAndProcessBrowserVacancy.js";
 import type { BrowserCapturePayload } from "../../application/acquisition/BrowserCapturePayload.js";
 import { DeterministicAcquisitionCaptureMapper } from "../../application/acquisition/DeterministicAcquisitionCaptureMapper.js";
-import { CompositeVacancyEvidenceExtractor } from "../../application/evidence/CompositeVacancyEvidenceExtractor.js";
-import { DirectFieldVacancyEvidenceExtractor } from "../../application/evidence/DirectFieldVacancyEvidenceExtractor.js";
-import { ExplicitEmployerCharacteristicExtractor } from "../../application/evidence/ExplicitEmployerCharacteristicExtractor.js";
-import { ExplicitTextVacancyEvidenceExtractor } from "../../application/evidence/ExplicitTextVacancyEvidenceExtractor.js";
-import { CoreVacancyHeaderFactsExtractor } from "../../application/evidence/CoreVacancyHeaderFactsExtractor.js";
-import { ExplicitCandidateRequirementsExtractor } from "../../application/evidence/ExplicitCandidateRequirementsExtractor.js";
-import { WorkdayVacancyEvidenceExtractor } from "../../application/evidence/WorkdayVacancyEvidenceExtractor.js";
-import { IndeedSelectedVacancyEvidenceExtractor } from "../../application/evidence/IndeedSelectedVacancyEvidenceExtractor.js";
+import { createVacancyEvidenceExtractor } from "../../application/evidence/createVacancyEvidenceExtractor.js";
 import { EvidenceBasedEmployerClusterMatcher } from "../../application/recognition/EvidenceBasedEmployerClusterMatcher.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
@@ -52,15 +45,7 @@ export function createCaptureProcessingRuntime(
     new SqliteEmployerClusterRepository(database);
   const assignmentRepository =
     new SqliteObservationClusterAssignmentRepository(database);
-  const evidenceExtractor = new CompositeVacancyEvidenceExtractor([
-    new WorkdayVacancyEvidenceExtractor(),
-    new IndeedSelectedVacancyEvidenceExtractor(),
-    new DirectFieldVacancyEvidenceExtractor(),
-    new ExplicitTextVacancyEvidenceExtractor(),
-    new ExplicitEmployerCharacteristicExtractor(),
-    new CoreVacancyHeaderFactsExtractor(),
-    new ExplicitCandidateRequirementsExtractor(),
-  ]);
+  const evidenceExtractor = createVacancyEvidenceExtractor();
   const matcher = new EvidenceBasedEmployerClusterMatcher({
     evidenceExtractor,
     observationProvider: new SqliteEmployerClusterObservationProvider(database),

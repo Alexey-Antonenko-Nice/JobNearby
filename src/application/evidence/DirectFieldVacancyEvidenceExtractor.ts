@@ -25,6 +25,7 @@ export class DirectFieldVacancyEvidenceExtractor
 
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
+      vacancyTitles: observation.title === undefined ? [] : [{ value: observation.title, provenance }],
       organizations: [
         ...(observation.displayedCompanyName === undefined ? [] : [{
           value: observation.displayedCompanyName,
