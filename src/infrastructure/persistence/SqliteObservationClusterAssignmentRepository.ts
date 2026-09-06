@@ -69,6 +69,15 @@ export class SqliteObservationClusterAssignmentRepository
     );
   }
 
+  async findEffectiveByClusterId(employerClusterId: string): Promise<readonly ObservationClusterAssignment[]> {
+    return (this.db.prepare(`
+      SELECT ${columns} FROM observation_cluster_assignments
+      WHERE employer_cluster_id = ? AND superseded_at IS NULL
+        AND status IN ('ACCEPTED', 'USER_CONFIRMED')
+      ORDER BY evaluated_at, id
+    `).all(employerClusterId) as AssignmentRow[]).map(mapRow);
+  }
+
   async findCurrentProposalByObservationId(
     sourceObservationId: SourceObservationId,
   ): Promise<ObservationClusterAssignment | null> {

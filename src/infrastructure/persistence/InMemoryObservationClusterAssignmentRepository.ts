@@ -23,9 +23,9 @@ export class InMemoryObservationClusterAssignmentRepository
     }
   >();
 
-  findEffectiveByClusterId(
+  async findEffectiveByClusterId(
     employerClusterId: EmployerClusterId,
-  ): readonly ObservationClusterAssignment[] {
+  ): Promise<readonly ObservationClusterAssignment[]> {
     return [...this.assignments.values()]
       .filter(
         ({ assignment, supersededAt }) =>
@@ -85,6 +85,7 @@ export class InMemoryObservationClusterAssignmentRepository
       "effective assignment",
     );
   }
+
 
   async findCurrentProposalByObservationId(
     sourceObservationId: SourceObservationId,
