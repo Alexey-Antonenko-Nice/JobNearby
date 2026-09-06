@@ -3,22 +3,11 @@ import {
   type AcquisitionId,
   type AcquisitionPackage,
 } from "../../domain/acquisition/AcquisitionPackage.js";
-import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
 import type { BrowserCapturePayload } from "./BrowserCapturePayload.js";
 import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
 import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js";
-import { extractBurkertApplyId } from "./BurkertVacancyIdentity.js";
-import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
-import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProviderRecognizer.js";
-import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
-import { IndeedSelectedVacancyContextLocator } from "./IndeedSelectedVacancyContextLocator.js";
-import { LinkedInSelectedVacancyContextLocator } from "./LinkedInSelectedVacancyContextLocator.js";
-import { extractWorkdayStructuredFields, isWorkdaySource } from "./WorkdayVacancy.js";
-import { JoobleSelectedVacancyContextLocator } from "./JoobleSelectedVacancyContextLocator.js";
-import { CadremploiSelectedVacancyContextLocator } from "./CadremploiSelectedVacancyContextLocator.js";
-import { LhhSelectedVacancyContextLocator } from "./LhhSelectedVacancyContextLocator.js";
-import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
+import { ProviderCaptureRegistry } from "./ProviderCaptureRegistry.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BROWSER_HTML_BYTES = 5 * 1024 * 1024;
@@ -27,16 +16,7 @@ export class BrowserCaptureAcquisitionAdapter {
   private readonly jsonLdExtractor = new LiteralJsonLdDocumentExtractor();
   private readonly jobPostingExtractor = new SchemaOrgJobPostingExtractor();
   private readonly jobPostingProjector = new SchemaOrgJobPostingProjector();
-  private readonly providerVacancyIdExtractor = new ConservativeProviderVacancyIdExtractor();
-  private readonly providerRecognizer = new HostnameAcquisitionProviderRecognizer();
-  private readonly contextLocators: Partial<Readonly<Record<ProviderKey, SelectedVacancyContextLocator>>> = {
-    FRANCE_TRAVAIL: new FranceTravailSelectedVacancyContextLocator(),
-    INDEED: new IndeedSelectedVacancyContextLocator(),
-    LINKEDIN: new LinkedInSelectedVacancyContextLocator(),
-    JOOBLE: new JoobleSelectedVacancyContextLocator(),
-    CADREMPLOI: new CadremploiSelectedVacancyContextLocator(),
-    LHH: new LhhSelectedVacancyContextLocator(),
-  };
+  private readonly providerCaptureRegistry = new ProviderCaptureRegistry();
 
   toAcquisitionPackage(
     payload: BrowserCapturePayload,
@@ -53,19 +33,9 @@ export class BrowserCaptureAcquisitionAdapter {
       : validateContent(payload.html, "Page HTML", MAX_BROWSER_HTML_BYTES);
     const acquiredAt = parseCapturedAt(payload.capturedAt);
     const sourceName = sourceNameFromUrl(pageUrl);
-    const providerExternalId = this.providerVacancyIdExtractor.extract({ sourceName, sourceUrl: pageUrl });
-    const externalId = sourceName === "burkert.com" && html !== undefined
-      ? extractBurkertApplyId(html) ?? providerExternalId
-      : providerExternalId;
-    const providerKey = this.providerRecognizer.recognize({ sourceName, sourceUrl: pageUrl });
-    const selectedContext = html === undefined || providerKey === undefined
-      ? undefined
-      : this.contextLocators[providerKey]?.locate({
-          providerKey,
-          sourceUrl: pageUrl,
-          ...(externalId !== undefined ? { externalId } : {}),
-          html,
-        });
+    const providerCapture = this.providerCaptureRegistry.capture({
+      sourceName, sourceUrl: pageUrl, ...(html === undefined ? {} : { html }),
+    });
     const jsonLdJobPostings = html === undefined
       ? []
       : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(html));
@@ -75,12 +45,9 @@ export class BrowserCaptureAcquisitionAdapter {
     const genericStructuredFields = jobPostings.length === 1
       ? this.jobPostingProjector.project(jobPostings[0]!)
       : undefined;
-    const workdayFields = html !== undefined && isWorkdaySource(sourceName, pageUrl)
-      ? extractWorkdayStructuredFields(html, pageUrl)
-      : undefined;
-    const structuredFields = workdayFields === undefined ? genericStructuredFields : {
+    const structuredFields = providerCapture.structuredFields === undefined ? genericStructuredFields : {
       ...genericStructuredFields,
-      ...workdayFields,
+      ...providerCapture.structuredFields,
     };
 
     return createAcquisitionPackage({
@@ -91,7 +58,7 @@ export class BrowserCaptureAcquisitionAdapter {
         sourceName,
       },
       sourceUrl: pageUrl,
-      ...(externalId !== undefined ? { externalId } : {}),
+      ...(providerCapture.externalId === undefined ? {} : { externalId: providerCapture.externalId }),
       ...(payload.pageTitle.trim().length > 0 ? { pageTitle: payload.pageTitle.trim() } : {}),
       content: {
         text: normalizeVisibleText(visibleText),
@@ -106,7 +73,7 @@ export class BrowserCaptureAcquisitionAdapter {
           : {}),
       },
       ...(structuredFields !== undefined ? { structuredFields } : {}),
-      ...(selectedContext !== undefined ? { contexts: [selectedContext] } : {}),
+      ...(providerCapture.context === undefined ? {} : { contexts: [providerCapture.context] }),
       metadata: payload.browserMetadata === undefined
         ? {}
         : structuredClone(payload.browserMetadata),
