@@ -78,13 +78,23 @@ export class ExplicitTextVacancyEvidenceExtractor
       vacancyText,
     ).map((value) => ({ value, role: "WORKPLACE", provenance }));
 
+    const normalizedOrganizations = franceTravailAgencyContext(observation.source.sourceName, vacancyText)
+      ? organizations.map((organization) => organization.role === "EMPLOYER"
+        ? { ...organization, role: "STAFFING_AGENCY" as const }
+        : organization)
+      : organizations;
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
-      organizations: uniqueByRoleAndValue(organizations),
+      organizations: uniqueByRoleAndValue(normalizedOrganizations),
       locations: uniqueByRoleAndValue(locations),
       people: uniqueByRoleAndValue(people),
     });
   }
+}
+
+function franceTravailAgencyContext(sourceName: string, text: string): boolean {
+  return /candidat\.francetravail\.fr/iu.test(sourceName) &&
+    /\b(?:recrute|contrats?\s+de\s+l['’]int[eé]rim\s+au\s+CDI|agences?\s+de\s+travail\s+temporaire|missions?\s+adapt[ée]es)\b/iu.test(text);
 }
 
 function extractExplicitClientNames(text: string): string[] {

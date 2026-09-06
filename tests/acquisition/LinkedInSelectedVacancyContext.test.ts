@@ -136,6 +136,16 @@ describe("LinkedInSelectedVacancyContextLocator", () => {
     expect(context?.html).not.toContain('id="workspace"');
   });
 
+  it("includes the active header from the SemanticJobDetails screen", () => {
+    const id = "4426980052";
+    const html = `<div data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"><div data-testid="lazy-column"><div><a href="/jobs/view/selected-${id}/">CEA</a><h1>Ingénieur mécanicien et essai H/F</h1><p>Bagnols-sur-Cèze, Occitanie, France</p><p>CDD</p></div><div id="JobDetails_AboutTheJob_${id}" componentkey="JobDetails_AboutTheJob_${id}"><h2>À propos de l’offre d’emploi</h2><p>Selected description</p></div></div></div>`;
+    const context = locate(id, html);
+    expect(context?.text).toContain("Ingénieur mécanicien et essai H/F");
+    expect(context?.text).toContain("Bagnols-sur-Cèze, Occitanie, France");
+    expect(context?.text).toContain("CDD");
+    expect(context?.text).toContain("CEA");
+  });
+
   it("uses the primary JobDetails section when a component reference is the corroboration", () => {
     const context = locate("4460344242", linkedInHtml("4460344242", { includeLink: false }));
     expect(context?.associationEvidence).toContain("MATCHING_LINKEDIN_COMPONENT_REFERENCE");
