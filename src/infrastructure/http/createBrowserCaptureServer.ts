@@ -14,6 +14,7 @@ export interface BrowserCaptureServerDependencies {
   ) => Promise<CaptureAndProcessBrowserVacancyResult>;
   readonly getVacancyReview?: VacancyReviewWorkflow["getVacancyReview"];
   readonly getVacancyInbox?: VacancyReviewWorkflow["getVacancyInbox"];
+  readonly decideEmployerReview?: VacancyReviewWorkflow["decideEmployerReview"];
   readonly decideEmployerMemoryReview?: VacancyReviewWorkflow["decideEmployerMemoryReview"];
   readonly confirmVacancyEmployer?: VacancyReviewWorkflow["confirmVacancyEmployer"];
   readonly recordVacancyReviewAction?: VacancyReviewWorkflow["recordVacancyReviewAction"];
@@ -49,6 +50,19 @@ export function createBrowserCaptureServer(
         operation = "review";
         const review = await dependencies.getVacancyReview(decodePathId(reviewMatch[1]!));
         sendJson(response, 200, { review });
+        return;
+      }
+      const employerReviewMatch = /^\/vacancies\/([^/]+)\/employer-review$/u.exec(path);
+      if (request.method === "POST" && employerReviewMatch !== null && dependencies.decideEmployerReview !== undefined) {
+        operation = "review";
+        const body = await readJsonBody(request, "Employer review");
+        if (!isRecord(body) || (body.decision !== "CONFIRM" && body.decision !== "REJECT")) throw new InvalidRequestError("Employer review payload is invalid.");
+        const canonicalVacancyId = decodePathId(employerReviewMatch[1]!);
+        if (body.type === "NAMED_CLIENT" && typeof body.candidateId === "string" && body.candidateId.trim() && Object.keys(body).every((key) => ["type", "candidateId", "decision"].includes(key))) {
+          sendJson(response, 200, { review: await dependencies.decideEmployerReview({ canonicalVacancyId, type: body.type, candidateId: body.candidateId, decision: body.decision }) });
+        } else if (body.type === "CONFIRMED_MEMORY" && typeof body.employerClusterId === "string" && body.employerClusterId.trim() && Object.keys(body).every((key) => ["type", "employerClusterId", "decision"].includes(key))) {
+          sendJson(response, 200, { review: await dependencies.decideEmployerReview({ canonicalVacancyId, type: body.type, employerClusterId: body.employerClusterId, decision: body.decision }) });
+        } else throw new InvalidRequestError("Employer review payload is invalid.");
         return;
       }
       const memoryReviewMatch = /^\/vacancies\/([^/]+)\/employer-memory-review$/u.exec(path);
@@ -188,6 +202,7 @@ function errorStatus(
   if (operation === "capture") {
     return message.startsWith("Browser capture could not be persisted:") ? 500 : 400;
   }
+  if (message === "Employer review candidate is no longer eligible.") return 409;
   if (message === "Employer memory candidate is no longer eligible for review."
     || message === "Employer candidate is no longer eligible for confirmation.") return 409;
   if (operation === "route") return 400;

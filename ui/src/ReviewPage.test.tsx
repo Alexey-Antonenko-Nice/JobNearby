@@ -11,6 +11,22 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it.each([["Confirm employer", "CONFIRM"], ["Not the employer", "REJECT"]])("reviews HEUFT named client with %s while ACTUA is not offered", async (label, decision) => {
+    const base = review({ employerClusterId: null, status: "UNRESOLVED", confirmationCandidate: null, organizations: { employerRelationships: [], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "ACTUA SAVERNE" }], recruiters: [{ role: "RECRUITER", rawName: "ACTUA Saverne" }], clients: [{ role: "CLIENT", rawName: "HEUFT France" }] } });
+    respond({ review: { ...base, employerReview: { required: true, candidates: [{ type: "NAMED_CLIENT", candidateId: "client-token", name: "HEUFT France", sourceRelationship: "CLIENT", employerClusterId: null, priorConfirmationCount: 0, explanation: "ACTUA Saverne is recruiting for the named client HEUFT France." }] } } });
+    respond({ review: base });
+    const user = userEvent.setup(); render(<ReviewPage />);
+    expect(await screen.findByRole("heading", { name: "Possible employer" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "HEUFT France" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(screen.getByText("Source relationship: Client named in vacancy")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: label }));
+    expect(fetchMock.mock.calls[1]![0]).toContain("/employer-review");
+    expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toEqual({ type: "NAMED_CLIENT", candidateId: "client-token", decision });
+    expect(screen.queryByRole("heading", { name: "Possible employer" })).not.toBeInTheDocument();
+    expect(screen.getByText("HEUFT France")).toBeInTheDocument();
+  });
+
   it.each([ ["Confirm employer", "CONFIRM"], ["Not this employer", "REJECT"] ])("reviews a remembered employer using %s", async (label, decision) => {
     respond({ review: { ...review(), employerMemoryReview: { required: true, candidates: [{ employerClusterId: "memory-a", displayLabel: "ACME", status: "PROBABLY_RESOLVED", priorConfirmationCount: 2, explanation: "Multiple confirmed clusters match." }] } } });
     respond({ review: review() });

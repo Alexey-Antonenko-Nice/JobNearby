@@ -19,6 +19,7 @@ export interface VacancyReviewOrganizationRelationship {
 }
 
 export interface VacancyReviewView {
+  readonly employerReview?: { readonly required: true; readonly candidates: readonly import("./EmployerReviewCandidate.js").EmployerReviewCandidate[] };
   readonly employerMemoryReview?: { readonly required: true; readonly candidates: readonly import("./EmployerMemoryReviewCandidate.js").EmployerMemoryReviewCandidate[] };
   readonly vacancy: {
     readonly canonicalVacancyId: CanonicalVacancyId;

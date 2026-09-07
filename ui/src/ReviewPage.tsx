@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { decideEmployerMemory, confirmEmployer, getReview, recordInteraction, type OrganizationRelationship, type ReviewView } from "./api";
+import { decideNamedClientEmployer, decideEmployerMemory, confirmEmployer, getReview, recordInteraction, type OrganizationRelationship, type ReviewView } from "./api";
 import { formatCompensation, formatEngagement, formatLocation, formatWorkMode } from "./formatVacancyFacts";
 
 const actions = ["REVIEWED", "INTERESTED", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN", "CLOSED"];
@@ -51,6 +51,14 @@ export function ReviewPage(): React.JSX.Element {
     finally { setPending(false); }
   }
 
+  async function reviewNamedClient(candidateId: string, decision: "CONFIRM" | "REJECT"): Promise<void> {
+    if (canonicalVacancyId === null) return;
+    setPending(true); setError(null);
+    try { setReview(await decideNamedClientEmployer(canonicalVacancyId, candidateId, decision)); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to review possible employer."); }
+    finally { setPending(false); }
+  }
+
   if (notFound) return <main className="page"><p>Vacancy not found.</p></main>;
   if (error !== null && review === null) return <main className="page"><p role="alert">{error}</p></main>;
   if (review === null) return <main className="page"><p>Loading...</p></main>;
@@ -66,6 +74,12 @@ export function ReviewPage(): React.JSX.Element {
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
     <section><h2>Employer memory</h2>{review.employer.employerClusterId === null ? <p>Employer unresolved / not linked</p> : <Details values={[["Employer status", review.employer.status], ["Known employer before", yesNo(review.employer.knownBefore)], ["Previous vacancies from this employer", review.employer.previousVacancyCount], ["Previous interacted vacancies", review.employer.previousInteractedVacancyCount], ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)], ["Previously interviewed with employer", yesNo(review.employer.everInterviewedWithEmployer)], ["Previously rejected by employer", yesNo(review.employer.everRejectedByEmployer)]]} />}{review.employer.confirmationCandidate !== undefined && review.employer.confirmationCandidate !== null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}</section>
+    {review.employerReview?.candidates.filter((candidate) => candidate.type === "NAMED_CLIENT").map((candidate) => <section key={candidate.candidateId}>
+      <h2>Possible employer</h2><h3>{candidate.name}</h3><p>Source relationship: Client named in vacancy</p><p>{candidate.explanation}</p>
+      {candidate.priorConfirmationCount > 0 && <p>Previously confirmed in {candidate.priorConfirmationCount} observations</p>}
+      <button type="button" disabled={pending} onClick={() => void reviewNamedClient(candidate.candidateId, "CONFIRM")}>Confirm employer</button>{" "}
+      <button type="button" disabled={pending} onClick={() => void reviewNamedClient(candidate.candidateId, "REJECT")}>Not the employer</button>
+    </section>)}
     {review.employerMemoryReview?.required && <section><h2>Possible known employer</h2>{review.employerMemoryReview.candidates.map((candidate) => <article key={candidate.employerClusterId}>
       <h3>{candidate.displayLabel}</h3><p>Status: {candidate.status}</p><p>Previously confirmed in {candidate.priorConfirmationCount} observations</p><p>{candidate.explanation}</p>
       <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "CONFIRM")}>Confirm employer</button>{" "}
