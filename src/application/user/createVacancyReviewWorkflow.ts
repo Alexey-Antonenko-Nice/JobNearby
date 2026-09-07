@@ -1,3 +1,6 @@
+import { decideNamedClientEmployer } from "./namedClientEmployerReview.js";
+import type { EmployerReviewDecision } from "../../domain/user/EmployerReviewCandidate.js";
+import type { EmployerRecognitionPersistence } from "../../domain/recognition/EmployerRecognitionPersistence.js";
 import { decideEmployerMemoryReview } from "./employerMemoryReview.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
@@ -21,6 +24,7 @@ export interface VacancyReviewWorkflowDependencies {
   readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
   readonly interactionRepository: UserVacancyInteractionRepository;
   readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
+  readonly recognitionPersistence?: EmployerRecognitionPersistence;
   readonly employerClusterWriter?: EmployerClusterRepository;
   readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
   readonly assignmentRepository?: ObservationClusterAssignmentRepository;
@@ -40,6 +44,13 @@ export function createVacancyReviewWorkflow(
     ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
   return {
+    decideEmployerReview: async (input: EmployerReviewDecision & { readonly canonicalVacancyId: string }) => {
+      const vacancy = await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId);
+      if (!vacancy) throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);
+      if (input.type === "CONFIRMED_MEMORY") await decideEmployerMemoryReview(vacancy, input.employerClusterId, input.decision, reviewDependencies);
+      else await decideNamedClientEmployer(vacancy, input.candidateId, input.decision, { ...reviewDependencies, ...(dependencies.recognitionPersistence ? { recognitionPersistence: dependencies.recognitionPersistence } : {}) });
+      return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
+    },
     decideEmployerMemoryReview: async (input: { readonly canonicalVacancyId: string; readonly employerClusterId: string; readonly decision: "CONFIRM" | "REJECT" }) => {
       const vacancy = await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId);
       if (!vacancy) throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);

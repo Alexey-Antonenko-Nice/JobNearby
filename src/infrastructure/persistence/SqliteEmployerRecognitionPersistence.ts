@@ -11,6 +11,20 @@ export class SqliteEmployerRecognitionPersistence
 {
   constructor(private readonly db: Database.Database) {}
 
+  async saveEmployerReviewDecision(assignment: ObservationClusterAssignment, expectedEffectiveAssignmentId: string, newCluster?: EmployerCluster): Promise<void> {
+    if (!["USER_CONFIRMED", "REJECTED"].includes(assignment.status)) throw new Error("Invalid employer review decision.");
+    this.db.transaction(() => {
+      const current = this.db.prepare("SELECT id, status FROM observation_cluster_assignments WHERE source_observation_id = ? AND superseded_at IS NULL AND status IN ('ACCEPTED', 'USER_CONFIRMED')").get(assignment.sourceObservationId) as { id: string; status: string } | undefined;
+      if (current?.id !== expectedEffectiveAssignmentId || current.status !== "ACCEPTED") throw new Error("Employer review candidate is no longer eligible.");
+      if (newCluster) {
+        if (assignment.status !== "USER_CONFIRMED" || assignment.employerClusterId !== newCluster.id) throw new Error("Invalid review cluster creation.");
+        insertEmployerCluster(this.db, newCluster);
+      }
+      if (assignment.status === "USER_CONFIRMED") this.db.prepare("UPDATE observation_cluster_assignments SET superseded_at = ? WHERE id = ?").run(assignment.evaluatedAt.toISOString(), current.id);
+      insertObservationClusterAssignment(this.db, assignment);
+    })();
+  }
+
   async saveNewClusterWithAssignment(
     cluster: EmployerCluster,
     assignment: ObservationClusterAssignment,

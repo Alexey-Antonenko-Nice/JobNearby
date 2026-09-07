@@ -1,3 +1,5 @@
+import { getNamedClientEmployerCandidate } from "./namedClientEmployerReview.js";
+import type { EmployerReviewCandidate } from "../../domain/user/EmployerReviewCandidate.js";
 import { hasRejectedEmployerMemory, getEmployerMemoryReviewCandidates } from "./employerMemoryReview.js";
 import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
@@ -55,8 +57,11 @@ export async function getVacancyReviewView(
   const groupedOrganizations = groupOrganizations(vacancy.organizationRelationships);
 
   const memoryCandidates = await getEmployerMemoryReviewCandidates(vacancy, dependencies);
+  const namedClient = memoryCandidates.length === 0 ? await getNamedClientEmployerCandidate(vacancy, dependencies) : null;
+  const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : [])];
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(employerCandidates.length === 0 ? {} : { employerReview: { required: true as const, candidates: employerCandidates } }),
     ...(memoryCandidates.length === 0 ? {} : { employerMemoryReview: { required: true as const, candidates: memoryCandidates } }),
     vacancy: {
       canonicalVacancyId,

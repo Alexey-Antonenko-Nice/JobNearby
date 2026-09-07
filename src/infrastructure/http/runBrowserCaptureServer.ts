@@ -1,3 +1,4 @@
+import { SqliteEmployerRecognitionPersistence } from "../persistence/SqliteEmployerRecognitionPersistence.js";
 import { createDatabase } from "../database/createDatabase.js";
 import { createCaptureProcessingRuntime } from "../runtime/createCaptureProcessingRuntime.js";
 import { createVacancyReviewWorkflow } from "../../application/user/createVacancyReviewWorkflow.js";
@@ -22,6 +23,7 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   sourceObservationRepository: new SqliteSourceObservationRepository(database),
   interactionRepository: new SqliteUserVacancyInteractionRepository(database),
   employerClusterRepository: new SqliteEmployerClusterRepository(database),
+  recognitionPersistence: new SqliteEmployerRecognitionPersistence(database),
   employerClusterWriter: new SqliteEmployerClusterRepository(database),
   employerMemoryPublicDataSource: new SqliteEmployerMemoryPublicDataSource(database),
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
@@ -32,6 +34,7 @@ const server = createBrowserCaptureServer({
   getVacancyReview: reviewWorkflow.getVacancyReview,
   recordVacancyReviewAction: reviewWorkflow.recordVacancyReviewAction,
   confirmVacancyEmployer: reviewWorkflow.confirmVacancyEmployer,
+  decideEmployerReview: reviewWorkflow.decideEmployerReview,
   decideEmployerMemoryReview: reviewWorkflow.decideEmployerMemoryReview,
 });
 

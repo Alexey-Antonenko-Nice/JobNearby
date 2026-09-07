@@ -1,3 +1,13 @@
+export interface NamedClientEmployerCandidate {
+  readonly type: "NAMED_CLIENT";
+  readonly candidateId: string;
+  readonly name: string;
+  readonly explanation: string;
+  readonly sourceRelationship: "CLIENT";
+  readonly employerClusterId: string | null;
+  readonly priorConfirmationCount: number;
+}
+
 export interface OrganizationRelationship {
   readonly organizationId?: string;
   readonly employerClusterId?: string;
@@ -13,6 +23,7 @@ export interface VacancySourceLink {
 }
 
 export interface ReviewView {
+  readonly employerReview?: { readonly required: boolean; readonly candidates: readonly (NamedClientEmployerCandidate | (NonNullable<ReviewView["employerMemoryReview"]>["candidates"][number] & { readonly type: "CONFIRMED_MEMORY" }))[] };
   readonly employerMemoryReview?: { readonly required: boolean; readonly candidates: readonly { employerClusterId: string; displayLabel: string; status: string; currentOrganizationName: string; explanation: string; reasonCodes: readonly string[]; priorConfirmationExists: boolean; priorConfirmationCount: number }[] };
   readonly vacancy: {
     readonly canonicalVacancyId: string;
@@ -93,6 +104,14 @@ export async function confirmEmployer(canonicalVacancyId: string, candidateName:
 export async function decideEmployerMemory(canonicalVacancyId: string, employerClusterId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
   const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-memory-review`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employerClusterId, decision }),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { review: ReviewView }).review;
+}
+
+export async function decideNamedClientEmployer(canonicalVacancyId: string, candidateId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
+  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "NAMED_CLIENT", candidateId, decision }),
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;
