@@ -1,6 +1,7 @@
 import type { EmployerClusterStatus } from "../recognition/EmployerCluster.js";
 
 export interface EmployerMemoryReviewCandidate {
+  readonly aliasEvidence?: readonly import("../recognition/EmployerAliasEvidence.js").EmployerAliasEvidence[];
   readonly employerClusterId: string;
   readonly displayLabel: string;
   readonly status: EmployerClusterStatus;

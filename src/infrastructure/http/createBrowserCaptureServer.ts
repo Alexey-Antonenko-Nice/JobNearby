@@ -62,6 +62,8 @@ export function createBrowserCaptureServer(
           sendJson(response, 200, { review: await dependencies.decideEmployerReview({ canonicalVacancyId, type: body.type, candidateId: body.candidateId, decision: body.decision }) });
         } else if (body.type === "CONFIRMED_MEMORY" && typeof body.employerClusterId === "string" && body.employerClusterId.trim() && Object.keys(body).every((key) => ["type", "employerClusterId", "decision"].includes(key))) {
           sendJson(response, 200, { review: await dependencies.decideEmployerReview({ canonicalVacancyId, type: body.type, employerClusterId: body.employerClusterId, decision: body.decision }) });
+        } else if (body.type === "ALIAS_SELECTION" && typeof body.candidateId === "string" && body.candidateId.trim() && typeof body.employerClusterId === "string" && body.employerClusterId.trim() && Object.keys(body).every((key) => ["type", "candidateId", "employerClusterId", "decision"].includes(key))) {
+          sendJson(response, 200, { review: await dependencies.decideEmployerReview({ canonicalVacancyId, type: body.type, candidateId: body.candidateId, employerClusterId: body.employerClusterId, decision: body.decision }) });
         } else throw new InvalidRequestError("Employer review payload is invalid.");
         return;
       }

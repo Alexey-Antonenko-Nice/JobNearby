@@ -1,3 +1,4 @@
+import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import { findConfirmedEmployerMemory } from "./findConfirmedEmployerMemory.js";
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
@@ -41,6 +42,7 @@ export type ProcessObservationResult =
 
 export interface ProcessObservationDependencies
   extends EvaluateObservationEmployerClusterDependencies {
+  readonly aliasRepository?: EmployerAliasEvidenceRepository;
   readonly recognitionPersistence: EmployerRecognitionPersistence;
   readonly evidenceExtractor?: VacancyEvidenceExtractor;
   readonly generateClusterId?: () => string;
@@ -67,7 +69,7 @@ export async function processObservation(
 
   const memory = dependencies.evidenceExtractor === undefined ? null : await findConfirmedEmployerMemory(
     (await dependencies.evidenceExtractor.extract(observation)).organizations.map((o) => ({ role: o.role === "UNKNOWN" ? "DISPLAYED_COMPANY" : o.role, rawName: o.value })),
-    [observation.id], dependencies.clusterRepository, dependencies.assignmentRepository,
+    [observation.id], dependencies.clusterRepository, dependencies.assignmentRepository, dependencies.aliasRepository,
   );
   // Do not allow the generic matcher to pick an arbitrary winner from ambiguous memory.
   const ambiguousMemory = memory !== null && memory.matches.length > 0 && (memory.matches.length > 1 || memory.names.length > 1);
@@ -166,7 +168,7 @@ async function propagateConfirmedEmployerMemory(
   if (dependencies.evidenceExtractor === undefined || dependencies.assignmentRepository.findEffectiveByClusterId === undefined) return null;
   const memory = await findConfirmedEmployerMemory(
     (await dependencies.evidenceExtractor.extract(observation)).organizations.map((o) => ({ role: o.role === "UNKNOWN" ? "DISPLAYED_COMPANY" : o.role, rawName: o.value })),
-    [observation.id], dependencies.clusterRepository, dependencies.assignmentRepository,
+    [observation.id], dependencies.clusterRepository, dependencies.assignmentRepository, dependencies.aliasRepository,
   );
   if (memory.names.length !== 1 || memory.matches.length !== 1) return null;
   const cluster = memory.matches[0]!.cluster;
@@ -178,7 +180,7 @@ async function propagateConfirmedEmployerMemory(
     confidence: 1,
     algorithm: "confirmed-employer-memory",
     algorithmVersion: "0.1.0",
-    explanation: `Reused employer cluster from prior user-confirmed employer memory for matching organization "${cluster.displayLabel}".`,
+    explanation: `Reused employer cluster from prior user-confirmed employer memory for matching organization "${cluster.displayLabel}".${memory.matches[0]!.aliasEvidence ? ` Explicit user-confirmed alias: "${memory.matches[0]!.currentOrganizationName}".` : ""}`,
   }, {
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
     ...(dependencies.generateAssignmentId === undefined ? {} : { generateId: dependencies.generateAssignmentId }),

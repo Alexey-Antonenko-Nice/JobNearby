@@ -60,6 +60,7 @@ describe("database migrations", () => {
       { version: 4 },
       { version: 5 },
       { version: 6 },
+      { version: 7 },
     ]);
 
     db.close();
@@ -88,6 +89,10 @@ describe("database migrations", () => {
       .toEqual({ version: 6, name: "add_browser_capture_snapshot_fingerprints_and_occurrences" });
     expect(db.prepare(`SELECT name FROM sqlite_master WHERE name = 'capture_occurrences'`).get())
       .toEqual({ name: "capture_occurrences" });
+    expect(db.prepare(`SELECT version, name FROM schema_migrations WHERE version = 7`).get())
+      .toEqual({ version: 7, name: "create_employer_alias_evidence" });
+    expect(db.prepare(`SELECT name FROM sqlite_master WHERE name = 'employer_alias_evidence'`).get())
+      .toEqual({ name: "employer_alias_evidence" });
     db.close();
   });
 
@@ -244,6 +249,7 @@ describe("database migrations", () => {
         { version: 4 },
         { version: 5 },
         { version: 6 },
+        { version: 7 },
       ]);
     db.close();
   });

@@ -1,3 +1,4 @@
+import type { EmployerAliasEvidence, EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import type { EmployerCluster } from "../../domain/recognition/EmployerCluster.js";
 import type { EmployerRecognitionPersistence } from "../../domain/recognition/EmployerRecognitionPersistence.js";
 import type { ObservationClusterAssignment } from "../../domain/recognition/ObservationClusterAssignment.js";
@@ -10,23 +11,29 @@ export class InMemoryEmployerRecognitionPersistence
   constructor(
     private readonly clusterRepository: InMemoryEmployerClusterRepository,
     private readonly assignmentRepository: InMemoryObservationClusterAssignmentRepository,
+    private readonly aliasRepository?: EmployerAliasEvidenceRepository,
   ) {}
 
   private reviewQueue: Promise<void> = Promise.resolve();
 
-  async saveEmployerReviewDecision(assignment: ObservationClusterAssignment, expectedEffectiveAssignmentId: string, newCluster?: EmployerCluster): Promise<void> {
+  async saveEmployerReviewDecision(assignment: ObservationClusterAssignment, expectedEffectiveAssignmentId: string, newCluster?: EmployerCluster, aliasEvidence?: EmployerAliasEvidence): Promise<void> {
     const operation = this.reviewQueue.then(async () => {
       if (!["USER_CONFIRMED", "REJECTED"].includes(assignment.status)) throw new Error("Invalid employer review decision.");
       const current = await this.assignmentRepository.findEffectiveByObservationId(assignment.sourceObservationId);
       if (current?.id !== expectedEffectiveAssignmentId || current.status !== "ACCEPTED") throw new Error("Employer review candidate is no longer eligible.");
+      if (aliasEvidence && (!this.aliasRepository || assignment.status !== "USER_CONFIRMED" || aliasEvidence.sourceAssignmentId !== assignment.id || aliasEvidence.employerClusterId !== assignment.employerClusterId)) throw new Error("Invalid alias confirmation proof.");
       if (newCluster) {
         if (assignment.status !== "USER_CONFIRMED" || assignment.employerClusterId !== newCluster.id) throw new Error("Invalid review cluster creation.");
         await this.clusterRepository.save(newCluster);
       }
+      let inserted = false;
       try {
         if (assignment.status === "USER_CONFIRMED") await this.assignmentRepository.supersedeEffectiveAssignment(current.id, assignment, assignment.evaluatedAt);
         else await this.assignmentRepository.save(assignment);
+        inserted = true;
+        if (aliasEvidence) await this.aliasRepository!.save(aliasEvidence);
       } catch (error) {
+        if (inserted) this.assignmentRepository.restoreReviewForRollback(current.id, assignment.id);
         if (newCluster) this.clusterRepository.deleteForRollback(newCluster.id);
         throw error;
       }

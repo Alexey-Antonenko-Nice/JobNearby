@@ -7,6 +7,8 @@ import { migration004 } from "./migrations/004_create_canonical_vacancy_identity
 import { migration005 } from "./migrations/005_create_user_vacancy_interaction_events.js";
 import { migration006 } from "./migrations/006_add_browser_capture_occurrences.js";
 
+import { migration007 } from "./migrations/007_create_employer_alias_evidence.js";
+
 interface Migration {
   version: number;
   name: string;
@@ -20,6 +22,7 @@ const migrations: readonly Migration[] = [
   migration004,
   migration005,
   migration006,
+  migration007,
 ];
 
 export function migrateDatabase(db: Database.Database): void {

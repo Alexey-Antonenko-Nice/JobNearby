@@ -1,3 +1,5 @@
+import { decideEmployerAlias } from "./employerAliasReview.js";
+import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import { decideNamedClientEmployer } from "./namedClientEmployerReview.js";
 import type { EmployerReviewDecision } from "../../domain/user/EmployerReviewCandidate.js";
 import type { EmployerRecognitionPersistence } from "../../domain/recognition/EmployerRecognitionPersistence.js";
@@ -20,6 +22,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly aliasRepository?: EmployerAliasEvidenceRepository;
   readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll" | "findById">;
   readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
   readonly interactionRepository: UserVacancyInteractionRepository;
@@ -36,6 +39,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.aliasRepository ? { aliasRepository: dependencies.aliasRepository } : {}),
     canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
     sourceObservationRepository: dependencies.sourceObservationRepository,
     interactionRepository: dependencies.interactionRepository,
@@ -48,6 +52,7 @@ export function createVacancyReviewWorkflow(
       const vacancy = await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId);
       if (!vacancy) throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);
       if (input.type === "CONFIRMED_MEMORY") await decideEmployerMemoryReview(vacancy, input.employerClusterId, input.decision, reviewDependencies);
+      else if (input.type === "ALIAS_SELECTION") await decideEmployerAlias(vacancy, input.candidateId, input.employerClusterId, input.decision, { ...reviewDependencies, ...(dependencies.recognitionPersistence ? { recognitionPersistence: dependencies.recognitionPersistence } : {}) });
       else await decideNamedClientEmployer(vacancy, input.candidateId, input.decision, { ...reviewDependencies, ...(dependencies.recognitionPersistence ? { recognitionPersistence: dependencies.recognitionPersistence } : {}) });
       return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
     },

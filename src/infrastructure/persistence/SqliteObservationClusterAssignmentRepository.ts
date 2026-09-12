@@ -34,6 +34,10 @@ export class SqliteObservationClusterAssignmentRepository
 {
   constructor(private readonly db: Database.Database) {}
 
+  async findConfirmedClusterIds(): Promise<readonly string[]> {
+    return (this.db.prepare("SELECT DISTINCT employer_cluster_id FROM observation_cluster_assignments WHERE status = 'USER_CONFIRMED' AND superseded_at IS NULL ORDER BY employer_cluster_id").all() as { employer_cluster_id: string }[]).map((row) => row.employer_cluster_id);
+  }
+
   async save(assignment: ObservationClusterAssignment): Promise<void> {
     insertObservationClusterAssignment(this.db, assignment);
   }

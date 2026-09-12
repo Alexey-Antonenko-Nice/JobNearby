@@ -1,3 +1,4 @@
+import { createAliasEvidence } from "../recognition/createEmployerAliasEvidence.js";
 import { createHash } from "node:crypto";
 import { normalizeOrganizationEvidenceName as normalize } from "../../domain/evidence/OrganizationEvidence.js";
 import type { CanonicalVacancy } from "../../domain/vacancies/CanonicalVacancy.js";
@@ -49,18 +50,28 @@ export async function getNamedClientEmployerCandidate(vacancy: CanonicalVacancy,
   const evidenceIds = [...new Set(strong.flatMap((r) => r.supportingEvidenceIds).filter((id) => vacancy.evidenceReferences.some((e) => e.id === id && e.kind === "ORGANIZATION_EVIDENCE" && vacancy.sourceObservationIds.includes(e.sourceObservationId))))].sort();
   const sourceIds = [...new Set(vacancy.evidenceReferences.filter((e) => evidenceIds.includes(e.id)).map((e) => e.sourceObservationId))].sort();
   if ((await assignments.findById(decisionId(vacancy.id, name)))?.status === "REJECTED") return null;
-  const sameNameClusters = (await deps.employerClusterRepository.findCandidates({})).filter((c) => c.displayLabel?.trim() && normalize(c.displayLabel) === key);
+  const aliases = deps.aliasRepository ? await deps.aliasRepository.findActiveByNormalizedName(key) : [];
+  const sameNameClusters = (await deps.employerClusterRepository.findCandidates({})).filter((c) => c.displayLabel?.trim() && (normalize(c.displayLabel) === key || aliases.some((a) => a.employerClusterId === c.id)));
   if (sameNameClusters.some((c) => c.status === "CONFLICTED")) return null;
   const matches = sameNameClusters.filter((c) => ["PROBABLY_RESOLVED", "RESOLVED"].includes(c.status));
   // Multiple same-name clusters require a separate identity choice, not an
   // arbitrary reuse or a duplicate created through this one-client workflow.
   if (matches.length > 1) return null;
   const cluster = matches[0];
+  if (cluster) {
+    for (const intermediary of intermediaries) {
+      if (!intermediary.rawName?.trim()) continue;
+      const intermediaryKey = normalize(intermediary.rawName);
+      if (normalize(cluster.displayLabel!) === intermediaryKey) return null;
+      if ((await deps.aliasRepository?.findActiveByNormalizedName(intermediaryKey))?.some((e) => e.employerClusterId === cluster.id)) return null;
+    }
+  }
   const prior = cluster && assignments.findEffectiveByClusterId ? (await assignments.findEffectiveByClusterId(cluster.id)).filter((a) => a.status === "USER_CONFIRMED" && !vacancy.sourceObservationIds.includes(a.sourceObservationId)) : [];
   return {
+    ...(aliases.length === 0 ? {} : { aliasEvidence: aliases.filter((a) => a.employerClusterId === cluster?.id) }),
     type: "NAMED_CLIENT", candidateId: hash([vacancy.id, key, observationId, current.id, evidenceIds, cluster?.id ?? null]),
     name, sourceRelationship: "CLIENT", canonicalVacancyId: vacancy.id, sourceObservationIds: sourceIds, supportingEvidenceIds: evidenceIds,
-    reasonCode: "NAMED_CLIENT_POSSIBLE_EMPLOYER", explanation: `${recruiter.rawName!.trim()} is recruiting for the named client ${name}. Confirm whether this client is the employer.`,
+    reasonCode: "NAMED_CLIENT_POSSIBLE_EMPLOYER", explanation: `${recruiter.rawName!.trim()} is recruiting for the named client ${name}. Confirm whether this client is the employer.${cluster && normalize(cluster.displayLabel!) !== key ? ` This name was explicitly confirmed as an alias of "${cluster.displayLabel}".` : ""}`,
     employerClusterId: cluster?.id ?? null, clusterStatus: cluster?.status ?? null,
     priorConfirmationCount: new Set(prior.map((a) => a.sourceObservationId)).size,
   };
@@ -101,8 +112,10 @@ export async function decideNamedClientEmployer(vacancy: CanonicalVacancy, candi
     status: decision === "CONFIRM" ? "USER_CONFIRMED" : "REJECTED", confidence: 1, algorithm, algorithmVersion: "1.0.0",
     explanation: JSON.stringify({ candidateId, name: candidate.name, sourceRelationship: "CLIENT", decision, explanation: candidate.explanation }),
   }, { generateId: () => decisionId(vacancy.id, candidate.name) });
+  const target = decision === "CONFIRM" && candidate.employerClusterId ? await deps.employerClusterRepository.findById(candidate.employerClusterId) : null;
+  const aliasEvidence = deps.aliasRepository && target?.displayLabel ? createAliasEvidence(candidate.name, target.displayLabel, assignment) : undefined;
   try {
-    await persistence.saveEmployerReviewDecision(assignment, current.id, cluster);
+    await persistence.saveEmployerReviewDecision(assignment, current.id, cluster, aliasEvidence);
   } catch (error) {
     const saved = await repository.findById(assignment.id);
     if (saved?.algorithm === algorithm && saved.status === assignment.status && decisionMetadata(saved.explanation)?.candidateId === candidateId) return;

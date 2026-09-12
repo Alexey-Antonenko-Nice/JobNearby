@@ -7,6 +7,7 @@ import type {
 import type { EmployerClusterId } from "./EmployerCluster.js";
 
 export interface ObservationClusterAssignmentRepository {
+  findConfirmedClusterIds?(): Promise<readonly string[]>;
   save(
     assignment: ObservationClusterAssignment,
   ): Promise<void>;

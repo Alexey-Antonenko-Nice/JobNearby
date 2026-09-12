@@ -1,3 +1,11 @@
+export interface EmployerAliasSelection {
+  readonly type: "ALIAS_SELECTION";
+  readonly candidateId: string;
+  readonly name: string;
+  readonly explanation: string;
+  readonly options: readonly { employerClusterId: string; displayLabel: string }[];
+}
+
 export interface NamedClientEmployerCandidate {
   readonly type: "NAMED_CLIENT";
   readonly candidateId: string;
@@ -23,7 +31,7 @@ export interface VacancySourceLink {
 }
 
 export interface ReviewView {
-  readonly employerReview?: { readonly required: boolean; readonly candidates: readonly (NamedClientEmployerCandidate | (NonNullable<ReviewView["employerMemoryReview"]>["candidates"][number] & { readonly type: "CONFIRMED_MEMORY" }))[] };
+  readonly employerReview?: { readonly required: boolean; readonly candidates: readonly (EmployerAliasSelection | NamedClientEmployerCandidate | (NonNullable<ReviewView["employerMemoryReview"]>["candidates"][number] & { readonly type: "CONFIRMED_MEMORY" }))[] };
   readonly employerMemoryReview?: { readonly required: boolean; readonly candidates: readonly { employerClusterId: string; displayLabel: string; status: string; currentOrganizationName: string; explanation: string; reasonCodes: readonly string[]; priorConfirmationExists: boolean; priorConfirmationCount: number }[] };
   readonly vacancy: {
     readonly canonicalVacancyId: string;
@@ -39,7 +47,7 @@ export interface ReviewView {
     readonly sourceLinks: readonly VacancySourceLink[];
   };
   readonly user: { readonly currentState: string; readonly lastInteractionAt: string | null; readonly everApplied: boolean; readonly everInterviewed: boolean; readonly everRejected: boolean };
-  readonly employer: { readonly employerClusterId: string | null; readonly status: string | null; readonly resolvedEmployerId: string | null; readonly knownBefore: boolean; readonly previousVacancyCount: number; readonly previousInteractedVacancyCount: number; readonly everAppliedToEmployer: boolean; readonly everInterviewedWithEmployer: boolean; readonly everRejectedByEmployer: boolean; readonly confirmationCandidate?: string | null };
+  readonly employer: { readonly aliasEvidence?: readonly { aliasName: string; explanation: string; sourceType: string; createdAt: string }[]; readonly employerClusterId: string | null; readonly status: string | null; readonly resolvedEmployerId: string | null; readonly knownBefore: boolean; readonly previousVacancyCount: number; readonly previousInteractedVacancyCount: number; readonly everAppliedToEmployer: boolean; readonly everInterviewedWithEmployer: boolean; readonly everRejectedByEmployer: boolean; readonly confirmationCandidate?: string | null };
   readonly organizations: Record<string, readonly OrganizationRelationship[]>;
   readonly recognition: { readonly sameCanonicalVacancySeenBefore: boolean; readonly employerSeenBefore: boolean; readonly unresolvedEmployer: boolean };
   readonly reviewSignals: { readonly isNewVacancy: boolean; readonly isKnownEmployer: boolean; readonly alreadyAppliedToThisVacancy: boolean; readonly previouslyAppliedToEmployer: boolean; readonly previouslyInterviewedWithEmployer: boolean; readonly previouslyRejectedByEmployer: boolean; readonly hasMultipleSourceObservations: boolean };
@@ -112,6 +120,14 @@ export async function decideEmployerMemory(canonicalVacancyId: string, employerC
 export async function decideNamedClientEmployer(canonicalVacancyId: string, candidateId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
   const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "NAMED_CLIENT", candidateId, decision }),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { review: ReviewView }).review;
+}
+
+export async function decideEmployerAlias(canonicalVacancyId: string, candidateId: string, employerClusterId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
+  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "ALIAS_SELECTION", candidateId, employerClusterId, decision }),
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;
