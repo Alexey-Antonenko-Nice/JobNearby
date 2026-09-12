@@ -42,6 +42,7 @@ export interface VacancyReviewView {
     readonly everRejected: boolean;
   };
   readonly employer: {
+    readonly aliasEvidence?: readonly import("../recognition/EmployerAliasEvidence.js").EmployerAliasEvidence[];
     readonly employerClusterId: EmployerClusterId | null;
     readonly status: EmployerClusterStatus | null;
     readonly resolvedEmployerId: string | null;

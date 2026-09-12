@@ -1,3 +1,5 @@
+import { getEmployerAliasSelection } from "./employerAliasReview.js";
+import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import { getNamedClientEmployerCandidate } from "./namedClientEmployerReview.js";
 import type { EmployerReviewCandidate } from "../../domain/user/EmployerReviewCandidate.js";
 import { hasRejectedEmployerMemory, getEmployerMemoryReviewCandidates } from "./employerMemoryReview.js";
@@ -18,6 +20,7 @@ import { employerConfirmationCandidate } from "./employerConfirmation.js";
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
   dependencies: {
+    readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
     readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
     readonly interactionRepository: UserVacancyInteractionRepository;
@@ -58,7 +61,9 @@ export async function getVacancyReviewView(
 
   const memoryCandidates = await getEmployerMemoryReviewCandidates(vacancy, dependencies);
   const namedClient = memoryCandidates.length === 0 ? await getNamedClientEmployerCandidate(vacancy, dependencies) : null;
-  const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : [])];
+  const aliasSelection = memoryCandidates.length === 0 ? await getEmployerAliasSelection(vacancy, dependencies) : null;
+  const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : []), ...(aliasSelection ? [aliasSelection] : [])];
+  const knownAliases = employerClusterId && dependencies.aliasRepository ? await dependencies.aliasRepository.findByClusterId(employerClusterId) : [];
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
     ...(employerCandidates.length === 0 ? {} : { employerReview: { required: true as const, candidates: employerCandidates } }),
@@ -84,6 +89,7 @@ export async function getVacancyReviewView(
       everRejected: eventTypes.has("REJECTED"),
     },
     employer: {
+      ...(knownAliases.length === 0 ? {} : { aliasEvidence: knownAliases }),
       employerClusterId,
       status: employerMemory?.employerCluster.status ?? null,
       resolvedEmployerId: employerMemory?.employerCluster.resolvedEmployerId ?? null,

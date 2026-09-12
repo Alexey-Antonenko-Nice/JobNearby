@@ -1,3 +1,4 @@
+import { SqliteEmployerAliasEvidenceRepository } from "../persistence/SqliteEmployerAliasEvidenceRepository.js";
 import type Database from "better-sqlite3";
 
 import { BrowserCaptureAcquisitionAdapter } from "../../application/acquisition/BrowserCaptureAcquisitionAdapter.js";
@@ -58,6 +59,7 @@ export function createCaptureProcessingRuntime(
       new DeterministicCanonicalVacancyCanonicalizer(),
     ),
     employerRecognition: {
+      aliasRepository: new SqliteEmployerAliasEvidenceRepository(database),
       clusterRepository: employerClusterRepository,
       assignmentRepository,
       matcher,

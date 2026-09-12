@@ -1,3 +1,4 @@
+import { SqliteEmployerAliasEvidenceRepository } from "../persistence/SqliteEmployerAliasEvidenceRepository.js";
 import { SqliteEmployerRecognitionPersistence } from "../persistence/SqliteEmployerRecognitionPersistence.js";
 import { createDatabase } from "../database/createDatabase.js";
 import { createCaptureProcessingRuntime } from "../runtime/createCaptureProcessingRuntime.js";
@@ -19,6 +20,7 @@ const runtime = createCaptureProcessingRuntime(database, {
   },
 });
 const reviewWorkflow = createVacancyReviewWorkflow({
+  aliasRepository: new SqliteEmployerAliasEvidenceRepository(database),
   canonicalVacancyRepository: new SqliteCanonicalVacancyRepository(database),
   sourceObservationRepository: new SqliteSourceObservationRepository(database),
   interactionRepository: new SqliteUserVacancyInteractionRepository(database),

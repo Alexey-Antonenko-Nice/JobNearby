@@ -23,6 +23,16 @@ export class InMemoryObservationClusterAssignmentRepository
     }
   >();
 
+  async findConfirmedClusterIds(): Promise<readonly string[]> {
+    return [...new Set([...this.assignments.values()].filter((r) => r.supersededAt === null && r.assignment.status === "USER_CONFIRMED").map((r) => r.assignment.employerClusterId))].sort();
+  }
+
+  restoreReviewForRollback(previousId: string, replacementId: string): void {
+    this.assignments.delete(replacementId);
+    const previous = this.assignments.get(previousId);
+    if (previous) previous.supersededAt = null;
+  }
+
   async findEffectiveByClusterId(
     employerClusterId: EmployerClusterId,
   ): Promise<readonly ObservationClusterAssignment[]> {

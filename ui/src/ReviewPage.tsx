@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { decideNamedClientEmployer, decideEmployerMemory, confirmEmployer, getReview, recordInteraction, type OrganizationRelationship, type ReviewView } from "./api";
+import { decideEmployerAlias, decideNamedClientEmployer, decideEmployerMemory, confirmEmployer, getReview, recordInteraction, type OrganizationRelationship, type ReviewView } from "./api";
 import { formatCompensation, formatEngagement, formatLocation, formatWorkMode } from "./formatVacancyFacts";
 
 const actions = ["REVIEWED", "INTERESTED", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN", "CLOSED"];
@@ -15,6 +15,7 @@ export function ReviewPage(): React.JSX.Element {
   const [review, setReview] = useState<ReviewView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [selectedAliasCluster, setSelectedAliasCluster] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -59,6 +60,14 @@ export function ReviewPage(): React.JSX.Element {
     finally { setPending(false); }
   }
 
+  async function reviewAlias(candidateId: string, decision: "CONFIRM" | "REJECT"): Promise<void> {
+    if (canonicalVacancyId === null || !selectedAliasCluster) return;
+    setPending(true); setError(null);
+    try { setReview(await decideEmployerAlias(canonicalVacancyId, candidateId, selectedAliasCluster, decision)); setSelectedAliasCluster(""); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Unable to review employer equivalence."); }
+    finally { setPending(false); }
+  }
+
   if (notFound) return <main className="page"><p>Vacancy not found.</p></main>;
   if (error !== null && review === null) return <main className="page"><p role="alert">{error}</p></main>;
   if (review === null) return <main className="page"><p>Loading...</p></main>;
@@ -74,6 +83,15 @@ export function ReviewPage(): React.JSX.Element {
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
     <section><h2>Employer memory</h2>{review.employer.employerClusterId === null ? <p>Employer unresolved / not linked</p> : <Details values={[["Employer status", review.employer.status], ["Known employer before", yesNo(review.employer.knownBefore)], ["Previous vacancies from this employer", review.employer.previousVacancyCount], ["Previous interacted vacancies", review.employer.previousInteractedVacancyCount], ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)], ["Previously interviewed with employer", yesNo(review.employer.everInterviewedWithEmployer)], ["Previously rejected by employer", yesNo(review.employer.everRejectedByEmployer)]]} />}{review.employer.confirmationCandidate !== undefined && review.employer.confirmationCandidate !== null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}</section>
+    {review.employer.aliasEvidence && <section><h2>Known name evidence</h2><ul>{review.employer.aliasEvidence.map((alias, index) => <li key={index}><strong>{alias.aliasName}</strong><p>{alias.explanation}</p></li>)}</ul></section>}
+    {review.employerReview?.candidates.filter((candidate) => candidate.type === "ALIAS_SELECTION").map((candidate) => <section key={candidate.candidateId}>
+      <h2>Same as a known employer?</h2><p>Current name: <strong>{candidate.name}</strong></p><p>{candidate.explanation}</p>
+      <label>Previously confirmed employer <select value={candidate.options.some((o) => o.employerClusterId === selectedAliasCluster) ? selectedAliasCluster : ""} disabled={pending} onChange={(event) => setSelectedAliasCluster(event.target.value)}>
+        <option value="">Select an employer</option>{candidate.options.map((option) => <option key={option.employerClusterId} value={option.employerClusterId}>{option.displayLabel}</option>)}
+      </select></label>{" "}
+      <button type="button" disabled={pending || !candidate.options.some((o) => o.employerClusterId === selectedAliasCluster)} onClick={() => void reviewAlias(candidate.candidateId, "CONFIRM")}>Same employer</button>{" "}
+      <button type="button" disabled={pending || !candidate.options.some((o) => o.employerClusterId === selectedAliasCluster)} onClick={() => void reviewAlias(candidate.candidateId, "REJECT")}>Keep separate</button>
+    </section>)}
     {review.employerReview?.candidates.filter((candidate) => candidate.type === "NAMED_CLIENT").map((candidate) => <section key={candidate.candidateId}>
       <h2>Possible employer</h2><h3>{candidate.name}</h3><p>Source relationship: Client named in vacancy</p><p>{candidate.explanation}</p>
       {candidate.priorConfirmationCount > 0 && <p>Previously confirmed in {candidate.priorConfirmationCount} observations</p>}

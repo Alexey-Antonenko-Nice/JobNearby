@@ -1,3 +1,4 @@
+import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import { findConfirmedEmployerMemory } from "../recognition/findConfirmedEmployerMemory.js";
 import { createObservationClusterAssignment } from "../recognition/createObservationClusterAssignment.js";
@@ -7,6 +8,7 @@ import type { CanonicalVacancy } from "../../domain/vacancies/CanonicalVacancy.j
 import type { EmployerMemoryReviewCandidate } from "../../domain/user/EmployerMemoryReviewCandidate.js";
 
 export interface MemoryReviewDependencies {
+  readonly aliasRepository?: EmployerAliasEvidenceRepository;
   readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
   readonly assignmentRepository?: ObservationClusterAssignmentRepository;
 }
@@ -27,7 +29,7 @@ export async function getEmployerMemoryReviewCandidates(vacancy: CanonicalVacanc
     if (cluster.status === "CONFLICTED") conflictedState = true;
     if (cluster.displayLabel && !/^unknown employer(?:\s|$)/iu.test(cluster.displayLabel)) namedNonFinalClusterIds.add(id);
   }
-  const memory = await findConfirmedEmployerMemory(vacancy.organizationRelationships, vacancy.sourceObservationIds, { findCandidates: findCandidates.bind(deps.employerClusterRepository) }, repository);
+  const memory = await findConfirmedEmployerMemory(vacancy.organizationRelationships, vacancy.sourceObservationIds, { findCandidates: findCandidates.bind(deps.employerClusterRepository) }, repository, deps.aliasRepository);
   const proposals = await Promise.all(vacancy.sourceObservationIds.map((id) => repository.findCurrentProposalByObservationId(id)));
   const history = (await Promise.all(vacancy.sourceObservationIds.map((id) => repository.findByObservationId(id)))).flat();
   const reasons: EmployerMemoryReviewCandidate["reasonCodes"][number][] = [];
@@ -36,10 +38,11 @@ export async function getEmployerMemoryReviewCandidates(vacancy: CanonicalVacanc
   if (conflictedState || memory.matches.some(({ cluster }) => [...namedNonFinalClusterIds].some((id) => id !== cluster.id))) reasons.push("CONFLICTING_EFFECTIVE_ASSIGNMENT");
   if (proposals.some((p) => p !== null)) reasons.push("RECOGNITION_REVIEW_REQUIRED");
   if (reasons.length === 0) return [];
-  return memory.matches.filter(({ cluster }) => !history.some((a) => a.employerClusterId === cluster.id && a.status === "REJECTED" && a.algorithm === MEMORY_REVIEW_ALGORITHM)).map(({ cluster, currentOrganizationName, priorConfirmationCount }) => ({
+  return memory.matches.filter(({ cluster }) => !history.some((a) => a.employerClusterId === cluster.id && a.status === "REJECTED" && [MEMORY_REVIEW_ALGORITHM, "user-employer-alias-review"].includes(a.algorithm))).map(({ cluster, currentOrganizationName, priorConfirmationCount, aliasEvidence }) => ({
+    ...(aliasEvidence ? { aliasEvidence } : {}),
     employerClusterId: cluster.id, displayLabel: cluster.displayLabel!, status: cluster.status,
     currentOrganizationName, reasonCodes: reasons, priorConfirmationExists: true, priorConfirmationCount,
-    explanation: `Previously confirmed employer memory exists for "${currentOrganizationName}". Automatic reuse was not performed: ${reasons.map((r) => ({ MULTIPLE_CONFIRMED_CLUSTERS: "multiple confirmed clusters match", MULTIPLE_CURRENT_EMPLOYER_NAMES: "multiple current employer names exist", CONFLICTING_EFFECTIVE_ASSIGNMENT: "the current assignment conflicts", RECOGNITION_REVIEW_REQUIRED: "recognition requires review" })[r]).join("; ")}.`,
+    explanation: `${aliasEvidence ? `"${currentOrganizationName}" was explicitly confirmed as the same employer as "${cluster.displayLabel}". ` : ""}Previously confirmed employer memory exists for "${currentOrganizationName}". Automatic reuse was not performed: ${reasons.map((r) => ({ MULTIPLE_CONFIRMED_CLUSTERS: "multiple confirmed clusters match", MULTIPLE_CURRENT_EMPLOYER_NAMES: "multiple current employer names exist", CONFLICTING_EFFECTIVE_ASSIGNMENT: "the current assignment conflicts", RECOGNITION_REVIEW_REQUIRED: "recognition requires review" })[r]).join("; ")}.`,
   }));
 }
 

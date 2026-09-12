@@ -1,3 +1,4 @@
+import type { EmployerAliasEvidence } from "./EmployerAliasEvidence.js";
 import type { EmployerCluster } from "./EmployerCluster.js";
 import type { ObservationClusterAssignment } from "./ObservationClusterAssignment.js";
 
@@ -7,6 +8,7 @@ export interface EmployerRecognitionPersistence {
     assignment: ObservationClusterAssignment,
     expectedEffectiveAssignmentId: string,
     newCluster?: EmployerCluster,
+    aliasEvidence?: EmployerAliasEvidence,
   ): Promise<void>;
 
   saveNewClusterWithAssignment(
