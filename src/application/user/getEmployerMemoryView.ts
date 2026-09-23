@@ -1,34 +1,52 @@
+import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
+import { compareUserVacancyInteractionEvents, deriveUserVacancyState } from "../../domain/user/UserVacancyInteractionEvent.js";
 import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import type { EmployerClusterId } from "../../domain/recognition/EmployerCluster.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import type {
-  EmployerMemoryOrganizationRelationship,
   EmployerMemoryOrganizationSeen,
   EmployerMemoryVacancy,
   EmployerMemoryView,
 } from "../../domain/user/EmployerMemoryView.js";
 import type { UserVacancyInteractionRepository } from "../../domain/user/UserVacancyInteractionRepository.js";
-import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
 import type { EmployerMemoryPublicDataSource } from "./EmployerMemoryPublicDataSource.js";
 
 export async function getEmployerMemoryView(
   employerClusterId: EmployerClusterId,
   dependencies: {
     readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
+    readonly excludeCanonicalVacancyId?: string;
+    readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly publicDataSource: EmployerMemoryPublicDataSource;
     readonly interactionRepository: UserVacancyInteractionRepository;
   },
 ): Promise<EmployerMemoryView> {
   const cluster = await dependencies.employerClusterRepository.findById(employerClusterId);
   if (cluster === null) throw new Error(`EmployerCluster "${employerClusterId}" does not exist.`);
-  const publicVacancies = await dependencies.publicDataSource.findByEmployerClusterId(employerClusterId);
-  const vacancies = await Promise.all(publicVacancies.map(async (vacancy): Promise<EmployerMemoryVacancy> => {
-    const history = await getUserVacancyHistory(vacancy.canonicalVacancyId, dependencies.interactionRepository);
-    const eventTypes = new Set(history.events.map(({ type }) => type));
+  const publicVacancies = [...new Map((await dependencies.publicDataSource.findByEmployerClusterId(employerClusterId))
+    .filter((vacancy) => vacancy.canonicalVacancyId !== dependencies.excludeCanonicalVacancyId)
+    .map((vacancy) => [vacancy.canonicalVacancyId, vacancy])).values()];
+  const ids = publicVacancies.map(({ canonicalVacancyId }) => canonicalVacancyId);
+  const repository = dependencies.interactionRepository;
+  const allEvents = repository.findByCanonicalVacancyIds
+    ? await repository.findByCanonicalVacancyIds(ids)
+    : (await Promise.all(ids.map((id) => repository.findByCanonicalVacancyId(id)))).flat();
+  const eventsByVacancy = new Map<string, typeof allEvents[number][]>();
+  for (const event of allEvents) {
+    const events = eventsByVacancy.get(event.canonicalVacancyId) ?? [];
+    events.push(event);
+    eventsByVacancy.set(event.canonicalVacancyId, events);
+  }
+  const vacancies = publicVacancies.map((vacancy): EmployerMemoryVacancy => {
+    const events = (eventsByVacancy.get(vacancy.canonicalVacancyId) ?? []).sort(compareUserVacancyInteractionEvents);
+    const eventTypes = new Set(events.map(({ type }) => type));
     return {
       ...vacancy,
-      currentUserState: history.currentState,
-      lastUserInteractionAt: history.events.at(-1)?.occurredAt ?? null,
+      currentUserState: deriveUserVacancyState(events),
+      lastUserInteractionAt: events.at(-1)?.occurredAt ?? null,
+      everContacted: eventTypes.has("CONTACTED"),
+      everOffered: eventTypes.has("OFFER"),
+      everWithdrawn: eventTypes.has("WITHDRAWN"),
       everApplied: eventTypes.has("APPLIED"),
       everInterviewed: eventTypes.has("INTERVIEW"),
       everRejected: eventTypes.has("REJECTED"),
@@ -36,16 +54,25 @@ export async function getEmployerMemoryView(
         ({ role }) => role === "RECRUITER" || role === "CONSULTANCY" || role === "STAFFING_AGENCY",
       ),
     };
-  }));
+  });
   vacancies.sort((left, right) =>
     (right.latestObservedAt?.getTime() ?? Number.NEGATIVE_INFINITY)
       - (left.latestObservedAt?.getTime() ?? Number.NEGATIVE_INFINITY)
     || left.canonicalVacancyId.localeCompare(right.canonicalVacancyId));
 
+  const aliases = await dependencies.aliasRepository?.findActiveByClusterId(employerClusterId) ?? [];
+  const knownNames = new Map<string, string>();
+  for (const name of [cluster.displayLabel, ...aliases.map(({ aliasName }) => aliasName)]) {
+    if (name?.trim() && !knownNames.has(normalizeOrganizationEvidenceName(name))) {
+      knownNames.set(normalizeOrganizationEvidenceName(name), name);
+    }
+  }
   return {
+    knownNames: [...knownNames.values()],
     employerCluster: {
       id: cluster.id,
       status: cluster.status,
+      ...(cluster.displayLabel === undefined ? {} : { displayLabel: cluster.displayLabel }),
       ...(cluster.resolvedEmployerId === undefined ? {} : { resolvedEmployerId: cluster.resolvedEmployerId }),
     },
     organizationsSeen: aggregateOrganizations(vacancies),
@@ -94,6 +121,9 @@ function summarize(vacancies: readonly EmployerMemoryVacancy[]): EmployerMemoryV
   return {
     vacancyCount: vacancies.length,
     interactedVacancyCount: vacancies.filter(({ currentUserState }) => currentUserState !== "NEW").length,
+    everContactedCount: vacancies.filter(({ everContacted }) => everContacted).length,
+    everOfferedCount: vacancies.filter(({ everOffered }) => everOffered).length,
+    everWithdrawnCount: vacancies.filter(({ everWithdrawn }) => everWithdrawn).length,
     everAppliedCount: vacancies.filter(({ everApplied }) => everApplied).length,
     everInterviewedCount: vacancies.filter(({ everInterviewed }) => everInterviewed).length,
     everRejectedCount: vacancies.filter(({ everRejected }) => everRejected).length,

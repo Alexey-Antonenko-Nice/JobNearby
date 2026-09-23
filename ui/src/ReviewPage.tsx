@@ -82,8 +82,12 @@ export function ReviewPage(): React.JSX.Element {
     ]} /></section>
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
-    <section><h2>Employer memory</h2>{review.employer.employerClusterId === null ? <p>Employer unresolved / not linked</p> : <Details values={[["Employer status", review.employer.status], ["Known employer before", yesNo(review.employer.knownBefore)], ["Previous vacancies from this employer", review.employer.previousVacancyCount], ["Previous interacted vacancies", review.employer.previousInteractedVacancyCount], ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)], ["Previously interviewed with employer", yesNo(review.employer.everInterviewedWithEmployer)], ["Previously rejected by employer", yesNo(review.employer.everRejectedByEmployer)]]} />}{review.employer.confirmationCandidate !== undefined && review.employer.confirmationCandidate !== null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}</section>
-    {review.employer.aliasEvidence && <section><h2>Known name evidence</h2><ul>{review.employer.aliasEvidence.map((alias, index) => <li key={index}><strong>{alias.aliasName}</strong><p>{alias.explanation}</p></li>)}</ul></section>}
+    {review.employerHistory ? <EmployerHistorySection history={review.employerHistory} organizations={review.organizations} /> :
+      <section><h2>Employer memory</h2>{review.employer.employerClusterId !== null && (review.employer.status === "RESOLVED" || review.employer.status === "PROBABLY_RESOLVED")
+        ? <Details values={[["Employer status", review.employer.status], ["Previous vacancies from this employer", review.employer.previousVacancyCount],
+          ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)]]} />
+        : <p>{review.employer.status === "CONFLICTED" ? "Employer identity requires review" : "Employer unresolved / not linked"}</p>}</section>}
+    {review.employer.confirmationCandidate != null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}
     {review.employerReview?.candidates.filter((candidate) => candidate.type === "ALIAS_SELECTION").map((candidate) => <section key={candidate.candidateId}>
       <h2>Same as a known employer?</h2><p>Current name: <strong>{candidate.name}</strong></p><p>{candidate.explanation}</p>
       <label>Previously confirmed employer <select value={candidate.options.some((o) => o.employerClusterId === selectedAliasCluster) ? selectedAliasCluster : ""} disabled={pending} onChange={(event) => setSelectedAliasCluster(event.target.value)}>
@@ -107,6 +111,42 @@ export function ReviewPage(): React.JSX.Element {
     <section><h2>Review signals</h2><ul className="signals">{signals(review).map((signal) => <li key={signal}>{signal}</li>)}</ul></section>
     <section><h2>Actions</h2><div className="actions">{actions.map((action) => <button key={action} type="button" disabled={pending} onClick={() => void submit(action)}>{action}</button>)}</div></section>
   </main>;
+}
+
+function EmployerHistorySection({ history, organizations }: {
+  readonly history: NonNullable<ReviewView["employerHistory"]>;
+  readonly organizations: ReviewView["organizations"];
+}): React.JSX.Element {
+  const summary = history.summary;
+  const intermediaries = [...new Set([...(organizations.recruiters ?? []), ...(organizations.staffingAgencies ?? [])]
+    .map(({ rawName }) => rawName).filter((name): name is string => Boolean(name)))];
+  return <section aria-labelledby="employer-history-heading">
+    <h2 id="employer-history-heading">Employer history</h2>
+    <h3>{history.employerCluster.displayLabel ?? "Employer"}</h3>
+    {summary.vacancyCount === 0 ? <p>No previous vacancies with this employer.</p> : <>
+      <p>Known employer</p>
+      <Details values={[["Previous vacancies", summary.vacancyCount], ["Applications", summary.everAppliedCount],
+        ["Interviews", summary.everInterviewedCount], ["Offers", summary.everOfferedCount], ["Rejections", summary.everRejectedCount]]} />
+      <p>Last interaction: {summary.latestUserInteractionAt === null ? "No previous interactions" : date(summary.latestUserInteractionAt)}</p>
+      <h4>Previous roles</h4><ul>{history.vacancies.map((vacancy) => <li key={vacancy.canonicalVacancyId}>
+        <a href={`/review/${encodeURIComponent(vacancy.canonicalVacancyId)}`}>{vacancy.title ?? "Untitled vacancy"}</a>
+        {vacancy.location !== null && ` — ${formatLocation(vacancy.location)}`}
+        {Boolean(vacancy.sources?.length) && ` — ${vacancy.sources!.join(", ")}`}
+        {` — ${interactionLabel(vacancy.currentUserState)}`}
+        <p>{[[vacancy.everApplied, "Applied"], [vacancy.everContacted, "Contacted"], [vacancy.everInterviewed, "Interviewed"],
+          [vacancy.everOffered, "Offered"], [vacancy.everRejected, "Rejected"], [vacancy.everWithdrawn, "Withdrawn"]]
+          .filter(([occurred]) => occurred).map(([, label]) => label).join(" · ")}
+          {vacancy.lastUserInteractionAt !== null && ` — ${date(vacancy.lastUserInteractionAt)}`}</p>
+      </li>)}</ul>
+    </>}
+    {history.knownNames.length > 0 && <><h4>Known names</h4><ul>{history.knownNames.map((name) => <li key={name}>{name}</li>)}</ul></>}
+    {intermediaries.length > 0 && <p>Current vacancy via: {intermediaries.join(", ")}</p>}
+  </section>;
+}
+function interactionLabel(state: string): string {
+  const labels: Record<string, string> = { NEW: "No interaction", REVIEWED: "Reviewed", INTERESTED: "Interested", APPLIED: "Applied",
+    CONTACTED: "Contacted", INTERVIEW: "Interview", OFFER: "Offer", REJECTED: "Rejected", WITHDRAWN: "Withdrawn", CLOSED: "Closed" };
+  return labels[state] ?? state;
 }
 
 function Details({ values }: { readonly values: readonly [string, unknown][] }): React.JSX.Element { return <dl>{values.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{text(value)}</dd></div>)}</dl>; }

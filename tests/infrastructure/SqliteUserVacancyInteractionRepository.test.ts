@@ -11,6 +11,20 @@ const databasePath = join(process.cwd(), ".user-vacancy-interactions-test.sqlite
 describe("SqliteUserVacancyInteractionRepository", () => {
   afterEach(() => { if (existsSync(databasePath)) unlinkSync(databasePath); });
 
+  it("batches only requested canonical histories without duplicate events", async () => {
+    const db = createDatabase(":memory:");
+    try {
+      for (const id of ["canonical-1", "other", "excluded"]) insertCanonicalVacancy(db, id);
+      const repository = new SqliteUserVacancyInteractionRepository(db);
+      await repository.append(interaction("late", "REJECTED", undefined, "2026-09-03T00:00:00Z"));
+      await repository.append({ ...interaction("early", "APPLIED"), canonicalVacancyId: "other" });
+      await repository.append({ ...interaction("ignored", "OFFER"), canonicalVacancyId: "excluded" });
+      expect((await repository.findByCanonicalVacancyIds(["canonical-1", "other", "canonical-1"]))
+        .map(({ id }) => id)).toEqual(["early", "late"]);
+      expect(await repository.findByCanonicalVacancyIds([])).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it("persists append-only typed events across restart", async () => {
     const firstDb = createDatabase(databasePath);
     insertCanonicalVacancy(firstDb, "canonical-1");

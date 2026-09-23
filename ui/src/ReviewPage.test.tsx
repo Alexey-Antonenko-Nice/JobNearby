@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,45 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("shows compact previous employer history with outcomes, aliases, and recruiter context", async () => {
+    respond({ review: { ...review({ organizations: { recruiters: [{ rawName: "ACTUA Saverne", role: "RECRUITER" }] } }), employerHistory: employerHistory() } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("region", { name: "Employer history" });
+    expect(within(section).getByRole("heading", { name: "HEUFT" })).toBeInTheDocument();
+    expect(within(section).getByText("Applications").nextElementSibling).toHaveTextContent("1");
+    expect(within(section).getByText("Previous vacancies").nextElementSibling).toHaveTextContent("3");
+    expect(within(section).getByRole("link", { name: "Technicien itinérant" })).toHaveAttribute("href", "/review/previous-1");
+    expect(within(section).getByText(/Applied · Interviewed · Rejected/)).toBeInTheDocument();
+    expect(within(section).getByText(/Strasbourg — Indeed — Rejected/)).toBeInTheDocument();
+    expect(within(section).getByText("Current vacancy via: ACTUA Saverne")).toBeInTheDocument();
+    expect(within(section).getByText("HEUFT France")).toBeInTheDocument();
+    expect(within(section).queryByText("Developer")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps employer identity and known names visible with no previous vacancies", async () => {
+    const history = employerHistory();
+    respond({ review: { ...review(), employerHistory: { ...history, vacancies: [], summary: { ...history.summary, vacancyCount: 0 } } } });
+    render(<ReviewPage />);
+    expect(await screen.findByText("No previous vacancies with this employer.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Known names" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Previous roles" })).not.toBeInTheDocument();
+  });
+
+  it.each(["UNRESOLVED", "CONFLICTED"])("does not present authoritative history for %s", async (status) => {
+    respond({ review: review({ status }) }); render(<ReviewPage />);
+    await screen.findByRole("heading", { name: "Employer memory" });
+    expect(screen.queryByRole("heading", { name: "Employer history" })).not.toBeInTheDocument();
+    if (status === "CONFLICTED") expect(screen.getByText("Employer identity requires review")).toBeInTheDocument();
+  });
+
+  it("shows absent previous interaction without substituting capture date", async () => {
+    const history = employerHistory();
+    respond({ review: { ...review(), employerHistory: { ...history, summary: { ...history.summary, latestUserInteractionAt: null } } } });
+    render(<ReviewPage />);
+    expect(await screen.findByText("Last interaction: No previous interactions")).toBeInTheDocument();
+  });
+
   it.each([["Confirm employer", "CONFIRM"], ["Not the employer", "REJECT"]])("reviews HEUFT named client with %s while ACTUA is not offered", async (label, decision) => {
     const base = review({ employerClusterId: null, status: "UNRESOLVED", confirmationCandidate: null, organizations: { employerRelationships: [], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "ACTUA SAVERNE" }], recruiters: [{ role: "RECRUITER", rawName: "ACTUA Saverne" }], clients: [{ role: "CLIENT", rawName: "HEUFT France" }] } });
     respond({ review: { ...base, employerReview: { required: true, candidates: [{ type: "NAMED_CLIENT", candidateId: "client-token", name: "HEUFT France", sourceRelationship: "CLIENT", employerClusterId: null, priorConfirmationCount: 0, explanation: "ACTUA Saverne is recruiting for the named client HEUFT France." }] } } });
@@ -160,7 +199,7 @@ describe("ReviewPage", () => {
 
   it("keeps ACTUA recruiter and HEUFT client visible without offering employer confirmation", async () => {
     respond({ review: review({
-      title: "M�canicien Monteur d��quipements Industriels H/F", employerClusterId: null, status: "UNRESOLVED", confirmationCandidate: null,
+      title: "Mécanicien Monteur d’Équipements Industriels H/F", employerClusterId: null, status: "UNRESOLVED", confirmationCandidate: null,
       organizations: { employerRelationships: [], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "ACTUA SAVERNE" }], recruiters: [{ role: "RECRUITER", rawName: "ACTUA Saverne" }], clients: [{ role: "CLIENT", rawName: "HEUFT France" }], consultancies: [] },
     }) });
     render(<ReviewPage />);
@@ -221,4 +260,15 @@ function review(overrides: Record<string, unknown> = {}) {
     else Object.assign(reviewSignals, { [key]: value });
   }
   return { vacancy, user, employer, organizations, recognition, reviewSignals };
+}
+function employerHistory() {
+  return {
+    employerCluster: { id: "heuft", displayLabel: "HEUFT", status: "PROBABLY_RESOLVED" }, knownNames: ["HEUFT", "HEUFT France"],
+    summary: { vacancyCount: 3, everAppliedCount: 1, everInterviewedCount: 1, everOfferedCount: 0, everRejectedCount: 1, latestUserInteractionAt: "2026-08-18T00:00:00Z" },
+    vacancies: ["Technicien itinérant", "Mécanicien monteur", "Mécanicien Monteur d'Équipements Industriels"].map((title, index) => ({
+      canonicalVacancyId: `previous-${index + 1}`, title, location: { rawText: "Strasbourg" }, sources: ["Indeed"], currentUserState: index === 0 ? "REJECTED" : "NEW",
+      lastUserInteractionAt: index === 0 ? "2026-08-18T00:00:00Z" : null, everApplied: index === 0, everInterviewed: index === 0,
+      everRejected: index === 0, everOffered: false, everContacted: false, everWithdrawn: false,
+    })),
+  };
 }

@@ -30,7 +30,23 @@ export interface VacancySourceLink {
   readonly observedAt: string;
 }
 
+export interface EmployerHistory {
+  readonly employerCluster: { readonly id: string; readonly status: string; readonly displayLabel?: string };
+  readonly knownNames: readonly string[];
+  readonly summary: {
+    readonly vacancyCount: number; readonly everAppliedCount: number; readonly everInterviewedCount: number;
+    readonly everOfferedCount: number; readonly everRejectedCount: number; readonly latestUserInteractionAt: string | null;
+  };
+  readonly vacancies: readonly {
+    readonly canonicalVacancyId: string; readonly title: string | null; readonly location: unknown | null;
+    readonly sources?: readonly string[]; readonly currentUserState: string; readonly lastUserInteractionAt: string | null;
+    readonly everApplied: boolean; readonly everContacted: boolean; readonly everInterviewed: boolean;
+    readonly everOffered: boolean; readonly everRejected: boolean; readonly everWithdrawn: boolean;
+  }[];
+}
+
 export interface ReviewView {
+  readonly employerHistory?: EmployerHistory;
   readonly employerReview?: { readonly required: boolean; readonly candidates: readonly (EmployerAliasSelection | NamedClientEmployerCandidate | (NonNullable<ReviewView["employerMemoryReview"]>["candidates"][number] & { readonly type: "CONFIRMED_MEMORY" }))[] };
   readonly employerMemoryReview?: { readonly required: boolean; readonly candidates: readonly { employerClusterId: string; displayLabel: string; status: string; currentOrganizationName: string; explanation: string; reasonCodes: readonly string[]; priorConfirmationExists: boolean; priorConfirmationCount: number }[] };
   readonly vacancy: {

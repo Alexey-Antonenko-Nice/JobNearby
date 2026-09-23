@@ -57,6 +57,7 @@ describe("SqliteEmployerAliasEvidenceRepository", () => {
       evidence("evidence-a", "cluster-a", "assignment-a"),
       evidence("evidence-b", "cluster-b", "assignment-b"),
     ]);
+    expect(await aliases.findActiveByClusterId("cluster-a")).toEqual([evidence("evidence-a", "cluster-a", "assignment-a")]);
     expect(await aliases.findByClusterId("cluster-a")).toEqual([evidence("evidence-a", "cluster-a", "assignment-a")]);
     expect(db.prepare("SELECT COUNT(*) AS count FROM employer_alias_evidence").get()).toEqual({ count: 2 });
     db.close();
@@ -78,6 +79,7 @@ describe("SqliteEmployerAliasEvidenceRepository", () => {
     await assignments.supersedeEffectiveAssignment(original.id, replacement, new Date("2026-09-08T11:00:00.000Z"));
 
     expect(await aliases.findActiveByNormalizedName(alias.normalizedAliasName)).toEqual([]);
+    expect(await aliases.findActiveByClusterId("cluster")).toEqual([]);
     expect(await aliases.findByClusterId("cluster")).toEqual([alias]);
     db.close();
   });
@@ -94,5 +96,24 @@ describe("SqliteEmployerAliasEvidenceRepository", () => {
     const invalid: EmployerAliasEvidence = { id: "invalid", aliasName: "", normalizedAliasName: "", employerClusterId: "cluster", sourceType: "USER_CONFIRMED_ALIAS", sourceAssignmentId: "assignment", createdAt: timestamp, explanation: "invalid" };
     await expect(aliases.save(invalid)).rejects.toThrow("Invalid employer alias evidence.");
     db.close();
+  });
+});
+
+// The in-memory repository must make the same active/audit distinction.
+describe("in-memory active cluster aliases", () => {
+  it("omits superseded evidence from known names without deleting provenance", async () => {
+    const { InMemoryObservationClusterAssignmentRepository } = await import("../../src/infrastructure/persistence/InMemoryObservationClusterAssignmentRepository.js");
+    const { InMemoryEmployerAliasEvidenceRepository } = await import("../../src/infrastructure/persistence/InMemoryEmployerAliasEvidenceRepository.js");
+    const assignments = new InMemoryObservationClusterAssignmentRepository();
+    const aliases = new InMemoryEmployerAliasEvidenceRepository(assignments);
+    const original = createObservationClusterAssignment({ sourceObservationId: "source", employerClusterId: "cluster", status: "USER_CONFIRMED", confidence: 1, algorithm: "user-review", algorithmVersion: "1" }, { generateId: () => "original" });
+    await assignments.save(original);
+    const evidence: EmployerAliasEvidence = { id: "alias", aliasName: "HEUFT France", normalizedAliasName: "heuft france", employerClusterId: "cluster", sourceType: "USER_CONFIRMED_ALIAS", sourceAssignmentId: original.id, createdAt: timestamp, explanation: "Explicit user confirmation" };
+    await aliases.save(evidence);
+    expect(await aliases.findActiveByClusterId("cluster")).toEqual([evidence]);
+    expect(await aliases.findActiveByClusterId("other")).toEqual([]);
+    await assignments.supersedeEffectiveAssignment(original.id, { ...original, id: "replacement" }, timestamp);
+    expect(await aliases.findActiveByClusterId("cluster")).toEqual([]);
+    expect(await aliases.findByClusterId("cluster")).toEqual([evidence]);
   });
 });

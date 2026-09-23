@@ -20,9 +20,13 @@ export interface EmployerMemoryVacancy {
   readonly title: string | null;
   readonly location: VacancyLocation | null;
   readonly latestObservedAt: Date | null;
+  readonly sources?: readonly string[];
   readonly sourceObservationCount: number;
   readonly currentUserState: UserVacancyState;
   readonly lastUserInteractionAt: Date | null;
+  readonly everContacted: boolean;
+  readonly everOffered: boolean;
+  readonly everWithdrawn: boolean;
   readonly everApplied: boolean;
   readonly everInterviewed: boolean;
   readonly everRejected: boolean;
@@ -41,13 +45,18 @@ export interface EmployerMemoryView {
   readonly employerCluster: {
     readonly id: EmployerClusterId;
     readonly status: EmployerClusterStatus;
+    readonly displayLabel?: string;
     readonly resolvedEmployerId?: string;
   };
+  readonly knownNames: readonly string[];
   readonly organizationsSeen: readonly EmployerMemoryOrganizationSeen[];
   readonly vacancies: readonly EmployerMemoryVacancy[];
   readonly summary: {
     readonly vacancyCount: number;
     readonly interactedVacancyCount: number;
+    readonly everContactedCount: number;
+    readonly everOfferedCount: number;
+    readonly everWithdrawnCount: number;
     readonly everAppliedCount: number;
     readonly everInterviewedCount: number;
     readonly everRejectedCount: number;

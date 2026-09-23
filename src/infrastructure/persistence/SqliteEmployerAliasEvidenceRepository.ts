@@ -16,6 +16,13 @@ export class SqliteEmployerAliasEvidenceRepository implements EmployerAliasEvide
         AND a.superseded_at IS NULL AND a.employer_cluster_id = e.employer_cluster_id
       ORDER BY e.employer_cluster_id, e.created_at, e.id`).all(name) as AliasRow[]).map(mapRow);
   }
+  async findActiveByClusterId(id: string): Promise<readonly EmployerAliasEvidence[]> {
+    return (this.db.prepare(`SELECT e.* FROM employer_alias_evidence e
+      JOIN observation_cluster_assignments a ON a.id = e.source_assignment_id
+      WHERE e.employer_cluster_id = ? AND a.status = 'USER_CONFIRMED'
+        AND a.superseded_at IS NULL AND a.employer_cluster_id = e.employer_cluster_id
+      ORDER BY e.created_at, e.id`).all(id) as AliasRow[]).map(mapRow);
+  }
   async findByClusterId(id: string): Promise<readonly EmployerAliasEvidence[]> {
     return (this.db.prepare("SELECT * FROM employer_alias_evidence WHERE employer_cluster_id = ? ORDER BY created_at, id").all(id) as AliasRow[]).map(mapRow);
   }

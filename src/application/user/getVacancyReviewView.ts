@@ -43,10 +43,14 @@ export async function getVacancyReviewView(
   const eventTypes = new Set(history.events.map(({ type }) => type));
   const confirmedAssignment = dependencies.assignmentRepository === undefined ? null : await latestEffectiveAssignment(vacancy.sourceObservationIds, dependencies.assignmentRepository);
   const employerClusterId = confirmedAssignment?.employerClusterId ?? effectiveEmployerClusterId(vacancy.organizationRelationships);
-  const employerMemory = employerClusterId === null ? null : await getEmployerMemoryView(
+  const employerCluster = employerClusterId === null ? null : await dependencies.employerClusterRepository.findById(employerClusterId);
+  const usableEmployer = employerCluster?.status === "PROBABLY_RESOLVED" || employerCluster?.status === "RESOLVED";
+  const employerMemory = !usableEmployer || employerClusterId === null ? null : await getEmployerMemoryView(
     employerClusterId,
     {
       employerClusterRepository: dependencies.employerClusterRepository,
+      excludeCanonicalVacancyId: canonicalVacancyId,
+      ...(dependencies.aliasRepository ? { aliasRepository: dependencies.aliasRepository } : {}),
       publicDataSource: dependencies.employerMemoryPublicDataSource,
       interactionRepository: dependencies.interactionRepository,
     },
@@ -63,9 +67,9 @@ export async function getVacancyReviewView(
   const namedClient = memoryCandidates.length === 0 ? await getNamedClientEmployerCandidate(vacancy, dependencies) : null;
   const aliasSelection = memoryCandidates.length === 0 ? await getEmployerAliasSelection(vacancy, dependencies) : null;
   const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : []), ...(aliasSelection ? [aliasSelection] : [])];
-  const knownAliases = employerClusterId && dependencies.aliasRepository ? await dependencies.aliasRepository.findByClusterId(employerClusterId) : [];
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(employerMemory === null ? {} : { employerHistory: employerMemory }),
     ...(employerCandidates.length === 0 ? {} : { employerReview: { required: true as const, candidates: employerCandidates } }),
     ...(memoryCandidates.length === 0 ? {} : { employerMemoryReview: { required: true as const, candidates: memoryCandidates } }),
     vacancy: {
@@ -89,10 +93,9 @@ export async function getVacancyReviewView(
       everRejected: eventTypes.has("REJECTED"),
     },
     employer: {
-      ...(knownAliases.length === 0 ? {} : { aliasEvidence: knownAliases }),
       employerClusterId,
-      status: employerMemory?.employerCluster.status ?? null,
-      resolvedEmployerId: employerMemory?.employerCluster.resolvedEmployerId ?? null,
+      status: employerCluster?.status ?? null,
+      resolvedEmployerId: employerCluster?.resolvedEmployerId ?? null,
       knownBefore: knownEmployer,
       previousVacancyCount: previousVacancies.length,
       previousInteractedVacancyCount: previousVacancies.filter(
@@ -101,9 +104,9 @@ export async function getVacancyReviewView(
       everAppliedToEmployer: employerMemory?.vacancies.some(({ everApplied }) => everApplied) ?? false,
       everInterviewedWithEmployer: employerMemory?.vacancies.some(({ everInterviewed }) => everInterviewed) ?? false,
       everRejectedByEmployer: employerMemory?.vacancies.some(({ everRejected }) => everRejected) ?? false,
-      confirmationCandidate: memoryCandidates.length > 0 || rejectedMemory ? null : (employerMemory?.employerCluster.status !== undefined
-        && employerMemory.employerCluster.status !== "UNRESOLVED"
-        && employerMemory.employerCluster.status !== "PROBABLY_RESOLVED")
+      confirmationCandidate: memoryCandidates.length > 0 || rejectedMemory ? null : (employerCluster?.status !== undefined
+        && employerCluster.status !== "UNRESOLVED"
+        && employerCluster.status !== "PROBABLY_RESOLVED")
         || confirmedAssignment?.status === "USER_CONFIRMED"
         ? null : employerConfirmationCandidate(vacancy.organizationRelationships),
     },

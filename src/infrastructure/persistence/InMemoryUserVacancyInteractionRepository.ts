@@ -17,6 +17,12 @@ export class InMemoryUserVacancyInteractionRepository
     this.events.set(validated.id, validated);
   }
 
+  async findByCanonicalVacancyIds(ids: readonly string[]) {
+    const selected = new Set(ids);
+    return [...this.events.values()].filter((event) => selected.has(event.canonicalVacancyId))
+      .sort(compareUserVacancyInteractionEvents).map((event) => structuredClone(event));
+  }
+
   async findByCanonicalVacancyId(canonicalVacancyId: string) {
     return [...this.events.values()]
       .filter((event) => event.canonicalVacancyId === canonicalVacancyId)
