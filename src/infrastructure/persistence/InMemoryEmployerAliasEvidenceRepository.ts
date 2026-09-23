@@ -22,6 +22,15 @@ export class InMemoryEmployerAliasEvidenceRepository implements EmployerAliasEvi
     }
     return structuredClone(result.sort(compare));
   }
+  async findActiveByClusterId(id: string): Promise<readonly EmployerAliasEvidence[]> {
+    const result: EmployerAliasEvidence[] = [];
+    for (const evidence of await this.findByClusterId(id)) {
+      const proof = await this.assignments.findById(evidence.sourceAssignmentId);
+      if (proof?.status === "USER_CONFIRMED" && proof.employerClusterId === id
+        && (await this.assignments.findEffectiveByObservationId(proof.sourceObservationId))?.id === proof.id) result.push(evidence);
+    }
+    return result;
+  }
   async findByClusterId(id: string): Promise<readonly EmployerAliasEvidence[]> {
     return structuredClone([...this.evidence.values()].filter((e) => e.employerClusterId === id).sort(compare));
   }

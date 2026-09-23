@@ -10,8 +10,39 @@ import type { CanonicalVacancy, VacancyOrganizationRelationship } from "../../sr
 import { InMemoryUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/InMemoryUserVacancyInteractionRepository.js";
 
 describe("getVacancyReviewView", () => {
-  it("represents a brand-new vacancy at a new unresolved cluster", async () => {
+  it.each(["UNRESOLVED", "CONFLICTED"] as const)("suppresses authoritative history for %s", async (status) => {
+    const view = await query(canonical("current", ["source-1"], [employer("cluster-1")]),
+      [event("prior", "old", "APPLIED", "2026-08-01")], [memory("old")], { ...defaultCluster(), status });
+    expect(view.employerHistory).toBeUndefined();
+    expect(view.employer).toMatchObject({ knownBefore: false, previousVacancyCount: 0, everAppliedToEmployer: false });
+    expect(view.reviewSignals.previouslyAppliedToEmployer).toBe(false);
+  });
+
+  it("exposes three previous roles and locations for a probable employer without legal identity", async () => {
+    const view = await query(canonical("current", ["source-1"], [employer("cluster-1")]), [], [
+      memory("current"), memory("one", { title: "Technicien itinérant", location: { rawText: "Lyon" } }),
+      memory("two", { title: "Mécanicien monteur", location: { rawText: "Paris" } }),
+      memory("three", { title: "Mécanicien Monteur d'Équipements Industriels", location: null }),
+    ]);
+    expect(view.employerHistory?.summary).toMatchObject({ vacancyCount: 3, latestUserInteractionAt: null });
+    expect(view.employerHistory?.employerCluster).toMatchObject({ status: "PROBABLY_RESOLVED", displayLabel: "HEUFT France" });
+    expect(view.employerHistory?.employerCluster.resolvedEmployerId).toBeUndefined();
+    expect(view.employerHistory?.vacancies).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "Technicien itinérant", location: { rawText: "Lyon" } }),
+      expect.objectContaining({ title: "Mécanicien monteur", location: { rawText: "Paris" } }),
+      expect.objectContaining({ title: "Mécanicien Monteur d'Équipements Industriels", location: null }),
+    ]));
+    expect(view.employerHistory?.knownNames).toEqual(["HEUFT France"]);
+  });
+
+  it("retains identity in the empty history for a newly known employer", async () => {
     const view = await query(canonical("current", ["source-1"], [employer("cluster-1")]), [], [memory("current")]);
+    expect(view.employerHistory?.vacancies).toEqual([]);
+    expect(view.employerHistory?.knownNames).toEqual(["HEUFT France"]);
+  });
+
+  it("represents a brand-new vacancy at a new unresolved cluster", async () => {
+    const view = await query(canonical("current", ["source-1"], [employer("cluster-1")]), [], [memory("current")], { ...defaultCluster(), status: "UNRESOLVED" });
     expect(view.user).toMatchObject({ currentState: "NEW", everApplied: false });
     expect(view.employer).toMatchObject({
       employerClusterId: "cluster-1", status: "UNRESOLVED", knownBefore: false,
@@ -56,7 +87,8 @@ describe("getVacancyReviewView", () => {
       isNewVacancy: false, alreadyAppliedToThisVacancy: true,
       previouslyAppliedToEmployer: false,
     });
-    expect(view.employer.everAppliedToEmployer).toBe(true);
+    expect(view.employer.everAppliedToEmployer).toBe(false);
+    expect(view.employerHistory?.summary.everAppliedCount).toBe(0);
   });
 
   it("derives prior employer history only from other canonical vacancies", async () => {
@@ -88,7 +120,7 @@ describe("getVacancyReviewView", () => {
     );
     expect(view.reviewSignals.isKnownEmployer).toBe(true);
     expect(view.employer).toMatchObject({ previousVacancyCount: 1, previousInteractedVacancyCount: 0 });
-    expect(view.recognition.unresolvedEmployer).toBe(true);
+    expect(view.recognition.unresolvedEmployer).toBe(false);
   });
 
   it("remains valid without an employer cluster and never promotes intermediaries", async () => {
@@ -210,7 +242,7 @@ function dependencies(
 }
 
 function defaultCluster(): EmployerCluster {
-  return { id: "cluster-1", status: "UNRESOLVED", createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01") };
+  return { id: "cluster-1", status: "PROBABLY_RESOLVED", displayLabel: "HEUFT France", createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01") };
 }
 
 const derivation = { algorithm: "test", algorithmVersion: "1", derivedAt: new Date("2026-01-01") };

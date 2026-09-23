@@ -83,7 +83,7 @@ function setup() {
     sourceObservationRepository: { findById: async (id) => observations.get(id) ?? null },
     interactionRepository: interactions,
     employerClusterRepository: { findById: async () => ({
-      id: clusterId, status: "UNRESOLVED",
+      id: clusterId, status: "PROBABLY_RESOLVED", displayLabel: "HEUFT France",
       createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01"),
     }) },
     employerMemoryPublicDataSource: { findByEmployerClusterId: async () => [

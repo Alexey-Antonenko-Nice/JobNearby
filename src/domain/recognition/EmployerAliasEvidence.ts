@@ -22,6 +22,7 @@ export function validateEmployerAliasEvidence(evidence: EmployerAliasEvidence): 
 }
 
 export interface EmployerAliasEvidenceRepository {
+  findActiveByClusterId(employerClusterId: string): Promise<readonly EmployerAliasEvidence[]>;
   save(evidence: EmployerAliasEvidence): Promise<void>;
   /** Only evidence supported by a currently effective human confirmation. */
   findActiveByNormalizedName(normalizedName: string): Promise<readonly EmployerAliasEvidence[]>;

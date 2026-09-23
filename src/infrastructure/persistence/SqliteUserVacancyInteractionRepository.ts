@@ -43,6 +43,17 @@ export class SqliteUserVacancyInteractionRepository
     }
   }
 
+  async findByCanonicalVacancyIds(ids: readonly string[]) {
+    if (ids.length === 0) return [];
+    const rows = this.db.prepare(`
+      SELECT id, canonical_vacancy_id, event_type, occurred_at, recorded_at, metadata_json
+      FROM user_vacancy_interaction_events
+      WHERE canonical_vacancy_id IN (SELECT value FROM json_each(?))
+      ORDER BY occurred_at, recorded_at, id
+    `).all(JSON.stringify([...new Set(ids)])) as InteractionRow[];
+    return rows.map(rowToEvent);
+  }
+
   async findByCanonicalVacancyId(canonicalVacancyId: string) {
     const rows = this.db.prepare(`
       SELECT id, canonical_vacancy_id, event_type, occurred_at, recorded_at, metadata_json

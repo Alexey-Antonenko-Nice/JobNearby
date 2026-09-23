@@ -12,6 +12,7 @@ export interface EmployerMemoryPublicVacancy {
   readonly title: string | null;
   readonly location: VacancyLocation | null;
   readonly latestObservedAt: Date | null;
+  readonly sources?: readonly string[];
   readonly sourceObservationCount: number;
   readonly organizationRelationships: readonly EmployerMemoryOrganizationRelationship[];
 }
