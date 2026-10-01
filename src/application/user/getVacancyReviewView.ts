@@ -1,3 +1,4 @@
+import { deriveVacancyContext } from "./deriveVacancyContext.js";
 import { deriveEmployerActionContext } from "./deriveEmployerActionContext.js";
 import { getEmployerAliasSelection } from "./employerAliasReview.js";
 import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
@@ -23,7 +24,7 @@ export async function getVacancyReviewView(
   dependencies: {
     readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
-    readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
+    readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds">;
     readonly interactionRepository: UserVacancyInteractionRepository;
     readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
     readonly assignmentRepository?: import("../../domain/recognition/ObservationClusterAssignmentRepository.js").ObservationClusterAssignmentRepository;
@@ -33,14 +34,19 @@ export async function getVacancyReviewView(
   const vacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
   if (vacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
 
-  const observations = await Promise.all(vacancy.sourceObservationIds.map(async (id) => {
-    const observation = await dependencies.sourceObservationRepository.findById(id);
-    if (observation === null) {
-      throw new Error(`CanonicalVacancy "${canonicalVacancyId}" references missing SourceObservation "${id}".`);
-    }
+  const observationIds = [...new Set(vacancy.sourceObservationIds)];
+  const repository = dependencies.sourceObservationRepository;
+  const loaded = repository.findByIds
+    ? await repository.findByIds(observationIds)
+    : await Promise.all(observationIds.map((id) => repository.findById(id)));
+  const byId = new Map(loaded.flatMap((item) => item ? [[item.id, item] as const] : []));
+  const observations = observationIds.map((id) => {
+    const observation = byId.get(id);
+    if (!observation) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" references missing SourceObservation "${id}".`);
     return observation;
-  }));
+  });
   const history = await getUserVacancyHistory(canonicalVacancyId, dependencies.interactionRepository);
+  const vacancyContext = deriveVacancyContext(canonicalVacancyId, observations, history.events);
   const eventTypes = new Set(history.events.map(({ type }) => type));
   const confirmedAssignment = dependencies.assignmentRepository === undefined ? null : await latestEffectiveAssignment(vacancy.sourceObservationIds, dependencies.assignmentRepository);
   const employerClusterId = confirmedAssignment?.employerClusterId ?? effectiveEmployerClusterId(vacancy.organizationRelationships);
@@ -71,6 +77,7 @@ export async function getVacancyReviewView(
   const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : []), ...(aliasSelection ? [aliasSelection] : [])];
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    vacancyContext,
     ...(employerActionContext === null ? {} : { employerActionContext }),
     ...(employerMemory === null ? {} : { employerHistory: employerMemory }),
     ...(employerCandidates.length === 0 ? {} : { employerReview: { required: true as const, candidates: employerCandidates } }),

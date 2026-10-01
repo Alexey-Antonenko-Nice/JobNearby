@@ -11,6 +11,34 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("shows first-time vacancy context with no prior actions", async () => {
+    respond({ review: { ...review(), vacancyContext: vacancyContext() } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("region", { name: "Vacancy context" });
+    expect(within(section).getByText("First time seen")).toBeInTheDocument();
+    expect(within(section).getByText("No prior actions")).toBeInTheDocument();
+    expect(within(section).getByText("Sources").nextElementSibling).toHaveTextContent("indeed.com");
+    expect(within(section).queryByText(/application via/)).not.toBeInTheDocument();
+  });
+  it("shows multi-source history and factual latest application provenance", async () => {
+    respond({ review: { ...review(), vacancyContext: { ...vacancyContext(), seenBefore: true, observationCount: 3, sourceCount: 2,
+      sourceProviders: ["hellowork.com", "indeed.com"], appliedBefore: true, latestInteractionType: "APPLIED",
+      latestInteractionAt: "2026-09-14T00:00:00Z", appliedViaProvider: "indeed.com", appliedViaSourceObservationId: "a" } } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("region", { name: "Vacancy context" });
+    expect(within(section).getByText("Seen before").nextElementSibling).toHaveTextContent("yes");
+    expect(within(section).getByText("Sources").nextElementSibling).toHaveTextContent("hellowork.com, indeed.com");
+    expect(within(section).getByText("Applied", { selector: "dt" }).nextElementSibling).toHaveTextContent("yes");
+    expect(within(section).getByText("Latest application via: indeed.com")).toBeInTheDocument();
+    expect(within(section).queryByText(/duplicate|campaign|publication family/i)).not.toBeInTheDocument();
+  });
+  it("shows an application without claiming source provenance", async () => {
+    respond({ review: { ...review(), vacancyContext: { ...vacancyContext(), appliedBefore: true, latestInteractionType: "CLOSED", latestInteractionAt: "2026-09-15T00:00:00Z", closedBefore: true } } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("region", { name: "Vacancy context" });
+    expect(within(section).getByText("Latest action").nextElementSibling).toHaveTextContent("Closed");
+    expect(within(section).queryByText(/application via/)).not.toBeInTheDocument();
+  });
   it("shows factual employer action context with prior counts and dates", async () => {
     respond({ review: { ...review(), employerHistory: employerHistory(), employerActionContext: actionContext() } });
     render(<ReviewPage />);
@@ -316,4 +344,13 @@ function actionContext() {
   return { knownEmployer: true, appliedBefore: true, applicationCount: 2, contactedBefore: true, contactCount: 1,
     interviewedBefore: true, interviewCount: 1, offeredBefore: false, offerCount: 0, rejectedBefore: true, rejectionCount: 1,
     withdrawnBefore: false, withdrawalCount: 0, lastApplicationAt: "2026-08-01T00:00:00Z", lastInteractionAt: "2026-08-18T00:00:00Z", lastInteractionType: "REJECTED" };
+}
+
+function vacancyContext(): import("./api").VacancyContext {
+  return { currentCanonicalVacancyId: "canonical-1", seenBefore: false, observationCount: 1, sourceCount: 1,
+    sourceProviders: ["indeed.com"], firstSeenAt: "2026-09-12T00:00:00Z", lastSeenAt: "2026-09-12T00:00:00Z",
+    currentSourceObservationId: null, currentSourceProvider: null, reviewedBefore: false, interestedBefore: false,
+    appliedBefore: false, contactedBefore: false, interviewedBefore: false, offeredBefore: false, rejectedBefore: false,
+    withdrawnBefore: false, closedBefore: false, latestInteractionType: null, latestInteractionAt: null,
+    appliedViaProvider: null, appliedViaSourceObservationId: null };
 }

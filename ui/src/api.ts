@@ -1,3 +1,28 @@
+export interface VacancyContext {
+  readonly currentCanonicalVacancyId: string;
+  readonly seenBefore: boolean;
+  readonly observationCount: number;
+  readonly sourceCount: number;
+  readonly sourceProviders: readonly string[];
+  readonly firstSeenAt: string | null;
+  readonly lastSeenAt: string | null;
+  readonly currentSourceObservationId: string | null;
+  readonly currentSourceProvider: string | null;
+  readonly reviewedBefore: boolean;
+  readonly interestedBefore: boolean;
+  readonly appliedBefore: boolean;
+  readonly contactedBefore: boolean;
+  readonly interviewedBefore: boolean;
+  readonly offeredBefore: boolean;
+  readonly rejectedBefore: boolean;
+  readonly withdrawnBefore: boolean;
+  readonly closedBefore: boolean;
+  readonly latestInteractionType: string | null;
+  readonly latestInteractionAt: string | null;
+  readonly appliedViaProvider: string | null;
+  readonly appliedViaSourceObservationId: string | null;
+}
+
 export interface EmployerAliasSelection {
   readonly type: "ALIAS_SELECTION";
   readonly candidateId: string;
@@ -59,6 +84,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly vacancyContext?: VacancyContext;
   readonly employerActionContext?: EmployerActionContext;
   readonly employerHistory?: EmployerHistory;
   readonly employerReview?: { readonly required: boolean; readonly candidates: readonly (EmployerAliasSelection | NamedClientEmployerCandidate | (NonNullable<ReviewView["employerMemoryReview"]>["candidates"][number] & { readonly type: "CONFIRMED_MEMORY" }))[] };

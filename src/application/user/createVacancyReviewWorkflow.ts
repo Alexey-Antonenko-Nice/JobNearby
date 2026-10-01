@@ -24,7 +24,7 @@ import {
 export interface VacancyReviewWorkflowDependencies {
   readonly aliasRepository?: EmployerAliasEvidenceRepository;
   readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll" | "findById">;
-  readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
+  readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds">;
   readonly interactionRepository: UserVacancyInteractionRepository;
   readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
   readonly recognitionPersistence?: EmployerRecognitionPersistence;
