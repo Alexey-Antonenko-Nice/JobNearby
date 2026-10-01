@@ -31,8 +31,19 @@ export async function getEmployerMemoryView(
   const allEvents = repository.findByCanonicalVacancyIds
     ? await repository.findByCanonicalVacancyIds(ids)
     : (await Promise.all(ids.map((id) => repository.findByCanonicalVacancyId(id)))).flat();
+  const selectedIds = new Set(ids);
+  let latestInteraction: typeof allEvents[number] | undefined;
+  let latestApplicationAt: Date | null = null;
   const eventsByVacancy = new Map<string, typeof allEvents[number][]>();
   for (const event of allEvents) {
+    if (!selectedIds.has(event.canonicalVacancyId)) continue;
+    if (latestInteraction === undefined || compareUserVacancyInteractionEvents(event, latestInteraction) > 0) {
+      latestInteraction = event;
+    }
+    if (event.type === "APPLIED"
+      && (latestApplicationAt === null || event.occurredAt.getTime() > latestApplicationAt.getTime())) {
+      latestApplicationAt = event.occurredAt;
+    }
     const events = eventsByVacancy.get(event.canonicalVacancyId) ?? [];
     events.push(event);
     eventsByVacancy.set(event.canonicalVacancyId, events);
@@ -77,7 +88,12 @@ export async function getEmployerMemoryView(
     },
     organizationsSeen: aggregateOrganizations(vacancies),
     vacancies,
-    summary: summarize(vacancies),
+    summary: {
+      ...summarize(vacancies),
+      latestApplicationAt,
+      latestUserInteractionAt: latestInteraction?.occurredAt ?? null,
+      latestUserInteractionType: latestInteraction?.type ?? null,
+    },
   };
 }
 
@@ -111,9 +127,8 @@ function aggregateOrganizations(vacancies: readonly EmployerMemoryVacancy[]): Em
     || left.role.localeCompare(right.role));
 }
 
-function summarize(vacancies: readonly EmployerMemoryVacancy[]): EmployerMemoryView["summary"] {
+function summarize(vacancies: readonly EmployerMemoryVacancy[]): Omit<EmployerMemoryView["summary"], "latestApplicationAt" | "latestUserInteractionAt" | "latestUserInteractionType"> {
   const latestVacancy = maximumDate(vacancies.map(({ latestObservedAt }) => latestObservedAt));
-  const latestInteraction = maximumDate(vacancies.map(({ lastUserInteractionAt }) => lastUserInteractionAt));
   const currentStateCounts: Partial<Record<EmployerMemoryVacancy["currentUserState"], number>> = {};
   for (const { currentUserState } of vacancies) {
     currentStateCounts[currentUserState] = (currentStateCounts[currentUserState] ?? 0) + 1;
@@ -129,7 +144,6 @@ function summarize(vacancies: readonly EmployerMemoryVacancy[]): EmployerMemoryV
     everRejectedCount: vacancies.filter(({ everRejected }) => everRejected).length,
     currentStateCounts,
     latestVacancyObservedAt: latestVacancy,
-    latestUserInteractionAt: latestInteraction,
   };
 }
 

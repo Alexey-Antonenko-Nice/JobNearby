@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { SqliteEmployerClusterRepository } from "../../src/infrastructure/persistence/SqliteEmployerClusterRepository.js";
 import { SqliteObservationClusterAssignmentRepository } from "../../src/infrastructure/persistence/SqliteObservationClusterAssignmentRepository.js";
@@ -30,8 +30,8 @@ async function fixture() {
   for (const [id, displayLabel] of [["heuft", "HEUFT"], ["other", "Other client"], ["unknown", "Unknown employer"]]) {
     await deps.employerClusterRepository.save({ id: id!, displayLabel: displayLabel!, status: id === "unknown" ? "UNRESOLVED" : "PROBABLY_RESOLVED", createdAt: date, updatedAt: date });
   }
-  async function assignment(id: string, sourceObservationId: string, employerClusterId: string, status: "ACCEPTED" | "USER_CONFIRMED" | "REJECTED" | "PROPOSED" = "ACCEPTED") {
-    const value = { id, sourceObservationId, employerClusterId, status, confidence: 1, algorithm: status === "USER_CONFIRMED" ? "user-employer-alias-review" : "confirmed-employer-memory", algorithmVersion: "1", evaluatedAt: date };
+  async function assignment(id: string, sourceObservationId: string, employerClusterId: string, status: "ACCEPTED" | "USER_CONFIRMED" | "REJECTED" | "PROPOSED" = "ACCEPTED", algorithm = status === "USER_CONFIRMED" ? "user-employer-alias-review" : "confirmed-employer-memory") {
+    const value = { id, sourceObservationId, employerClusterId, status, confidence: 1, algorithm, algorithmVersion: "1", evaluatedAt: date };
     await deps.assignmentRepository.save(value);
     return value;
   }
@@ -93,6 +93,9 @@ describe("M12.5 employer-centric history SQLite/API", () => {
       const response = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/vacancies/current/review`);
       expect(response.status).toBe(200);
       const { review } = await response.json();
+      expect(review.employerActionContext).toMatchObject({ knownEmployer: true, appliedBefore: true, applicationCount: 1,
+        interviewedBefore: true, interviewCount: 1, offeredBefore: true, offerCount: 1, rejectedBefore: true, rejectionCount: 1,
+        lastApplicationAt: "2026-08-02T00:00:00.000Z", lastInteractionAt: "2026-08-05T00:00:00.000Z", lastInteractionType: "OFFER" });
       expect(review.employerHistory.summary).toMatchObject({ vacancyCount: 3, everAppliedCount: 1, everInterviewedCount: 1, everOfferedCount: 1, everRejectedCount: 1, latestUserInteractionAt: "2026-08-05T00:00:00.000Z" });
       expect(review.employerHistory.knownNames).toEqual(["HEUFT", "HEUFT France"]);
       expect(review.employerHistory.vacancies.map((v: { canonicalVacancyId: string }) => v.canonicalVacancyId)).toEqual(["one", "three", "two"]);
@@ -155,6 +158,46 @@ describe("M12.5 employer-centric history SQLite/API", () => {
       expect((await f.workflow.getVacancyReview("automatic")).employer.employerClusterId).toBe("other");
       expect((await f.deps.employerMemoryPublicDataSource.findByEmployerClusterId("heuft")).some((v) => v.canonicalVacancyId === "automatic")).toBe(false);
       expect((await f.deps.employerMemoryPublicDataSource.findByEmployerClusterId("other")).some((v) => v.canonicalVacancyId === "automatic")).toBe(true);
+    } finally { f.db.close(); }
+  });
+});
+
+describe("M12.6 action context integration", () => {
+  it.each(["user-employer-memory-review", "user-employer-alias-review", "user-named-client-employer-review"])("does not count %s assignment rejection as a job rejection", async (algorithm) => {
+    const f = await fixture();
+    try {
+      await f.assignment("review-rejected", "one-0", "heuft", "REJECTED", algorithm);
+      const result = await f.workflow.getVacancyReview("current");
+      expect(result.employerActionContext).toMatchObject({ knownEmployer: true, rejectionCount: 0, rejectedBefore: false, lastInteractionAt: null, lastInteractionType: null });
+    } finally { f.db.close(); }
+  });
+  it("shares Air Products alias-linked action history through the existing effective cluster", async () => {
+    const f = await fixture();
+    try {
+      await f.deps.employerClusterRepository.save({ id: "air", displayLabel: "Air Products", status: "PROBABLY_RESOLVED", createdAt: date, updatedAt: date });
+      await f.vacancy("air-prior", "air", "Air Products S.A.S.", "Previous role", 3, true);
+      await f.vacancy("air-current", "air", "Air Products", "New role");
+      await f.alias("air-alias", "Air Products S.A.S.", "assignment-air-prior-0", "air");
+      await f.event("air-applied", "air-prior", "APPLIED", "2026-08-18");
+      await f.event("other-rejected", "other-client", "REJECTED", "2026-09-01");
+      const result = await f.workflow.getVacancyReview("air-current");
+      expect(result.employerHistory?.knownNames).toEqual(["Air Products", "Air Products S.A.S."]);
+      expect(result.employerActionContext).toMatchObject({ applicationCount: 1, rejectionCount: 0, lastInteractionType: "APPLIED", lastApplicationAt: new Date("2026-08-18") });
+    } finally { f.db.close(); }
+  });
+  it("uses one history batch and naturally refreshes while excluding the action on the current vacancy", async () => {
+    const f = await fixture();
+    try {
+      const batch = vi.spyOn(f.deps.interactionRepository, "findByCanonicalVacancyIds");
+      const single = vi.spyOn(f.deps.interactionRepository, "findByCanonicalVacancyId");
+      const before = await f.workflow.getVacancyReview("current");
+      expect(batch).toHaveBeenCalledTimes(1);
+      expect(single).toHaveBeenCalledExactlyOnceWith("current");
+      const posted = await f.workflow.recordVacancyReviewAction({ canonicalVacancyId: "current", type: "APPLIED" });
+      expect(posted.review.user.everApplied).toBe(true);
+      expect(posted.review.employerActionContext).toEqual(before.employerActionContext);
+      const otherReview = await f.workflow.getVacancyReview("two");
+      expect(otherReview.employerActionContext).toMatchObject({ appliedBefore: true, applicationCount: 1, lastInteractionType: "APPLIED" });
     } finally { f.db.close(); }
   });
 });

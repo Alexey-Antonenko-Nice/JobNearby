@@ -63,6 +63,7 @@ describe("getEmployerMemoryView", () => {
       vacancyCount: 0, interactedVacancyCount: 0,
       everAppliedCount: 0, everInterviewedCount: 0, everRejectedCount: 0,
       everContactedCount: 0, everOfferedCount: 0, everWithdrawnCount: 0,
+      latestApplicationAt: null, latestUserInteractionType: null,
       currentStateCounts: {}, latestVacancyObservedAt: null, latestUserInteractionAt: null,
     });
   });

@@ -82,7 +82,7 @@ export function ReviewPage(): React.JSX.Element {
     ]} /></section>
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
-    {review.employerHistory ? <EmployerHistorySection history={review.employerHistory} organizations={review.organizations} /> :
+    {review.employerHistory ? <EmployerHistorySection history={review.employerHistory} context={review.employerActionContext} organizations={review.organizations} /> :
       <section><h2>Employer memory</h2>{review.employer.employerClusterId !== null && (review.employer.status === "RESOLVED" || review.employer.status === "PROBABLY_RESOLVED")
         ? <Details values={[["Employer status", review.employer.status], ["Previous vacancies from this employer", review.employer.previousVacancyCount],
           ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)]]} />
@@ -113,8 +113,9 @@ export function ReviewPage(): React.JSX.Element {
   </main>;
 }
 
-function EmployerHistorySection({ history, organizations }: {
+function EmployerHistorySection({ history, context, organizations }: {
   readonly history: NonNullable<ReviewView["employerHistory"]>;
+  readonly context: ReviewView["employerActionContext"];
   readonly organizations: ReviewView["organizations"];
 }): React.JSX.Element {
   const summary = history.summary;
@@ -123,11 +124,12 @@ function EmployerHistorySection({ history, organizations }: {
   return <section aria-labelledby="employer-history-heading">
     <h2 id="employer-history-heading">Employer history</h2>
     <h3>{history.employerCluster.displayLabel ?? "Employer"}</h3>
+    {context && <EmployerContext context={context} />}
     {summary.vacancyCount === 0 ? <p>No previous vacancies with this employer.</p> : <>
       <p>Known employer</p>
-      <Details values={[["Previous vacancies", summary.vacancyCount], ["Applications", summary.everAppliedCount],
-        ["Interviews", summary.everInterviewedCount], ["Offers", summary.everOfferedCount], ["Rejections", summary.everRejectedCount]]} />
-      <p>Last interaction: {summary.latestUserInteractionAt === null ? "No previous interactions" : date(summary.latestUserInteractionAt)}</p>
+      {context ? <p>{summary.vacancyCount} previous vacancies</p> : <Details values={[["Previous vacancies", summary.vacancyCount], ["Applications", summary.everAppliedCount],
+        ["Interviews", summary.everInterviewedCount], ["Offers", summary.everOfferedCount], ["Rejections", summary.everRejectedCount]]} />}
+      {!context && <p>Last interaction: {summary.latestUserInteractionAt === null ? "No previous interactions" : date(summary.latestUserInteractionAt)}</p>}
       <h4>Previous roles</h4><ul>{history.vacancies.map((vacancy) => <li key={vacancy.canonicalVacancyId}>
         <a href={`/review/${encodeURIComponent(vacancy.canonicalVacancyId)}`}>{vacancy.title ?? "Untitled vacancy"}</a>
         {vacancy.location !== null && ` — ${formatLocation(vacancy.location)}`}
@@ -143,6 +145,23 @@ function EmployerHistorySection({ history, organizations }: {
     {intermediaries.length > 0 && <p>Current vacancy via: {intermediaries.join(", ")}</p>}
   </section>;
 }
+function EmployerContext({ context }: { readonly context: NonNullable<ReviewView["employerActionContext"]> }): React.JSX.Element {
+  const prior = (occurred: boolean, count: number) => occurred ? `Yes · ${count}` : "No";
+  return <div role="group" aria-label="Employer context">
+    <h4>Employer context</h4>
+    {context.lastInteractionType === null ? <p>No previous applications or interactions with this employer.</p> : <Details values={[
+      ["Applied before", prior(context.appliedBefore, context.applicationCount)],
+      ["Contacted before", prior(context.contactedBefore, context.contactCount)],
+      ["Interviewed before", prior(context.interviewedBefore, context.interviewCount)],
+      ["Offer before", prior(context.offeredBefore, context.offerCount)],
+      ["Rejected before", prior(context.rejectedBefore, context.rejectionCount)],
+      ["Withdrawn before", prior(context.withdrawnBefore, context.withdrawalCount)],
+      ["Last application", context.lastApplicationAt === null ? "None" : date(context.lastApplicationAt)],
+      ["Last interaction", `${interactionLabel(context.lastInteractionType)} · ${date(context.lastInteractionAt)}`],
+    ]} />}
+  </div>;
+}
+
 function interactionLabel(state: string): string {
   const labels: Record<string, string> = { NEW: "No interaction", REVIEWED: "Reviewed", INTERESTED: "Interested", APPLIED: "Applied",
     CONTACTED: "Contacted", INTERVIEW: "Interview", OFFER: "Offer", REJECTED: "Rejected", WITHDRAWN: "Withdrawn", CLOSED: "Closed" };

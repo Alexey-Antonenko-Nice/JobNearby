@@ -1,3 +1,4 @@
+import { deriveEmployerActionContext } from "./deriveEmployerActionContext.js";
 import { getEmployerAliasSelection } from "./employerAliasReview.js";
 import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import { getNamedClientEmployerCandidate } from "./namedClientEmployerReview.js";
@@ -55,6 +56,7 @@ export async function getVacancyReviewView(
       interactionRepository: dependencies.interactionRepository,
     },
   );
+  const employerActionContext = deriveEmployerActionContext(employerMemory);
   const previousVacancies = employerMemory?.vacancies.filter(
     ({ canonicalVacancyId: id }) => id !== canonicalVacancyId,
   ) ?? [];
@@ -69,6 +71,7 @@ export async function getVacancyReviewView(
   const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : []), ...(aliasSelection ? [aliasSelection] : [])];
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(employerActionContext === null ? {} : { employerActionContext }),
     ...(employerMemory === null ? {} : { employerHistory: employerMemory }),
     ...(employerCandidates.length === 0 ? {} : { employerReview: { required: true as const, candidates: employerCandidates } }),
     ...(memoryCandidates.length === 0 ? {} : { employerMemoryReview: { required: true as const, candidates: memoryCandidates } }),

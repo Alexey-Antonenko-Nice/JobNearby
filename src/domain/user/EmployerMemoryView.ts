@@ -5,7 +5,7 @@ import type {
   VacancyLocation,
   VacancyOrganizationRole,
 } from "../vacancies/CanonicalVacancy.js";
-import type { UserVacancyState } from "./UserVacancyInteractionEvent.js";
+import type { UserVacancyState, UserVacancyInteractionType } from "./UserVacancyInteractionEvent.js";
 
 export interface EmployerMemoryOrganizationRelationship {
   readonly organizationId?: string;
@@ -62,6 +62,8 @@ export interface EmployerMemoryView {
     readonly everRejectedCount: number;
     readonly currentStateCounts: Readonly<Partial<Record<UserVacancyState, number>>>;
     readonly latestVacancyObservedAt: Date | null;
+    readonly latestApplicationAt: Date | null;
+    readonly latestUserInteractionType: UserVacancyInteractionType | null;
     readonly latestUserInteractionAt: Date | null;
   };
 }

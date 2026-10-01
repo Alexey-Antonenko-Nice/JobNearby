@@ -11,6 +11,44 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("shows factual employer action context with prior counts and dates", async () => {
+    respond({ review: { ...review(), employerHistory: employerHistory(), employerActionContext: actionContext() } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("group", { name: "Employer context" });
+    expect(within(section).getByText("Applied before").nextElementSibling).toHaveTextContent("Yes · 2");
+    expect(within(section).getByText("Contacted before").nextElementSibling).toHaveTextContent("Yes · 1");
+    expect(within(section).getByText("Interviewed before").nextElementSibling).toHaveTextContent("Yes · 1");
+    expect(within(section).getByText("Rejected before").nextElementSibling).toHaveTextContent("Yes · 1");
+    expect(within(section).getByText("Offer before").nextElementSibling).toHaveTextContent("No");
+    expect(within(section).getByText("Withdrawn before").nextElementSibling).toHaveTextContent("No");
+    expect(within(section).getByText("Last application").nextElementSibling).toHaveTextContent(new Date("2026-08-01T00:00:00Z").toLocaleDateString());
+    expect(within(section).getByText("Last interaction").nextElementSibling).toHaveTextContent(`Rejected · ${new Date("2026-08-18T00:00:00Z").toLocaleDateString()}`);
+    expect(screen.getByRole("heading", { name: "Previous roles" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the no-prior-interactions state for a known employer", async () => {
+    const context = { ...actionContext(), appliedBefore: false, applicationCount: 0, contactedBefore: false, contactCount: 0,
+      interviewedBefore: false, interviewCount: 0, rejectedBefore: false, rejectionCount: 0,
+      lastApplicationAt: null, lastInteractionAt: null, lastInteractionType: null };
+    respond({ review: { ...review(), employerHistory: { ...employerHistory(), vacancies: [], summary: { ...employerHistory().summary, vacancyCount: 0 } }, employerActionContext: context } });
+    render(<ReviewPage />);
+    expect(await screen.findByText("No previous applications or interactions with this employer.")).toBeInTheDocument();
+    const section = screen.getByRole("group", { name: "Employer context" });
+    expect(within(section).queryByText("Applied before")).not.toBeInTheDocument();
+  });
+
+  it("displays CLOSED neutrally and no application date when there was no application", async () => {
+    respond({ review: { ...review(), employerHistory: employerHistory(), employerActionContext: {
+      ...actionContext(), appliedBefore: false, applicationCount: 0, lastApplicationAt: null, rejectedBefore: false, rejectionCount: 0, lastInteractionType: "CLOSED",
+    } } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("group", { name: "Employer context" });
+    expect(within(section).getByText("Last interaction").nextElementSibling).toHaveTextContent("Closed");
+    expect(within(section).getByText("Last application").nextElementSibling).toHaveTextContent("None");
+    expect(within(section).getByText("Rejected before").nextElementSibling).toHaveTextContent("No");
+  });
+
   it("shows compact previous employer history with outcomes, aliases, and recruiter context", async () => {
     respond({ review: { ...review({ organizations: { recruiters: [{ rawName: "ACTUA Saverne", role: "RECRUITER" }] } }), employerHistory: employerHistory() } });
     render(<ReviewPage />);
@@ -40,6 +78,7 @@ describe("ReviewPage", () => {
     respond({ review: review({ status }) }); render(<ReviewPage />);
     await screen.findByRole("heading", { name: "Employer memory" });
     expect(screen.queryByRole("heading", { name: "Employer history" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Employer context" })).not.toBeInTheDocument();
     if (status === "CONFLICTED") expect(screen.getByText("Employer identity requires review")).toBeInTheDocument();
   });
 
@@ -271,4 +310,10 @@ function employerHistory() {
       everRejected: index === 0, everOffered: false, everContacted: false, everWithdrawn: false,
     })),
   };
+}
+
+function actionContext() {
+  return { knownEmployer: true, appliedBefore: true, applicationCount: 2, contactedBefore: true, contactCount: 1,
+    interviewedBefore: true, interviewCount: 1, offeredBefore: false, offerCount: 0, rejectedBefore: true, rejectionCount: 1,
+    withdrawnBefore: false, withdrawalCount: 0, lastApplicationAt: "2026-08-01T00:00:00Z", lastInteractionAt: "2026-08-18T00:00:00Z", lastInteractionType: "REJECTED" };
 }
