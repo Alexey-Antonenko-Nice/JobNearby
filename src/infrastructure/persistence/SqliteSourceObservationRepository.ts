@@ -138,6 +138,14 @@ export class SqliteSourceObservationRepository
     }
   }
 
+  async findByIds(ids: readonly SourceObservationId[]): Promise<readonly SourceObservation[]> {
+    if (ids.length === 0) return [];
+    const rows = this.db.prepare(`
+      SELECT * FROM source_observations WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id
+    `).all(JSON.stringify(ids)) as SourceObservationRow[];
+    return rows.map(mapRowToObservation);
+  }
+
   async findById(
     id: SourceObservationId,
   ): Promise<SourceObservation | null> {

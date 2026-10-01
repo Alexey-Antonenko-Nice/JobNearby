@@ -4,6 +4,8 @@ import type {
 } from "./SourceObservation.js";
 
 export interface SourceObservationRepository {
+  findByIds?(ids: readonly SourceObservationId[]): Promise<readonly SourceObservation[]>;
+
   save(observation: SourceObservation): Promise<void>;
 
   findById(

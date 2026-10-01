@@ -80,6 +80,7 @@ export function ReviewPage(): React.JSX.Element {
       ["Location", review.vacancy.locationAlternatives.length > 1 ? `Multiple locations (${review.vacancy.locationAlternatives.map(formatLocation).join("; ")})` : formatLocation(review.vacancy.location)], ["Engagement", formatEngagement(review.vacancy.engagement)], ["Work mode", formatWorkMode(review.vacancy.workMode)], ["Compensation", formatCompensation(review.vacancy.compensation)],
       ["Canonicalization status", review.vacancy.canonicalizationStatus], ["Latest observed date", date(review.vacancy.latestObservedAt)], ["Source observation count", review.vacancy.sourceObservationCount],
     ]} /></section>
+    {review.vacancyContext && <VacancyContextSection context={review.vacancyContext} />}
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
     {review.employerHistory ? <EmployerHistorySection history={review.employerHistory} context={review.employerActionContext} organizations={review.organizations} /> :
@@ -175,3 +176,23 @@ function text(value: unknown): string { if (value === null || value === undefine
 function yesNo(value: boolean): string { return value ? "yes" : "no"; }
 function date(value: string | null): string { return value === null ? "Unknown" : new Date(value).toLocaleDateString(); }
 function reviewIdFromPath(path: string): string | null { const match = /^\/review\/([^/]+)$/u.exec(path); return match === null ? null : decodeURIComponent(match[1]!); }
+function VacancyContextSection({ context }: { readonly context: NonNullable<ReviewView["vacancyContext"]> }): React.JSX.Element {
+  return <section aria-label="Vacancy context"><h2>Vacancy context</h2>
+    {!context.seenBefore && <p>{context.observationCount === 1 ? "First time seen" : "No observations"}</p>}
+    <Details values={[
+      ["Seen before", yesNo(context.seenBefore)], ["Sources", context.sourceProviders.join(", ") || "Unknown"],
+      ["Observations", context.observationCount], ["Source count", context.sourceCount],
+      ["First seen", date(context.firstSeenAt)], ["Last seen", date(context.lastSeenAt)],
+    ]} />
+    {context.latestInteractionType === null ? <p>No prior actions</p> : <Details values={[
+      ["Applied", yesNo(context.appliedBefore)],
+      ["Prior actions", ([
+        [context.reviewedBefore, "Reviewed"], [context.interestedBefore, "Interested"], [context.appliedBefore, "Applied"],
+        [context.contactedBefore, "Contacted"], [context.interviewedBefore, "Interviewed"], [context.offeredBefore, "Offered"],
+        [context.rejectedBefore, "Rejected"], [context.withdrawnBefore, "Withdrawn"], [context.closedBefore, "Closed"],
+      ] as const).filter(([present]) => present).map(([, label]) => label).join(" · ")],
+      ["Latest action", `${interactionLabel(context.latestInteractionType)} · ${date(context.latestInteractionAt)}`],
+    ]} />}
+    {context.appliedViaProvider !== null && <p>Latest application via: {context.appliedViaProvider}</p>}
+  </section>;
+}

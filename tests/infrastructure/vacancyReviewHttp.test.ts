@@ -1,3 +1,4 @@
+import { deriveVacancyContext } from "../../src/application/user/deriveVacancyContext.js";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -33,6 +34,10 @@ describe("vacancy review HTTP workflow", () => {
     const response = await fetch(`${fixture.base}/vacancies/canonical-1/review`);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ review: { user: { currentState: "NEW" } } });
+    const serialized = await (await fetch(`${fixture.base}/vacancies/canonical-1/review`)).json() as { review: { vacancyContext: Record<string, unknown> } };
+    expect(serialized.review.vacancyContext).toMatchObject({ firstSeenAt: "2026-09-12T00:00:00.000Z", lastSeenAt: "2026-09-12T00:00:00.000Z", currentSourceProvider: null, appliedViaProvider: null, seenBefore: false });
+    expect(serialized.review.vacancyContext).not.toHaveProperty("publicationFamily");
+    expect(serialized.review.vacancyContext).not.toHaveProperty("recruitmentCampaign");
     expect(fixture.getVacancyReview).toHaveBeenCalledWith("canonical-1");
     expect(fixture.recordVacancyReviewAction).not.toHaveBeenCalled();
   });
@@ -110,7 +115,8 @@ async function start(options: {
   actionError?: Error;
   actionType?: string;
 } = {}) {
-  const review = { user: { currentState: "NEW" }, reviewSignals: { isNewVacancy: true } };
+  const vacancyContext = deriveVacancyContext("canonical-1", [{ id: "source-1", source: { sourceType: "JOB_BOARD", sourceName: "indeed.com" }, observedAt: new Date("2026-09-12"), metadata: {} }], []);
+  const review = { vacancyContext, user: { currentState: "NEW" }, reviewSignals: { isNewVacancy: true } };
   const getVacancyReview = options.getError === undefined
     ? vi.fn().mockResolvedValue(review)
     : vi.fn().mockRejectedValue(options.getError);

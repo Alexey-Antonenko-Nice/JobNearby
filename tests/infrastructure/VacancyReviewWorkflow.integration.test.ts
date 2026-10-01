@@ -49,6 +49,7 @@ describe("VacancyReviewWorkflow SQLite integration", () => {
     db = createDatabase(databasePath);
     workflow = workflowFor(db, () => `event-${++sequence}`);
     const restarted = await workflow.getVacancyReview(vacancy.id);
+    expect(restarted.vacancyContext).toMatchObject({ reviewedBefore: true, appliedBefore: true, latestInteractionType: "APPLIED", appliedViaProvider: null });
     expect(restarted.user.currentState).toBe("APPLIED");
     expect(restarted.reviewSignals.alreadyAppliedToThisVacancy).toBe(true);
     expect(db.prepare(`SELECT event_type FROM user_vacancy_interaction_events ORDER BY occurred_at, recorded_at, id`).all())

@@ -25,6 +25,13 @@ export class InMemorySourceObservationRepository
     this.observations.set(observation.id, observation);
   }
 
+  async findByIds(ids: readonly SourceObservationId[]): Promise<readonly SourceObservation[]> {
+    return [...new Set(ids)].flatMap((id) => {
+      const observation = this.observations.get(id);
+      return observation ? [observation] : [];
+    });
+  }
+
   async findById(
     id: SourceObservationId,
   ): Promise<SourceObservation | null> {

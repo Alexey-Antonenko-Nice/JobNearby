@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getVacancyReviewView } from "../../src/application/user/getVacancyReviewView.js";
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
@@ -37,6 +37,8 @@ describe("VacancyReviewView SQLite composition", () => {
     await canonical.save(vacancy);
     const interactions = new SqliteUserVacancyInteractionRepository(db);
     const before = snapshot(db);
+    const batch = vi.spyOn(sources, "findByIds");
+    const single = vi.spyOn(sources, "findById");
 
     const view = await getVacancyReviewView(vacancy.id, {
       canonicalVacancyRepository: canonical,
@@ -57,7 +59,26 @@ describe("VacancyReviewView SQLite composition", () => {
     expect(view.organizations.employerRelationships).toEqual([
       expect.objectContaining({ rawName: "HEUFT France", employerClusterId: "cluster-heuft", role: "EMPLOYER" }),
     ]);
+    expect(view.vacancyContext).toMatchObject({
+      currentCanonicalVacancyId: vacancy.id, seenBefore: true, observationCount: 2, sourceCount: 2,
+      sourceProviders: ["candidat.francetravail.fr", "linkedin.com"],
+      firstSeenAt: new Date("2026-09-01"), lastSeenAt: new Date("2026-09-02"),
+      currentSourceProvider: null, appliedBefore: false, rejectedBefore: false,
+    });
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(single).not.toHaveBeenCalled();
+    expect(JSON.parse(JSON.stringify(view)).vacancyContext.firstSeenAt).toBe("2026-09-01T00:00:00.000Z");
     expect(snapshot(db)).toEqual(before);
+    await interactions.append({ id: "applied", canonicalVacancyId: vacancy.id, type: "APPLIED",
+      occurredAt: new Date("2026-09-03"), recordedAt: new Date("2026-09-03"), metadata: { sourceObservationId: "heuft-a" } });
+    db.prepare("UPDATE observation_cluster_assignments SET status = 'REJECTED'").run();
+    const acted = await getVacancyReviewView(vacancy.id, {
+      canonicalVacancyRepository: canonical, sourceObservationRepository: sources,
+      interactionRepository: interactions, employerClusterRepository: clusters,
+      employerMemoryPublicDataSource: new SqliteEmployerMemoryPublicDataSource(db),
+    });
+    expect(acted.vacancyContext).toMatchObject({ appliedBefore: true, rejectedBefore: false, appliedViaProvider: "linkedin.com", latestInteractionType: "APPLIED" });
+    expect(await interactions.findByCanonicalVacancyId(vacancy.id)).toHaveLength(1);
     db.close();
   });
 });
