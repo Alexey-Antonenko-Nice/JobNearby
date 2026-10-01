@@ -14,6 +14,7 @@ describe("getVacancyReviewView", () => {
     const view = await query(canonical("current", ["source-1"], [employer("cluster-1")]),
       [event("prior", "old", "APPLIED", "2026-08-01")], [memory("old")], { ...defaultCluster(), status });
     expect(view.employerHistory).toBeUndefined();
+    expect(view.employerActionContext).toBeUndefined();
     expect(view.employer).toMatchObject({ knownBefore: false, previousVacancyCount: 0, everAppliedToEmployer: false });
     expect(view.reviewSignals.previouslyAppliedToEmployer).toBe(false);
   });

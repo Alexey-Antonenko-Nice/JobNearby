@@ -3,6 +3,15 @@ import { namedClientFixture, namedClientVacancy } from "./namedClientReviewFixtu
 import { createObservationClusterAssignment } from "../../src/application/recognition/createObservationClusterAssignment.js";
 
 describe("named-client employer review", () => {
+  it("does not expose pending named-client history as authoritative action context", async () => {
+    const f = await namedClientFixture();
+    await f.addHistory();
+    await f.deps.interactionRepository.append({ id: "prior-applied", canonicalVacancyId: "prior", type: "APPLIED", occurredAt: new Date("2026-01-01"), recordedAt: new Date("2026-01-01") });
+    const review = await f.workflow.getVacancyReview(f.vacancy.id);
+    expect(review.employerReview?.candidates).toContainEqual(expect.objectContaining({ type: "NAMED_CLIENT", employerClusterId: "heuft" }));
+    expect(review.employerActionContext).toBeUndefined();
+  });
+
   it("offers HEUFT from explicit CLIENT evidence without changing assignments, clusters or ACTUA roles", async () => {
     const f = await namedClientFixture();
     const original = structuredClone(f.vacancy);

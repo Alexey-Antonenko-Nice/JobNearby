@@ -45,7 +45,21 @@ export interface EmployerHistory {
   }[];
 }
 
+export interface EmployerActionContext {
+  readonly knownEmployer: boolean;
+  readonly appliedBefore: boolean; readonly applicationCount: number;
+  readonly contactedBefore: boolean; readonly contactCount: number;
+  readonly interviewedBefore: boolean; readonly interviewCount: number;
+  readonly offeredBefore: boolean; readonly offerCount: number;
+  readonly rejectedBefore: boolean; readonly rejectionCount: number;
+  readonly withdrawnBefore: boolean; readonly withdrawalCount: number;
+  readonly lastApplicationAt: string | null;
+  readonly lastInteractionAt: string | null;
+  readonly lastInteractionType: string | null;
+}
+
 export interface ReviewView {
+  readonly employerActionContext?: EmployerActionContext;
   readonly employerHistory?: EmployerHistory;
   readonly employerReview?: { readonly required: boolean; readonly candidates: readonly (EmployerAliasSelection | NamedClientEmployerCandidate | (NonNullable<ReviewView["employerMemoryReview"]>["candidates"][number] & { readonly type: "CONFIRMED_MEMORY" }))[] };
   readonly employerMemoryReview?: { readonly required: boolean; readonly candidates: readonly { employerClusterId: string; displayLabel: string; status: string; currentOrganizationName: string; explanation: string; reasonCodes: readonly string[]; priorConfirmationExists: boolean; priorConfirmationCount: number }[] };

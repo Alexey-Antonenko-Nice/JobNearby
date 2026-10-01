@@ -124,5 +124,6 @@ describe("employer memory ambiguity review", () => {
     expect(review.employerMemoryReview).toMatchObject({ required: true, candidates: [{ employerClusterId: "a", priorConfirmationCount: 1 }, { employerClusterId: "b" }] });
     expect(review.employer.confirmationCandidate).toBeNull();
     expect(review.employer.employerClusterId).toBeNull();
+    expect(review.employerActionContext).toBeUndefined();
   });
 });
