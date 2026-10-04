@@ -22,6 +22,7 @@ import { employerConfirmationCandidate } from "./employerConfirmation.js";
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
   dependencies: {
+    readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
     readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
     readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds">;
@@ -46,7 +47,9 @@ export async function getVacancyReviewView(
     return observation;
   });
   const history = await getUserVacancyHistory(canonicalVacancyId, dependencies.interactionRepository);
-  const vacancyContext = deriveVacancyContext(canonicalVacancyId, observations, history.events);
+  const relationshipContext = await dependencies.publicationCampaignContextSource?.findBySourceObservationIds(observationIds)
+    ?? { publicationFamilies: [], recruitmentCampaigns: [] };
+  const vacancyContext = { ...deriveVacancyContext(canonicalVacancyId, observations, history.events), ...relationshipContext };
   const eventTypes = new Set(history.events.map(({ type }) => type));
   const confirmedAssignment = dependencies.assignmentRepository === undefined ? null : await latestEffectiveAssignment(vacancy.sourceObservationIds, dependencies.assignmentRepository);
   const employerClusterId = confirmedAssignment?.employerClusterId ?? effectiveEmployerClusterId(vacancy.organizationRelationships);

@@ -22,6 +22,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
   readonly aliasRepository?: EmployerAliasEvidenceRepository;
   readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll" | "findById">;
   readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds">;
@@ -39,6 +40,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.publicationCampaignContextSource ? { publicationCampaignContextSource: dependencies.publicationCampaignContextSource } : {}),
     ...(dependencies.aliasRepository ? { aliasRepository: dependencies.aliasRepository } : {}),
     canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
     sourceObservationRepository: dependencies.sourceObservationRepository,

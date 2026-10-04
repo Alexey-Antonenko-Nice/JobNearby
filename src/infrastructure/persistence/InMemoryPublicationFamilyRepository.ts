@@ -12,6 +12,15 @@ export class InMemoryPublicationFamilyRepository implements PublicationFamilyRep
     if (this.entities.has(value.id)) conflict("PublicationFamily ID already exists.");
     this.entities.set(value.id, structuredClone(value));
   }
+  readContextMemberships(observationIds: readonly string[]) {
+    const current = new Set(observationIds);
+    const active = this.ledger.list(isActive);
+    const ids = new Set(active.filter((m) => current.has(m.sourceObservationId)).map((m) => m.publicationFamilyId));
+    return {
+      families: [...ids].sort().map((id) => structuredClone(this.entities.get(id)!)),
+      familyMemberships: active.filter((m) => ids.has(m.publicationFamilyId)),
+    };
+  }
   async findById(id: string) { return structuredClone(this.entities.get(id) ?? null); }
   async findBySourceObservationId(id: string) {
     const member = this.activeMembership(id);

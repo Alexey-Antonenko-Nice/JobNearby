@@ -1,4 +1,9 @@
-export interface VacancyContext {
+import type { PublicationCampaignContext as DomainPublicationCampaignContext } from "../../src/domain/user/PublicationCampaignContext.js";
+
+type Serialized<T> = T extends Date ? string : T extends readonly (infer V)[] ? readonly Serialized<V>[] : T extends object ? { [K in keyof T]: Serialized<T[K]> } : T;
+export type PublicationCampaignContext = Serialized<DomainPublicationCampaignContext>;
+
+export interface VacancyContext extends PublicationCampaignContext {
   readonly currentCanonicalVacancyId: string;
   readonly seenBefore: boolean;
   readonly observationCount: number;

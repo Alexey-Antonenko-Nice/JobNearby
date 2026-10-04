@@ -36,8 +36,8 @@ describe("vacancy review HTTP workflow", () => {
     expect(await response.json()).toMatchObject({ review: { user: { currentState: "NEW" } } });
     const serialized = await (await fetch(`${fixture.base}/vacancies/canonical-1/review`)).json() as { review: { vacancyContext: Record<string, unknown> } };
     expect(serialized.review.vacancyContext).toMatchObject({ firstSeenAt: "2026-09-12T00:00:00.000Z", lastSeenAt: "2026-09-12T00:00:00.000Z", currentSourceProvider: null, appliedViaProvider: null, seenBefore: false });
-    expect(serialized.review.vacancyContext).not.toHaveProperty("publicationFamily");
-    expect(serialized.review.vacancyContext).not.toHaveProperty("recruitmentCampaign");
+    expect(serialized.review.vacancyContext.publicationFamilies).toEqual([]);
+    expect(serialized.review.vacancyContext.recruitmentCampaigns).toEqual([]);
     expect(fixture.getVacancyReview).toHaveBeenCalledWith("canonical-1");
     expect(fixture.recordVacancyReviewAction).not.toHaveBeenCalled();
   });
