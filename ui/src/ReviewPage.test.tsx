@@ -11,6 +11,15 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("integrates persisted publication context into review without implying a prior application", async () => {
+    respond({ review: { ...review(), vacancyContext: { ...vacancyContext(), publicationFamilies: [{ id: "f1", representativeTitle: "Related publication", observationCount: 2, currentVacancyObservationCount: 1, currentVacancyObservationIds: ["a"], sourceProviders: ["indeed.com"], firstSeenAt: "2026-09-01T00:00:00Z", lastSeenAt: "2026-09-12T00:00:00Z", membershipEvidence: [] }] } } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("region", { name: "Publication and campaign context" });
+    expect(within(section).getByText("Related publication")).toBeInTheDocument();
+    expect(screen.getByText("No prior actions")).toBeInTheDocument();
+    expect(within(section).queryByText(/duplicate|applied/i)).not.toBeInTheDocument();
+  });
+
   it("shows first-time vacancy context with no prior actions", async () => {
     respond({ review: { ...review(), vacancyContext: vacancyContext() } });
     render(<ReviewPage />);
@@ -347,7 +356,7 @@ function actionContext() {
 }
 
 function vacancyContext(): import("./api").VacancyContext {
-  return { currentCanonicalVacancyId: "canonical-1", seenBefore: false, observationCount: 1, sourceCount: 1,
+  return { publicationFamilies: [], recruitmentCampaigns: [], currentCanonicalVacancyId: "canonical-1", seenBefore: false, observationCount: 1, sourceCount: 1,
     sourceProviders: ["indeed.com"], firstSeenAt: "2026-09-12T00:00:00Z", lastSeenAt: "2026-09-12T00:00:00Z",
     currentSourceObservationId: null, currentSourceProvider: null, reviewedBefore: false, interestedBefore: false,
     appliedBefore: false, contactedBefore: false, interviewedBefore: false, offeredBefore: false, rejectedBefore: false,

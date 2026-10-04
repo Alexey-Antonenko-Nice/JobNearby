@@ -1,6 +1,7 @@
+import type { PublicationCampaignContext } from "./PublicationCampaignContext.js";
 import type { UserVacancyInteractionType } from "./UserVacancyInteractionEvent.js";
 
-export interface VacancyContext {
+export interface VacancyContext extends PublicationCampaignContext {
   readonly currentCanonicalVacancyId: string;
   readonly seenBefore: boolean;
   readonly observationCount: number;

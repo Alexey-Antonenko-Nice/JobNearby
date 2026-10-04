@@ -18,6 +18,7 @@ export function deriveVacancyContext(
   // Resolve provenance only within this canonical vacancy's persisted membership.
   const appliedObservation = distinct.find(({ id }) => id === (application?.type === "APPLIED" ? application.metadata?.sourceObservationId : undefined));
   return {
+    publicationFamilies: [], recruitmentCampaigns: [],
     currentCanonicalVacancyId: canonicalVacancyId,
     // Canonical-only review: multiplicity, not an as-of claim about a current observation.
     seenBefore: distinct.length > 1,

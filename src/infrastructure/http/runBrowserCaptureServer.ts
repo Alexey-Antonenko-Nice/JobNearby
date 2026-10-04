@@ -1,3 +1,4 @@
+import { SqlitePublicationCampaignContextSource } from "../persistence/SqlitePublicationCampaignContextSource.js";
 import { SqliteEmployerAliasEvidenceRepository } from "../persistence/SqliteEmployerAliasEvidenceRepository.js";
 import { SqliteEmployerRecognitionPersistence } from "../persistence/SqliteEmployerRecognitionPersistence.js";
 import { createDatabase } from "../database/createDatabase.js";
@@ -20,6 +21,7 @@ const runtime = createCaptureProcessingRuntime(database, {
   },
 });
 const reviewWorkflow = createVacancyReviewWorkflow({
+  publicationCampaignContextSource: new SqlitePublicationCampaignContextSource(database),
   aliasRepository: new SqliteEmployerAliasEvidenceRepository(database),
   canonicalVacancyRepository: new SqliteCanonicalVacancyRepository(database),
   sourceObservationRepository: new SqliteSourceObservationRepository(database),

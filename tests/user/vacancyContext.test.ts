@@ -64,8 +64,8 @@ describe("vacancy context", () => {
   it("does not borrow provenance from an older application when latest has none", () => {
     expect(context(undefined, [event("APPLIED", { id: "a", metadata: { sourceObservationId: "a" } }), event("APPLIED", { id: "z" })]).appliedViaProvider).toBeNull();
   });
-  it("does not expose deferred family or campaign fields", () => {
-    expect(context()).not.toHaveProperty("publicationFamily");
-    expect(context()).not.toHaveProperty("recruitmentCampaign");
+  it("starts with empty relationship lists before persisted traversal", () => {
+    expect(context().publicationFamilies).toEqual([]);
+    expect(context().recruitmentCampaigns).toEqual([]);
   });
 });

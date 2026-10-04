@@ -17,6 +17,18 @@ export class InMemoryRecruitmentCampaignRepository implements RecruitmentCampaig
     if (this.entities.has(value.id)) conflict("RecruitmentCampaign ID already exists.");
     this.entities.set(value.id, value);
   }
+  readContextMemberships(familyIds: readonly string[], observationIds: readonly string[]) {
+    const families = new Set(familyIds); const observations = new Set(observationIds);
+    const campaignMemberships = this.ledger.list((m) => isActive(m) && (m.publicationFamilyId !== undefined
+      ? families.has(m.publicationFamilyId) : observations.has(m.sourceObservationId)));
+    const ids = new Set(campaignMemberships.map((m) => m.recruitmentCampaignId));
+    const campaigns = [...ids].sort().map((id) => {
+      const entity = this.entities.get(id)!;
+      return structuredClone({ id: entity.id, employerClusterId: entity.employerClusterId, status: entity.status,
+        firstObservedAt: entity.firstObservedAt, lastObservedAt: entity.lastObservedAt });
+    });
+    return { campaigns, campaignMemberships };
+  }
   async findById(id: string) { return structuredClone(this.entities.get(id) ?? null); }
   async findByEmployerClusterId(id: string) {
     return [...this.entities.values()].filter((e) => e.employerClusterId === id).sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0).map((e) => structuredClone(e));
