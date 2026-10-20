@@ -1,5 +1,38 @@
 import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
-import type { VacancyOrganizationRelationship } from "../../domain/vacancies/CanonicalVacancy.js";
+import type { CanonicalVacancy, VacancyOrganizationRelationship } from "../../domain/vacancies/CanonicalVacancy.js";
+import { findConfirmedEmployerMemory } from "../recognition/findConfirmedEmployerMemory.js";
+import type { MemoryReviewDependencies } from "./employerMemoryReview.js";
+
+/** A read-only identity proof, shared by review and direct-confirmation POST. */
+export async function isEmployerConfirmationRedundant(
+  vacancy: CanonicalVacancy,
+  candidate: string | null,
+  dependencies: MemoryReviewDependencies,
+): Promise<boolean> {
+  const repository = dependencies.assignmentRepository;
+  const findCandidates = dependencies.employerClusterRepository.findCandidates;
+  if (candidate === null || !repository || !findCandidates) return false;
+  const effective = await Promise.all(vacancy.sourceObservationIds.map((id) => repository.findEffectiveByObservationId(id)));
+  const current = effective.at(-1);
+  // Explicit current confirmations retain their existing idempotent POST behavior.
+  // This rule prevents a propagated ACCEPTED assignment becoming USER_CONFIRMED.
+  if (current?.status !== "ACCEPTED") return false;
+  if (effective.some((assignment) => assignment !== null && assignment.employerClusterId !== current.employerClusterId)) return false;
+  if (vacancy.organizationRelationships.some((relationship) => relationship.role === "EMPLOYER"
+    && relationship.employerClusterId !== undefined && relationship.employerClusterId !== current.employerClusterId)) return false;
+  const cluster = await dependencies.employerClusterRepository.findById(current.employerClusterId);
+  if (!cluster || !["PROBABLY_RESOLVED", "RESOLVED"].includes(cluster.status)) return false;
+  const proposals = await Promise.all(vacancy.sourceObservationIds.map((id) => repository.findCurrentProposalByObservationId(id)));
+  if (proposals.some((proposal) => proposal !== null)) return false;
+  const memory = await findConfirmedEmployerMemory(
+    vacancy.organizationRelationships, vacancy.sourceObservationIds,
+    { findCandidates: findCandidates.bind(dependencies.employerClusterRepository) },
+    repository, dependencies.aliasRepository,
+  );
+  return memory.names.length === 1 && memory.matches.length === 1
+    && memory.matches[0]!.cluster.id === current.employerClusterId
+    && normalizeOrganizationEvidenceName(memory.matches[0]!.currentOrganizationName) === normalizeOrganizationEvidenceName(candidate);
+}
 
 export function employerConfirmationCandidate(
   relationships: readonly VacancyOrganizationRelationship[],

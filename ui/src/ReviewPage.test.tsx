@@ -11,6 +11,18 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("shows Elite Robots history without a redundant direct employer confirmation", async () => {
+    const history = employerHistory();
+    respond({ review: { ...review({ status: "PROBABLY_RESOLVED", confirmationCandidate: null, isKnownEmployer: true }),
+      employerHistory: { ...history, employerCluster: { id: "elite", displayLabel: "Elite Robots", status: "PROBABLY_RESOLVED" }, knownNames: ["Elite Robots"] } } });
+    render(<ReviewPage />);
+    const section = await screen.findByRole("region", { name: "Employer history" });
+    expect(within(section).getAllByText("Elite Robots").length).toBeGreaterThan(0);
+    expect(within(section).getByRole("link", { name: "Technicien itinérant" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Employer candidate:/)).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   it("integrates persisted publication context into review without implying a prior application", async () => {
     respond({ review: { ...review(), vacancyContext: { ...vacancyContext(), publicationFamilies: [{ id: "f1", representativeTitle: "Related publication", observationCount: 2, currentVacancyObservationCount: 1, currentVacancyObservationIds: ["a"], sourceProviders: ["indeed.com"], firstSeenAt: "2026-09-01T00:00:00Z", lastSeenAt: "2026-09-12T00:00:00Z", membershipEvidence: [] }] } } });
     render(<ReviewPage />);

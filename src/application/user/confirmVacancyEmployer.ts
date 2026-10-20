@@ -4,13 +4,15 @@ import { createObservationClusterAssignment } from "../recognition/createObserva
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import type { ObservationClusterAssignmentRepository } from "../../domain/recognition/ObservationClusterAssignmentRepository.js";
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
-import { employerConfirmationCandidate } from "./employerConfirmation.js";
+import { employerConfirmationCandidate, isEmployerConfirmationRedundant } from "./employerConfirmation.js";
+import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import { effectiveEmployerClusterId } from "./effectiveEmployerClusterId.js";
 
 export async function confirmVacancyEmployer(
   canonicalVacancyId: string,
   candidateName: string,
   dependencies: {
+    readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
     readonly employerClusterRepository: EmployerClusterRepository;
     readonly assignmentRepository: ObservationClusterAssignmentRepository;
@@ -23,7 +25,8 @@ export async function confirmVacancyEmployer(
   if ((await getEmployerMemoryReviewCandidates(vacancy, dependencies)).length > 0) throw new Error("Employer memory candidate must be reviewed before direct confirmation.");
   const candidate = employerConfirmationCandidate(vacancy.organizationRelationships);
   if (await hasRejectedEmployerMemory(vacancy, candidate, dependencies)) throw new Error("Employer candidate was rejected in employer memory review.");
-  if (candidate === null || candidate !== candidateName.trim()) {
+  if (candidate === null || candidate !== candidateName.trim()
+    || await isEmployerConfirmationRedundant(vacancy, candidate, dependencies)) {
     throw new Error("Employer candidate is no longer eligible for confirmation.");
   }
   const observationId = vacancy.sourceObservationIds.at(-1);
