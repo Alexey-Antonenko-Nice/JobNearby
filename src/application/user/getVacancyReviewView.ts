@@ -17,7 +17,7 @@ import { collectVacancySourceLinks } from "./collectVacancySourceLinks.js";
 import { effectiveEmployerClusterId } from "./effectiveEmployerClusterId.js";
 import { getEmployerMemoryView } from "./getEmployerMemoryView.js";
 import { getUserVacancyHistory } from "./getUserVacancyHistory.js";
-import { employerConfirmationCandidate } from "./employerConfirmation.js";
+import { employerConfirmationCandidate, isEmployerConfirmationRedundant } from "./employerConfirmation.js";
 
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
@@ -79,6 +79,7 @@ export async function getVacancyReviewView(
   const aliasSelection = memoryCandidates.length === 0 ? await getEmployerAliasSelection(vacancy, dependencies) : null;
   const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : []), ...(aliasSelection ? [aliasSelection] : [])];
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
+  const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
     vacancyContext,
     ...(employerActionContext === null ? {} : { employerActionContext }),
@@ -117,7 +118,7 @@ export async function getVacancyReviewView(
       everAppliedToEmployer: employerMemory?.vacancies.some(({ everApplied }) => everApplied) ?? false,
       everInterviewedWithEmployer: employerMemory?.vacancies.some(({ everInterviewed }) => everInterviewed) ?? false,
       everRejectedByEmployer: employerMemory?.vacancies.some(({ everRejected }) => everRejected) ?? false,
-      confirmationCandidate: memoryCandidates.length > 0 || rejectedMemory ? null : (employerCluster?.status !== undefined
+      confirmationCandidate: memoryCandidates.length > 0 || rejectedMemory || redundantConfirmation ? null : (employerCluster?.status !== undefined
         && employerCluster.status !== "UNRESOLVED"
         && employerCluster.status !== "PROBABLY_RESOLVED")
         || confirmedAssignment?.status === "USER_CONFIRMED"

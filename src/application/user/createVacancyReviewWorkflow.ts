@@ -72,6 +72,7 @@ export function createVacancyReviewWorkflow(
         throw new Error("Employer confirmation is unavailable.");
       }
       await confirmVacancyEmployer(input.canonicalVacancyId, input.candidateName, {
+        ...(dependencies.aliasRepository ? { aliasRepository: dependencies.aliasRepository } : {}),
         canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
         employerClusterRepository: dependencies.employerClusterWriter,
         assignmentRepository: dependencies.assignmentRepository,
