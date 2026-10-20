@@ -10,6 +10,7 @@ import { LhhSelectedVacancyContextLocator } from "./LhhSelectedVacancyContextLoc
 import { LinkedInSelectedVacancyContextLocator } from "./LinkedInSelectedVacancyContextLocator.js";
 import { extractWorkdayStructuredFields, isWorkdaySource } from "./WorkdayVacancy.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
+import { extractPersonioHeaderFacts } from "./PersonioVacancy.js";
 
 export interface ProviderCaptureInput {
   readonly sourceName: string;
@@ -55,7 +56,14 @@ export class ProviderCaptureRegistry {
           providerKey, sourceUrl: input.sourceUrl,
           ...(externalId === undefined ? {} : { externalId }), html: input.html,
         });
-    const structuredFields = input.html !== undefined && isWorkdaySource(input.sourceName, input.sourceUrl)
+    const personioHeader = providerKey === "PERSONIO" && externalId !== undefined && input.html !== undefined
+      ? extractPersonioHeaderFacts(input.html) : undefined;
+    const structuredFields = personioHeader !== undefined
+      ? {
+          ...(personioHeader.title === undefined ? {} : { title: personioHeader.title }),
+          ...(personioHeader.contractTerms.length === 0 ? {} : { contractText: personioHeader.contractTerms.join(" · ") }),
+        }
+      : input.html !== undefined && isWorkdaySource(input.sourceName, input.sourceUrl)
       ? extractWorkdayStructuredFields(input.html, input.sourceUrl)
       : undefined;
     return {

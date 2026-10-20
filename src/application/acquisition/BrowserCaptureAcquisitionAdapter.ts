@@ -8,6 +8,7 @@ import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
 import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js";
 import { ProviderCaptureRegistry } from "./ProviderCaptureRegistry.js";
+import { isPersonioHostname } from "./PersonioVacancy.js";
 
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BROWSER_HTML_BYTES = 5 * 1024 * 1024;
@@ -96,6 +97,7 @@ function validatePageUrl(value: string): string {
 function sourceNameFromUrl(value: string): string {
   try {
     const hostname = new URL(value).hostname.toLocaleLowerCase();
+    if (isPersonioHostname(hostname)) return hostname;
     if (hostname.length === 0) return "browser";
     const withoutWww = hostname.startsWith("www.") ? hostname.slice(4) : hostname;
     const labels = withoutWww.split(".");

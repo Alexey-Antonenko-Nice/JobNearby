@@ -6,6 +6,7 @@ import { ExplicitEmployerCharacteristicExtractor } from "./ExplicitEmployerChara
 import { ExplicitTextVacancyEvidenceExtractor } from "./ExplicitTextVacancyEvidenceExtractor.js";
 import { IndeedSelectedVacancyEvidenceExtractor } from "./IndeedSelectedVacancyEvidenceExtractor.js";
 import { WorkdayVacancyEvidenceExtractor } from "./WorkdayVacancyEvidenceExtractor.js";
+import { PersonioVacancyEvidenceExtractor } from "./PersonioVacancyEvidenceExtractor.js";
 import { JoobleSelectedVacancyEvidenceExtractor } from "./JoobleSelectedVacancyEvidenceExtractor.js";
 import { LinkedInSelectedVacancyEvidenceExtractor } from "./LinkedInSelectedVacancyEvidenceExtractor.js";
 import { CadremploiSelectedVacancyEvidenceExtractor } from "./CadremploiSelectedVacancyEvidenceExtractor.js";
@@ -14,6 +15,7 @@ import { LhhSelectedVacancyEvidenceExtractor } from "./LhhSelectedVacancyEvidenc
 export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtractor {
   return new CompositeVacancyEvidenceExtractor([
     new WorkdayVacancyEvidenceExtractor(),
+    new PersonioVacancyEvidenceExtractor(),
     new JoobleSelectedVacancyEvidenceExtractor(),
     new LinkedInSelectedVacancyEvidenceExtractor(),
     new CadremploiSelectedVacancyEvidenceExtractor(),
