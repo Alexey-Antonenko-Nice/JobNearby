@@ -1,4 +1,5 @@
 import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
+import { isPersonioSource } from "./PersonioVacancy.js";
 import type {
   AcquisitionProviderRecognitionInput,
   AcquisitionProviderRecognizer,
@@ -13,6 +14,7 @@ const providersByHostname: Readonly<Record<string, ProviderKey>> = {
 
 export class HostnameAcquisitionProviderRecognizer implements AcquisitionProviderRecognizer {
   recognize(input: AcquisitionProviderRecognitionInput): ProviderKey | undefined {
+    if (isPersonioSource(input.sourceName, input.sourceUrl)) return "PERSONIO";
     try {
       const hostname = new URL(input.sourceUrl).hostname.toLocaleLowerCase();
       const sourceName = input.sourceName.toLocaleLowerCase();

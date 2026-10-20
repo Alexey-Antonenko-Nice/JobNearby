@@ -25,7 +25,7 @@ export interface VacancyReviewWorkflowDependencies {
   readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
   readonly aliasRepository?: EmployerAliasEvidenceRepository;
   readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll" | "findById">;
-  readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds">;
+  readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds" | "countCaptureOccurrences">;
   readonly interactionRepository: UserVacancyInteractionRepository;
   readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
   readonly recognitionPersistence?: EmployerRecognitionPersistence;

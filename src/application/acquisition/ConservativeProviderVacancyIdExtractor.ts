@@ -5,6 +5,7 @@ import type {
 import { extractLinkedInVacancyId } from "./LinkedInVacancyUrl.js";
 import { extractRandstadVacancyId } from "./RandstadVacancyUrl.js";
 import { extractWorkdayVacancyId } from "./WorkdayVacancy.js";
+import { extractPersonioVacancyId, isPersonioSource } from "./PersonioVacancy.js";
 
 type ExtractionRule = (url: URL) => string | undefined;
 
@@ -24,6 +25,7 @@ export class ConservativeProviderVacancyIdExtractor
   implements ProviderVacancyIdExtractor
 {
   extract(input: ProviderVacancyIdExtractionInput): string | undefined {
+    if (isPersonioSource(input.sourceName, input.sourceUrl)) return extractPersonioVacancyId(input.sourceUrl);
     if (input.sourceName.endsWith(".myworkdayjobs.com")) {
       try {
         const url = new URL(input.sourceUrl);

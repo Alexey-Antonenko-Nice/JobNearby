@@ -146,6 +146,15 @@ export class SqliteSourceObservationRepository
     return rows.map(mapRowToObservation);
   }
 
+  async countCaptureOccurrences(ids: readonly SourceObservationId[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    const row = this.db.prepare(`
+      SELECT COUNT(*) AS count FROM capture_occurrences
+      WHERE source_observation_id IN (SELECT value FROM json_each(?))
+    `).get(JSON.stringify(ids)) as { count: number };
+    return row.count;
+  }
+
   async findById(
     id: SourceObservationId,
   ): Promise<SourceObservation | null> {

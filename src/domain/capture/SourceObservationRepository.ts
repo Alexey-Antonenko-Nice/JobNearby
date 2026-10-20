@@ -4,6 +4,8 @@ import type {
 } from "./SourceObservation.js";
 
 export interface SourceObservationRepository {
+  /** Capture sightings are separate from immutable observation snapshots. */
+  countCaptureOccurrences?(ids: readonly SourceObservationId[]): Promise<number>;
   findByIds?(ids: readonly SourceObservationId[]): Promise<readonly SourceObservation[]>;
 
   save(observation: SourceObservation): Promise<void>;

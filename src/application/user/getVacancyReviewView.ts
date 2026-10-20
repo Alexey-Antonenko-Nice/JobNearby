@@ -25,7 +25,7 @@ export async function getVacancyReviewView(
     readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
     readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
-    readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds">;
+    readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById" | "findByIds" | "countCaptureOccurrences">;
     readonly interactionRepository: UserVacancyInteractionRepository;
     readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
     readonly assignmentRepository?: import("../../domain/recognition/ObservationClusterAssignmentRepository.js").ObservationClusterAssignmentRepository;
@@ -49,7 +49,9 @@ export async function getVacancyReviewView(
   const history = await getUserVacancyHistory(canonicalVacancyId, dependencies.interactionRepository);
   const relationshipContext = await dependencies.publicationCampaignContextSource?.findBySourceObservationIds(observationIds)
     ?? { publicationFamilies: [], recruitmentCampaigns: [] };
-  const vacancyContext = { ...deriveVacancyContext(canonicalVacancyId, observations, history.events), ...relationshipContext };
+  const derivedContext = deriveVacancyContext(canonicalVacancyId, observations, history.events);
+  const captureCount = await repository.countCaptureOccurrences?.(observationIds) ?? 0;
+  const vacancyContext = { ...derivedContext, ...relationshipContext, seenBefore: derivedContext.seenBefore || captureCount > 1 };
   const eventTypes = new Set(history.events.map(({ type }) => type));
   const confirmedAssignment = dependencies.assignmentRepository === undefined ? null : await latestEffectiveAssignment(vacancy.sourceObservationIds, dependencies.assignmentRepository);
   const employerClusterId = confirmedAssignment?.employerClusterId ?? effectiveEmployerClusterId(vacancy.organizationRelationships);
