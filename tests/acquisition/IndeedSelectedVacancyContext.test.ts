@@ -94,10 +94,10 @@ describe("IndeedSelectedVacancyContextLocator", () => {
     expect(context?.html).toMatch(/^\s*<section/u);
   });
 
-  it("rejects absent or mismatched URL identity", () => {
+  it("uses explicit selected evidence without URL identity and rejects a mismatched URL", () => {
     const html = indeedHtml("73c6c191fddb1427");
     expect(locate("73c6c191fddb1427", html, "https://fr.indeed.com/jobs"))
-      .toBeUndefined();
+      .toMatchObject({ providerExternalId: "73c6c191fddb1427" });
     expect(locate("73c6c191fddb1427", html, "https://fr.indeed.com/?vjk=other"))
       .toBeUndefined();
   });

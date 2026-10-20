@@ -49,7 +49,7 @@ describe("ingestBrowserCapture", () => {
     expect(stored).not.toHaveProperty("externalId");
   });
 
-  it("persists repeated captures as independent observations", async () => {
+  it("persists repeated captures without provider identity as independent observations", async () => {
     const repository = new InMemorySourceObservationRepository();
     let index = 0;
     const deps = {
@@ -58,12 +58,24 @@ describe("ingestBrowserCapture", () => {
       generateAcquisitionId: () => `acquisition-${++index}`,
       generateObservationId: () => `observation-${index}`,
     };
-    const first = await ingestBrowserCapture(browserPayload, deps);
-    const second = await ingestBrowserCapture(browserPayload, deps);
+    const unidentifiedPayload = { ...browserPayload, pageUrl: "https://employer.example/jobs/" };
+    const first = await ingestBrowserCapture(unidentifiedPayload, deps);
+    const second = await ingestBrowserCapture(unidentifiedPayload, deps);
     expect(first.sourceObservationId).toBe("observation-1");
     expect(second.sourceObservationId).toBe("observation-2");
     expect(await repository.findById("observation-1")).not.toBeNull();
     expect(await repository.findById("observation-2")).not.toBeNull();
+  });
+
+  it("reuses identical direct Indeed jk captures now that the URL supplies provider identity", async () => {
+    const repository = new InMemorySourceObservationRepository();
+    let sequence = 0;
+    const deps = { repository, acquisitionMapper: new DeterministicAcquisitionCaptureMapper(),
+      generateObservationId: () => `direct-${++sequence}` };
+    const first = await ingestBrowserCapture(browserPayload, deps);
+    const second = await ingestBrowserCapture(browserPayload, deps);
+    expect(second.sourceObservationId).toBe(first.sourceObservationId);
+    expect((await repository.findById(first.sourceObservationId))?.source.externalId).toBe("abc");
   });
 
   it("keeps acquisition and observation IDs semantically separate", async () => {

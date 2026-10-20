@@ -6,13 +6,14 @@ import { extractLinkedInVacancyId } from "./LinkedInVacancyUrl.js";
 import { extractRandstadVacancyId } from "./RandstadVacancyUrl.js";
 import { extractWorkdayVacancyId } from "./WorkdayVacancy.js";
 import { extractPersonioVacancyId, isPersonioSource } from "./PersonioVacancy.js";
+import { indeedUrlVacancyId } from "./IndeedSelectedVacancyContextLocator.js";
 
 type ExtractionRule = (url: URL) => string | undefined;
 
 const rules: Readonly<Record<string, ExtractionRule>> = {
   "hellowork.com": extractHellowork,
   "meteojob.com": extractMeteojob,
-  "indeed.com": (url) => nonEmptyParameter(url, "vjk"),
+  "indeed.com": (url) => indeedUrlVacancyId(url.href),
   "linkedin.com": extractLinkedIn,
   "jobleads.com": extractJobLeads,
   "candidat.francetravail.fr": extractFranceTravail,

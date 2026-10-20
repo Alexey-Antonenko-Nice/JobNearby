@@ -37,12 +37,15 @@ export class BrowserCaptureAcquisitionAdapter {
     const providerCapture = this.providerCaptureRegistry.capture({
       sourceName, sourceUrl: pageUrl, ...(html === undefined ? {} : { html }),
     });
-    const jsonLdJobPostings = html === undefined
+    // Never project search/account JSON-LD or microdata into selected-job fields.
+    // The immutable full-page content is still retained for diagnostics.
+    const evidenceHtml = providerCapture.requiresSelectedVacancyContext ? providerCapture.context?.html : html;
+    const jsonLdJobPostings = evidenceHtml === undefined
       ? []
-      : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(html));
+      : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(evidenceHtml));
     const jobPostings = jsonLdJobPostings.length > 0
       ? jsonLdJobPostings
-      : html === undefined ? [] : this.jobPostingExtractor.extractHtml(html);
+      : evidenceHtml === undefined ? [] : this.jobPostingExtractor.extractHtml(evidenceHtml);
     const genericStructuredFields = jobPostings.length === 1
       ? this.jobPostingProjector.project(jobPostings[0]!)
       : undefined;
@@ -75,9 +78,10 @@ export class BrowserCaptureAcquisitionAdapter {
       },
       ...(structuredFields !== undefined ? { structuredFields } : {}),
       ...(providerCapture.context === undefined ? {} : { contexts: [providerCapture.context] }),
-      metadata: payload.browserMetadata === undefined
-        ? {}
-        : structuredClone(payload.browserMetadata),
+      metadata: {
+        ...(payload.browserMetadata === undefined ? {} : structuredClone(payload.browserMetadata)),
+        ...(providerCapture.requiresSelectedVacancyContext ? { vacancyEvidenceScope: "SELECTED_VACANCY_REQUIRED" } : {}),
+      },
     });
   }
 }
