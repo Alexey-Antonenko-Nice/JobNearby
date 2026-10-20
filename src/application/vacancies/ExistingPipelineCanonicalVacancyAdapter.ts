@@ -349,6 +349,7 @@ function mapOrganizationRole(
   evidence: OrganizationEvidence,
 ): VacancyOrganizationRelationship["role"] {
   return {
+    DISPLAYED_COMPANY: "DISPLAYED_COMPANY",
     EMPLOYER: "EMPLOYER",
     RECRUITMENT_AGENCY: "RECRUITER",
     STAFFING_AGENCY: "STAFFING_AGENCY",
@@ -475,16 +476,31 @@ function usable(value: string | undefined): value is string {
 function uniqueOrganizationRelationships(
   relationships: readonly VacancyOrganizationRelationship[],
 ): VacancyOrganizationRelationship[] {
-  const seen = new Set<string>();
-  return relationships.filter((relationship) => {
+  const indexes = new Map<string, number>();
+  const unique: VacancyOrganizationRelationship[] = [];
+  for (const relationship of relationships) {
     const anchor = relationship.rawName === undefined
       ? relationship.employerClusterId ?? relationship.organizationId ?? ""
       : normalizeOrganizationEvidenceName(relationship.rawName);
     const key = `${relationship.role}\u0000${anchor}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+    const index = indexes.get(key);
+    if (index === undefined) {
+      indexes.set(key, unique.length);
+      unique.push(relationship);
+      continue;
+    }
+    const existing = unique[index]!;
+    unique[index] = {
+      ...existing,
+      supportingEvidenceIds: [
+        ...new Set([
+          ...existing.supportingEvidenceIds,
+          ...relationship.supportingEvidenceIds,
+        ]),
+      ],
+    };
+  }
+  return unique;
 }
 
 type EngagementValue = { readonly rawTerms: readonly string[]; readonly normalizedTerms: readonly string[] };

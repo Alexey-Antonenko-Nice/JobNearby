@@ -332,6 +332,135 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
     });
   });
 
+  it("upgrades unknown fields from later provider-agnostic evidence and merges safe organization roles", () => {
+    const first = observation("first", {
+      source: { sourceType: "JOB_BOARD", sourceName: "Indeed", externalId: "shared-job-id" },
+    });
+    const later = observation("later", {
+      source: { sourceType: "JOB_BOARD", sourceName: "Indeed", externalId: "shared-job-id" },
+    });
+    const laterProvenance = {
+      sourceObservationId: "later",
+      extractionMethod: "TEXT_EXTRACTION" as const,
+      confidence: 0.98,
+    };
+    const cluster: EmployerCluster = {
+      id: "unresolved-employer",
+      status: "UNRESOLVED",
+      createdAt: new Date("2026-08-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+    };
+    const vacancy = canonicalize(
+      [first, later],
+      [
+        extracted("first", {
+          organizations: [{ value: "Eurofirms Group | People first", role: "UNKNOWN" }],
+        }),
+        createExtractedVacancyEvidence({
+          sourceObservationId: "later",
+          vacancyTitles: [{ value: "Maintenance engineer H/F", provenance: laterProvenance }],
+          locations: [{ value: "Toulouse, Occitanie, France", role: "WORKPLACE", provenance: laterProvenance }],
+          engagements: [{ rawTerms: ["Temps plein"], normalizedTerms: ["FULL_TIME"], provenance: laterProvenance }],
+          workModes: [{ value: "ON_SITE", provenance: laterProvenance }],
+          compensations: [{
+            rawText: "39K € par yr - 42K € par yr",
+            currency: "EUR",
+            minimum: 39000,
+            maximum: 42000,
+            period: "YEAR",
+            provenance: laterProvenance,
+          }],
+          organizations: [
+            { value: "Eurofirms Group | People first", role: "DISPLAYED_COMPANY", provenance: laterProvenance },
+            { value: "Eurofirms Group | People first", role: "RECRUITMENT_AGENCY", provenance: laterProvenance },
+          ],
+        }),
+      ],
+      cluster,
+    );
+
+    expect(vacancy.role).toMatchObject({ status: "RESOLVED", value: { title: "Maintenance engineer H/F" } });
+    expect(vacancy.location).toMatchObject({ status: "RESOLVED", value: { rawText: "Toulouse, Occitanie, France" } });
+    expect(vacancy.engagement).toMatchObject({ status: "RESOLVED", value: { normalizedTerms: ["FULL_TIME"] } });
+    expect(vacancy.workMode).toMatchObject({ status: "RESOLVED", value: "ON_SITE" });
+    expect(vacancy.compensation).toMatchObject({
+      status: "RESOLVED",
+      value: { minimum: 39000, maximum: 42000, currency: "EUR", period: "YEAR" },
+    });
+    expect(vacancy.organizationRelationships).toEqual(expect.arrayContaining([
+      expect.objectContaining({ employerClusterId: cluster.id, role: "EMPLOYER" }),
+      expect.objectContaining({ rawName: "Eurofirms Group | People first", role: "DISPLAYED_COMPANY" }),
+      expect.objectContaining({ rawName: "Eurofirms Group | People first", role: "RECRUITER" }),
+    ]));
+    expect(vacancy.organizationRelationships.filter(({ role, rawName }) =>
+      role === "DISPLAYED_COMPANY" && rawName?.toLocaleLowerCase().startsWith("eurofirms"),
+    )).toHaveLength(1);
+    expect(vacancy.organizationRelationships.find(({ role }) => role === "DISPLAYED_COMPANY")?.supportingEvidenceIds)
+      .toHaveLength(2);
+    expect(vacancy.organizationRelationships).not.toContainEqual(
+      expect.objectContaining({ rawName: "Eurofirms Group | People first", role: "EMPLOYER" }),
+    );
+  });
+
+  it("preserves conflicting work-mode evidence instead of choosing the later observation", () => {
+    const provenance = (sourceObservationId: string) => ({
+      sourceObservationId,
+      extractionMethod: "TEXT_EXTRACTION" as const,
+      confidence: 0.98,
+    });
+    const vacancy = canonicalize(
+      [observation("first"), observation("later")],
+      [
+        createExtractedVacancyEvidence({
+          sourceObservationId: "first",
+          workModes: [{ value: "ON_SITE", provenance: provenance("first") }],
+        }),
+        createExtractedVacancyEvidence({
+          sourceObservationId: "later",
+          workModes: [{ value: "REMOTE", provenance: provenance("later") }],
+        }),
+      ],
+    );
+
+    expect(vacancy.workMode.status).toBe("CONFLICTED");
+    expect(vacancy.workMode.alternatives?.map(({ value }) => value)).toEqual(["ON_SITE", "REMOTE"]);
+  });
+
+  it("retains earlier valid evidence when a later observation is silent and leaves unsupported fields unknown", () => {
+    const firstProvenance = {
+      sourceObservationId: "first",
+      extractionMethod: "TEXT_EXTRACTION" as const,
+      confidence: 0.98,
+    };
+    const withLaterSilence = canonicalize(
+      [observation("first"), observation("later")],
+      [
+        createExtractedVacancyEvidence({
+          sourceObservationId: "first",
+          workModes: [{ value: "ON_SITE", provenance: firstProvenance }],
+          compensations: [{
+            rawText: "39K € par yr - 42K € par yr",
+            currency: "EUR",
+            minimum: 39000,
+            maximum: 42000,
+            period: "YEAR",
+            provenance: firstProvenance,
+          }],
+        }),
+        extracted("later"),
+      ],
+    );
+    expect(withLaterSilence.workMode).toMatchObject({ status: "RESOLVED", value: "ON_SITE" });
+    expect(withLaterSilence.compensation).toMatchObject({
+      status: "RESOLVED",
+      value: { minimum: 39000, maximum: 42000, currency: "EUR", period: "YEAR" },
+    });
+
+    const stillUnknown = canonicalize([observation("one")]);
+    expect(stillUnknown.workMode.status).toBe("UNKNOWN");
+    expect(stillUnknown.compensation.status).toBe("UNKNOWN");
+  });
+
   it("projects explicit candidate requirements without collapsing multiple languages", async () => {
     const source = observation("one", {
       description: "English required. German preferred. 3 years of experience. frequent international travel required.",

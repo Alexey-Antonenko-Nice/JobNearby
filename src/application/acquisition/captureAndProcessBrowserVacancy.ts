@@ -59,6 +59,8 @@ export async function captureAndProcessBrowserVacancy(
   const ingestion = await ingestBrowserCapture(payload, dependencies.ingestion);
   const capture = captureSummary(ingestion);
   try {
+    // Snapshot reuse only deduplicates immutable source content. Always reproject
+    // the returned observation with current extractors, including exact recaptures.
     const processing = await dependencies.processVacancyObservation(
       ingestion.sourceObservationId,
     );

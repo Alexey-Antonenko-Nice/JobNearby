@@ -5,6 +5,7 @@ import {
 } from "./EvidenceProvenance.js";
 
 export type OrganizationEvidenceRole =
+  | "DISPLAYED_COMPANY"
   | "EMPLOYER"
   | "RECRUITMENT_AGENCY"
   | "STAFFING_AGENCY"

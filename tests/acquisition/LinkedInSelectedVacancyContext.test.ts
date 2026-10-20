@@ -5,6 +5,9 @@ import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acq
 import { HostnameAcquisitionProviderRecognizer } from "../../src/application/acquisition/HostnameAcquisitionProviderRecognizer.js";
 import { LinkedInSelectedVacancyContextLocator } from "../../src/application/acquisition/LinkedInSelectedVacancyContextLocator.js";
 import { createAcquisitionPackage } from "../../src/domain/acquisition/AcquisitionPackage.js";
+import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { fromSelectedVacancyContext } from "../../src/domain/evidence/VacancyEvidenceInput.js";
+import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
 
 const recognizer = new HostnameAcquisitionProviderRecognizer();
 const locator = new LinkedInSelectedVacancyContextLocator();
@@ -134,6 +137,69 @@ describe("LinkedInSelectedVacancyContextLocator", () => {
     expect(context?.text).not.toContain("Other vacancy");
     expect(context?.html).toContain('id="JobDetails_AboutTheJob_4460344242"');
     expect(context?.html).not.toContain('id="workspace"');
+  });
+
+  it("captures and extracts the selected Eurofirms search-results header without sidebar evidence", async () => {
+    const id = "4473114996";
+    const html = `
+      <main>
+        <div class="results-list">
+          <div componentkey="job-card-component-ref-9999999999">Sidebar employer and 2M€</div>
+          <div componentkey="job-card-component-ref-${id}">Selected result</div>
+        </div>
+        <div class="selected-job-detail">
+          <div class="job-header">
+            <a href="/jobs/view/${id}/">Eurofirms Group | People first</a>
+            <h1>Ingénieur Méthodes Industrialisation H/F</h1>
+            <p>Toulouse, Occitanie, France · il y a 2 jours</p>
+            <p>39K € par yr - 42K € par yr</p>
+            <p>Sur site</p><p>Temps plein</p>
+          </div>
+          <div class="job-sections">
+            <div id="JobDetails_AboutTheJob_${id}">
+              <h2>À propos de l’offre d’emploi</h2>
+              <p>Eurofirms décrit son activité d’intérim et de recrutement.</p>
+            </div>
+            <div id="JobDetails_AboutTheCompany_${id}">Company details</div>
+          </div>
+        </div>
+      </main>`;
+
+    const context = locate(id, html, `https://www.linkedin.com/jobs/search-results/?currentJobId=${id}`);
+    expect(context?.text).toContain("Eurofirms Group | People first");
+    expect(context?.text).toContain("39K € par yr - 42K € par yr");
+    expect(context?.text).toContain("Sur site");
+    expect(context?.text).toContain("Temps plein");
+    expect(context?.text).not.toContain("Sidebar employer");
+    expect(context?.text).not.toContain("2M€");
+
+    if (context === undefined) throw new Error("Expected the selected LinkedIn vacancy context.");
+    const observation: SourceObservation = {
+      id: "linkedin-search-results-regression",
+      source: {
+        sourceType: "JOB_BOARD",
+        sourceName: "linkedin.com",
+        sourceUrl: `https://www.linkedin.com/jobs/search-results/?currentJobId=${id}`,
+        externalId: id,
+      },
+      observedAt: new Date("2026-09-08T10:00:00.000Z"),
+      metadata: {},
+    };
+    const evidence = await createVacancyEvidenceExtractor().extract(
+      fromSelectedVacancyContext(observation, context),
+    );
+    expect(evidence.vacancyTitles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "Ingénieur Méthodes Industrialisation H/F" }),
+    ]));
+    expect(evidence.workModes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "ON_SITE" }),
+    ]));
+    expect(evidence.compensations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ minimum: 39000, maximum: 42000, currency: "EUR", period: "YEAR" }),
+    ]));
+    expect(evidence.organizations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ value: "Eurofirms Group | People first", role: "DISPLAYED_COMPANY" }),
+    ]));
   });
 
   it("includes the active header from the SemanticJobDetails screen", () => {
