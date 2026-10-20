@@ -3,7 +3,7 @@ import { extractBurkertApplyId } from "./BurkertVacancyIdentity.js";
 import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
 import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
 import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProviderRecognizer.js";
-import { IndeedSelectedVacancyContextLocator } from "./IndeedSelectedVacancyContextLocator.js";
+import { IndeedSelectedVacancyContextLocator, requiresIndeedSelectedContext } from "./IndeedSelectedVacancyContextLocator.js";
 import { JoobleSelectedVacancyContextLocator } from "./JoobleSelectedVacancyContextLocator.js";
 import { CadremploiSelectedVacancyContextLocator } from "./CadremploiSelectedVacancyContextLocator.js";
 import { LhhSelectedVacancyContextLocator } from "./LhhSelectedVacancyContextLocator.js";
@@ -19,6 +19,7 @@ export interface ProviderCaptureInput {
 }
 
 export interface ProviderCaptureResult {
+  readonly requiresSelectedVacancyContext?: boolean;
   readonly providerKey?: ProviderKey;
   readonly externalId?: string;
   readonly context?: ReturnType<SelectedVacancyContextLocator["locate"]>;
@@ -66,9 +67,11 @@ export class ProviderCaptureRegistry {
       : input.html !== undefined && isWorkdaySource(input.sourceName, input.sourceUrl)
       ? extractWorkdayStructuredFields(input.html, input.sourceUrl)
       : undefined;
+    const selectedExternalId = context?.providerExternalId ?? externalId;
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
-      ...(externalId === undefined ? {} : { externalId }),
+      ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
+      ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),
     };

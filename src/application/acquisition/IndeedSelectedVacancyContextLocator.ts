@@ -1,56 +1,89 @@
 import { createAcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 
-const EVIDENCE = [
-  "URL_EXTERNAL_ID",
-  "MATCHING_SELECTED_RESULT",
-  "BOUNDED_JOB_DETAIL",
-  "DETAIL_EXTERNAL_ID_MATCH",
-] as const;
-
 export class IndeedSelectedVacancyContextLocator implements SelectedVacancyContextLocator {
   locate(input: Parameters<SelectedVacancyContextLocator["locate"]>[0]) {
-    if (input.providerKey !== "INDEED" || input.externalId === undefined) return undefined;
-    if (!urlHasExternalId(input.sourceUrl, input.externalId)) return undefined;
-
-    const selectedResults = findSelectedResults(input.html, input.externalId);
-    if (selectedResults.length !== 1) return undefined;
-    if (!containsMatchingJobKey(selectedResults[0]!, input.externalId)) return undefined;
-
-    const details = findBoundedJobDetails(input.html);
+    if (input.providerKey !== "INDEED") return undefined;
+    let sourceUrl: URL;
+    try { sourceUrl = new URL(input.sourceUrl); } catch { return undefined; }
+    if (!isIndeedHostname(sourceUrl.hostname)) return undefined;
+    const html = stripIndeedScripts(input.html);
+    const companyJobs = isIndeedCompanyJobsUrl(input.sourceUrl);
+    const details = findBoundedJobDetails(html, companyJobs);
     if (details.length !== 1) return undefined;
     const detailHtml = details[0]!;
-    if (!detailIndependentlyReferencesId(detailHtml, input.externalId)) return undefined;
+    const detailIds = explicitDetailIds(detailHtml, input.sourceUrl);
+    if (detailIds.size > 1) return undefined;
+    const companyPane = companyJobs && /data-testid\s*=\s*["']JobDetail["']/u.test(detailHtml);
+    const urlId = indeedUrlVacancyId(input.sourceUrl);
+    const externalId = [...detailIds][0] ?? (companyPane ? urlId : undefined);
+    if (externalId === undefined) return undefined;
+    const urlKeys = [...sourceUrl.searchParams.getAll("vjk"), ...(supportsJkQuery(sourceUrl) ? sourceUrl.searchParams.getAll("jk") : [])].filter(Boolean);
+    if (urlKeys.some((key) => key !== externalId)) return undefined;
+    if ((input.externalId !== undefined && input.externalId !== externalId)
+      || (urlId !== undefined && urlId !== externalId)) return undefined;
+    const selectedResults = findSelectedResults(html);
+    const nativePane = /data-testid=["']viewjob-main-content["']/iu.test(detailHtml);
+    // Legacy panes require the independent selected-card association. Native
+    // direct pages may have no results column, but must carry their own job key.
+    if ((!nativePane && !companyPane && selectedResults.length !== 1) || selectedResults.length > 1) return undefined;
+    if (selectedResults.some((card) => !hasClass(openingTags(card, "div")[0] ?? "", `job_${externalId}`)
+      || !containsMatchingJobKey(card, externalId))) return undefined;
 
-    const text = htmlToText(detailHtml);
+    const text = htmlToIndeedText(detailHtml);
     if (text.length === 0) return undefined;
 
     return createAcquisitionContext({
       kind: "SELECTED_VACANCY",
       associationMethod: "PROVIDER_LOCATOR",
       providerKey: "INDEED",
-      providerExternalId: input.externalId,
-      associationEvidence: EVIDENCE,
+      providerExternalId: externalId,
+      associationEvidence: [
+        urlId === undefined ? "SELECTED_DETAIL_EXTERNAL_ID" : "URL_EXTERNAL_ID",
+        ...(selectedResults.length === 1 ? ["MATCHING_SELECTED_RESULT"] : []),
+        "BOUNDED_JOB_DETAIL",
+        ...(detailIds.size === 1 ? ["DETAIL_EXTERNAL_ID_MATCH"] : []),
+      ],
       text,
       html: detailHtml,
     });
   }
 }
 
-function urlHasExternalId(sourceUrl: string, externalId: string): boolean {
+export function indeedUrlVacancyId(sourceUrl: string): string | undefined {
   try {
-    return new URL(sourceUrl).searchParams.get("vjk") === externalId;
-  } catch {
-    return false;
-  }
+    const url = new URL(sourceUrl);
+    if (!isIndeedHostname(url.hostname)) return undefined;
+    const values = [...url.searchParams.getAll("vjk"), ...(supportsJkQuery(url) ? url.searchParams.getAll("jk") : [])].filter(Boolean);
+    return new Set(values).size === 1 ? values[0] : undefined;
+  } catch { return undefined; }
 }
 
-function findSelectedResults(html: string, externalId: string): string[] {
-  const resultClass = `job_${externalId}`;
+export function isIndeedCompanyJobsUrl(sourceUrl: string): boolean {
+  try {
+    const url = new URL(sourceUrl);
+    return isIndeedHostname(url.hostname) && /^\/cmp\/[^/]+\/jobs\/?$/u.test(url.pathname);
+  } catch { return false; }
+}
+
+function supportsJkQuery(url: URL): boolean {
+  return url.pathname === "/viewjob" || isIndeedCompanyJobsUrl(url.href);
+}
+
+export function requiresIndeedSelectedContext(sourceUrl: string, html = ""): boolean {
+  try {
+    const url = new URL(sourceUrl);
+    if (!isIndeedHostname(url.hostname)) return false;
+    return url.pathname === "/" || url.pathname === "/jobs" || isIndeedCompanyJobsUrl(sourceUrl)
+      || /(?:job-full-details|jobsearch-ViewjobPaneWrapper|rnvjContainerDesktop|viewjob-main-content|vjs-highlight)/u.test(stripIndeedScripts(html));
+  } catch { return false; }
+}
+
+function findSelectedResults(html: string): string[] {
   const results: string[] = [];
   for (const match of openingTagMatches(html, "div")) {
     const tag = match[0];
-    if (hasClass(tag, "result") && hasClass(tag, "vjs-highlight") && hasClass(tag, resultClass)) {
+    if (hasClass(tag, "result") && hasClass(tag, "vjs-highlight")) {
       const outerHtml = balancedElement(html, "div", match.index);
       if (outerHtml !== undefined) results.push(outerHtml);
     }
@@ -62,7 +95,7 @@ function containsMatchingJobKey(html: string, externalId: string): boolean {
   return openingTags(html, "a").some((tag) => attribute(tag, "data-jk") === externalId);
 }
 
-function findBoundedJobDetails(html: string): string[] {
+function findBoundedJobDetails(html: string, companyJobs: boolean): string[] {
   const details: string[] = [];
   for (const match of openingTagMatches(html, "section")) {
     const tag = match[0];
@@ -74,20 +107,82 @@ function findBoundedJobDetails(html: string): string[] {
       if (outerHtml !== undefined) details.push(outerHtml);
     }
   }
+  const wrappers = indeedElementsWithAttribute(html, "id", "jobsearch-ViewjobPaneWrapper");
+  for (const wrapper of wrappers) {
+    const main = indeedElementsWithAttribute(wrapper, "data-testid", "viewjob-main-content");
+    if (main.length !== 1 || indeedElementsWithAttribute(main[0]!, "data-testid", "vj-job-title").length !== 1
+      || indeedElementsWithAttribute(main[0]!, "data-testid", "viewjob-job-content").length !== 1) return [];
+    details.push(main[0]!);
+  }
+  if (companyJobs) {
+    for (const pane of indeedElementsWithAttribute(html, "data-testid", "JobDetail")) {
+      const head = indeedElementsWithAttribute(pane, "data-testid", "JobDetailHead");
+      if (head.length !== 1 || indeedElementsWithAttribute(head[0]!, "data-testid", "jobDetailTitle").length !== 1
+        || indeedElementsWithAttribute(head[0]!, "data-testid", "jobDetailSubtitle").length !== 1
+        || indeedElementsWithAttribute(pane, "data-testid", "jobDetailDescription").length !== 1
+        || indeedElementsWithAttribute(pane, "data-testid", "JobList").length !== 0) return [];
+      details.push(pane);
+    }
+  }
   return details;
 }
 
-function detailIndependentlyReferencesId(html: string, externalId: string): boolean {
-  return openingTags(html, "a").some((tag) => {
-    const href = attribute(tag, "href");
-    if (href === undefined) return false;
-    try {
-      return new URL(href.replaceAll("&amp;", "&"), "https://indeed.com").searchParams.get("fromjk")
-        === externalId;
-    } catch {
-      return false;
+function explicitDetailIds(html: string, sourceUrl: string): Set<string> {
+  const ids = new Set<string>();
+  for (const tag of html.match(/<[a-z][\w-]*\b[^>]*>/giu) ?? []) {
+    for (const name of ["data-jk", "data-job-key", "data-indeed-apply-jk"]) {
+      const id = attribute(tag, name);
+      if (id) ids.add(id);
     }
-  });
+    for (const name of ["data-indeed-apply-joburl", "data-indeed-apply-continueurl", "data-indeed-apply-pingbackurl"]) {
+      const href = attribute(tag, name);
+      if (href !== undefined) addUrlIds(href);
+    }
+  }
+  for (const tag of openingTags(html, "a")) {
+    const href = attribute(tag, "href");
+    if (href === undefined) continue;
+    addUrlIds(href);
+  }
+  return ids;
+
+  function addUrlIds(href: string): void {
+    // A button's empty/fragment href inherits the browser URL; it is not an
+    // independent identifier exposed by the selected detail.
+    if (href.trim() === "" || href.trim().startsWith("#")) return;
+    try {
+      const url = new URL(href.replaceAll("&amp;", "&"), sourceUrl);
+      if (!isIndeedHostname(url.hostname) || !["http:", "https:"].includes(url.protocol)) return;
+      for (const key of ["jk", "vjk", "fromjk"]) for (const value of url.searchParams.getAll(key)) if (value) ids.add(value);
+      // Current native Indeed apply links carry the selected key in an explicit
+      // Indeed conversion URL, not in the opaque applyable-job UUID.
+      if (url.hostname === "smartapply.indeed.com" && url.pathname === "/beta/indeedapply/applybyapplyablejobid") {
+        const pingback = url.searchParams.get("pingbackUrl");
+        if (pingback) {
+          const nested = new URL(pingback);
+          if (isIndeedHostname(nested.hostname) && ["http:", "https:"].includes(nested.protocol)) {
+            for (const value of nested.searchParams.getAll("jk")) if (value) ids.add(value);
+          }
+        }
+      }
+    } catch { /* Ignore malformed or non-provider links. */ }
+  }
+}
+
+function isIndeedHostname(hostname: string): boolean { return hostname === "indeed.com" || hostname.endsWith(".indeed.com"); }
+
+export function stripIndeedScripts(html: string): string {
+  return html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/giu, "").replace(/<!--[\s\S]*?-->/gu, "");
+}
+
+export function indeedElementsWithAttribute(html: string, name: string, value: string): string[] {
+  const result: string[] = [];
+  for (const match of html.matchAll(/<([a-z][\w-]*)\b[^>]*>/giu)) {
+    if (attribute(match[0], name) !== value) continue;
+    const element = balancedElement(html, match[1]!, match.index);
+    if (element !== undefined) result.push(element);
+  }
+  return result;
 }
 
 function openingTags(html: string, tagName: string): string[] {
@@ -124,7 +219,7 @@ function hasClass(tag: string, className: string): boolean {
   return attribute(tag, "class")?.split(/\s+/u).includes(className) ?? false;
 }
 
-function htmlToText(html: string): string {
+export function htmlToIndeedText(html: string): string {
   return decodeEntities(
     html
       .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/giu, " ")

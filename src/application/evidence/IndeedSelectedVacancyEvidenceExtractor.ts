@@ -6,6 +6,7 @@ import {
   fromSelectedVacancyContext,
   normalizeVacancyEvidenceInput,
 } from "../../domain/evidence/VacancyEvidenceInput.js";
+import { indeedElementsWithAttribute, htmlToIndeedText } from "../acquisition/IndeedSelectedVacancyContextLocator.js";
 
 const CONFIDENCE = 1;
 
@@ -28,11 +29,22 @@ export class IndeedSelectedVacancyEvidenceExtractor implements VacancyEvidenceEx
       confidence: CONFIDENCE,
       contentOrigin: "SELECTED_VACANCY_CONTEXT" as const,
     };
+    const context = selectedIndeedContext(input)!;
+    const selectedText = context.text ?? htmlToIndeedText(context.html ?? "");
+    const compensation = companyJobsHeaderCompensation(context.html ?? "") ?? selectedCompensation(selectedText);
+    const terms = [
+      ...(/\bCDI\b/iu.test(selectedText) ? [["CDI", "INDEFINITE"] as const] : []),
+      ...(/\bCDD\b/iu.test(selectedText) ? [["CDD", "FIXED_TERM"] as const] : []),
+      ...(/\btemps\s+plein\b/iu.test(selectedText) ? [["temps plein", "FULL_TIME"] as const] : []),
+      ...(/\btemps\s+partiel\b/iu.test(selectedText) ? [["temps partiel", "PART_TIME"] as const] : []),
+    ];
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
       ...(facts.title === undefined ? {} : { vacancyTitles: [{ value: facts.title, provenance }] }),
       ...(facts.company === undefined ? {} : { organizations: [{ value: facts.company, role: "UNKNOWN", provenance }] }),
       ...(facts.location === undefined ? {} : { locations: [{ value: facts.location, role: "WORKPLACE", provenance }] }),
+      ...(terms.length === 0 ? {} : { engagements: [{ rawTerms: terms.map(([raw]) => raw), normalizedTerms: terms.map(([, value]) => value), provenance }] }),
+      ...(compensation === undefined ? {} : { compensations: [{ ...compensation, provenance }] }),
     });
   }
 }
@@ -43,21 +55,64 @@ export function extractIndeedSelectedVacancyFacts(
   const context = selectedIndeedContext(input);
   if (context === undefined || context.html === undefined) return undefined;
   const title = firstSemanticText(context.html, [
+    /data-testid\s*=\s*["']jobDetailTitle["']/u,
+    /data-testid\s*=\s*["']vj-job-title["']/iu,
     /(?:data-testid|data-test-id)\s*=\s*["'][^"']*(?:jobtitle|jobinfoheader-title)[^"']*["']/iu,
     /class\s*=\s*["'][^"']*jobsearch-JobInfoHeader-title[^"']*["']/iu,
   ]) ?? firstHeadingWithJobPostSuffix(context.html);
+  const companyJobsSubtitle = selectedCompanyJobsSubtitle(context.html);
   const company = firstSemanticText(context.html, [
+    /data-testid\s*=\s*["']vj-company-name["']/iu,
     /(?:data-testid|data-test-id)\s*=\s*["'][^"']*inlineHeader-companyName[^"']*["']/iu,
     /href\s*=\s*["'][^"']*\/cmp\/[^"']*fromjk=[^"']*["']/iu,
-  ]);
+  ]) ?? companyJobsSubtitle?.company;
   const location = firstSemanticText(context.html, [
     /(?:data-testid|data-test-id)\s*=\s*["'][^"']*(?:inlineHeader-companyLocation|job-location)[^"']*["']/iu,
-  ]) ?? firstPostalLocation(context.text ?? htmlToText(context.html));
+  ]) ?? companyJobsSubtitle?.location ?? nativeHeaderLocation(context.html) ?? firstPostalLocation(context.text ?? htmlToText(context.html));
   return {
     ...(title === undefined ? {} : { title: stripIndeedJobPostSuffix(title) }),
     ...(company === undefined ? {} : { company }),
     ...(location === undefined ? {} : { location }),
   };
+}
+
+function selectedCompanyJobsSubtitle(html: string): { company: string; location: string } | undefined {
+  const subtitles = indeedElementsWithAttribute(html, "data-testid", "jobDetailSubtitle");
+  if (subtitles.length !== 1) return undefined;
+  // The company-jobs pane labels company and locality together. Split only at
+  // its explicit separator and a French department-qualified locality.
+  const match = /^(.+)\s+-\s+([\p{L}][\p{L}\s'’.-]{1,80}\s*\(\d{2,3}\))$/u.exec(normalizeText(htmlToIndeedText(subtitles[0]!)));
+  return match === null ? undefined : { company: match[1]!.trim(), location: match[2]!.trim() };
+}
+
+function companyJobsHeaderCompensation(html: string) {
+  const heads = indeedElementsWithAttribute(html, "data-testid", "JobDetailHead");
+  if (heads.length !== 1) return undefined;
+  // Salary and the apply action are inline siblings on company jobs pages.
+  // Read the explicit salary span instead of joining it with button text.
+  const salaries = [...heads[0]!.matchAll(/<span\b[^>]*>([^<]+)<\/span>/giu)]
+    .map((match) => selectedCompensation(htmlToIndeedText(match[1]!))).filter((value) => value !== undefined);
+  return salaries.length === 1 ? salaries[0] : undefined;
+}
+
+function nativeHeaderLocation(html: string): string | undefined {
+  const metadata = indeedElementsWithAttribute(html, "data-testid", "company-info-metadata");
+  if (metadata.length !== 1) return undefined;
+  return htmlToIndeedText(metadata[0]!).split(/\r?\n/u).map(normalizeText)
+    .find((line) => /^[\p{L}][\p{L}\s'’.-]{1,80}\s*\(\d{2,3}\)$/u.test(line));
+}
+
+function selectedCompensation(text: string) {
+  const number = "\\d+(?:[ \\u00a0\\u202f]\\d{3})*(?:[.,]\\d{1,2})?";
+  const pattern = new RegExp(`(?:^|\\n)[ \\t]*((?:De\\s+)?(${number})\\s*€\\s*[àa]\\s*(${number})\\s*€\\s+par\\s+(mois|an|heure))(?=\\s*(?:\\n|$))`, "iu");
+  const match = pattern.exec(text);
+  if (match === null) return undefined;
+  const amount = (value: string) => Number(value.replace(/\s/gu, "").replace(",", "."));
+  const minimum = amount(match[2]!);
+  const maximum = amount(match[3]!);
+  if (!Number.isFinite(minimum) || minimum <= 0 || maximum < minimum) return undefined;
+  return { rawText: normalizeText(match[1]!), currency: "EUR", minimum, maximum,
+    period: match[4]!.toLowerCase() === "mois" ? "MONTH" as const : match[4]!.toLowerCase() === "heure" ? "HOUR" as const : "YEAR" as const };
 }
 
 export function isIndeedSelectedVacancyInput(input: VacancyEvidenceExtractionInput): boolean {

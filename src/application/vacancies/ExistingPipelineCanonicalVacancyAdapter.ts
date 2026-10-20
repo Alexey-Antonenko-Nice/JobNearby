@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { scopeIndeedVacancyEvidence } from "../evidence/scopeIndeedVacancyEvidence.js";
 
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { EmployerCharacteristicEvidence } from "../../domain/evidence/EmployerCharacteristicEvidence.js";
@@ -108,7 +109,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     const experienceCandidates: CanonicalCandidate<readonly ExperienceRequirement[]>[] = [];
     const travelCandidates: CanonicalCandidate<VacancyTravel>[] = [];
 
-    for (const observation of input.observations) {
+    for (const observation of input.observations.map(scopeIndeedVacancyEvidence)) {
       if (usable(observation.title)) {
         const { id } = addReference(
           observation.id,

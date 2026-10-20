@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { scopeIndeedVacancyEvidence } from "../evidence/scopeIndeedVacancyEvidence.js";
 
 import type {
   SourceObservation,
@@ -229,13 +230,13 @@ function evidenceExtractionInputFor(
     (context): context is AcquisitionContext =>
       isRecord(context) && context.kind === "SELECTED_VACANCY",
   );
-  if (selectedContexts.length === 0) return observation;
+  if (selectedContexts.length === 0) return scopeIndeedVacancyEvidence(observation);
   if (selectedContexts.length > 1) {
     throw new CanonicalVacancyIntegrityError(
       `SourceObservation "${observation.id}" has multiple selected vacancy acquisition contexts.`,
     );
   }
-  return fromSelectedVacancyContext(observation, selectedContexts[0]!);
+  return scopeIndeedVacancyEvidence(fromSelectedVacancyContext(observation, selectedContexts[0]!));
 }
 
 function acquisitionContexts(observation: SourceObservation): readonly unknown[] {

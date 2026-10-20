@@ -13,6 +13,7 @@ import type { VacancyTitleEvidence } from "../../domain/evidence/VacancyTitleEvi
 import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
 import type { VacancyWorkModeEvidence } from "../../domain/evidence/VacancyWorkModeEvidence.js";
 import type { VacancyCompensationEvidence } from "../../domain/evidence/VacancyCompensationEvidence.js";
+import { scopeIndeedVacancyEvidence } from "./scopeIndeedVacancyEvidence.js";
 import type {
   ExperienceRequirementEvidence,
   LanguageRequirementEvidence,
@@ -31,7 +32,7 @@ export class CompositeVacancyEvidenceExtractor
   async extract(
     input: VacancyEvidenceExtractionInput,
   ): Promise<ExtractedVacancyEvidence> {
-    const observation = normalizeVacancyEvidenceInput(input);
+    const observation = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(input));
     const results = await Promise.all(
       this.extractors.map((extractor) => extractor.extract(observation)),
     );
