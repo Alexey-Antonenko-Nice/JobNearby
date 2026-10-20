@@ -30,6 +30,7 @@ import {
   type ProcessObservationResult,
 } from "../recognition/processObservation.js";
 import { recordObservationClusterAssignment } from "../recognition/recordObservationClusterAssignment.js";
+import { loadEffectiveEmployerMembership } from "../recognition/loadEffectiveEmployerMembership.js";
 import { EffectiveAssignmentConflictError } from "../../domain/recognition/EmployerRecognitionPersistenceError.js";
 import type {
   ExistingPipelineCanonicalVacancyAdapter,
@@ -154,7 +155,19 @@ export async function processVacancyObservation(
         basis.observationIds.filter((id) => id !== requestedObservation.id),
         dependencies.employerRecognition,
       );
-      const employerResult = establishedEmployerCluster === null ||
+      // Reprojection refreshes evidence, not an already effective employer decision.
+      // Keep accepted/user-confirmed history intact even when a custom processor is supplied.
+      const existingMembership = await loadEffectiveEmployerMembership(
+        sourceObservationId,
+        dependencies.employerRecognition,
+      );
+      const employerResult: ProcessObservationResult = existingMembership !== null
+        ? {
+          outcome: "MATCHED_EXISTING_CLUSTER",
+          employerCluster: existingMembership.cluster,
+          assignment: existingMembership.assignment,
+        }
+        : establishedEmployerCluster === null ||
           dependencies.processEmployerObservation !== undefined
         ? await (
           dependencies.processEmployerObservation ?? processObservation

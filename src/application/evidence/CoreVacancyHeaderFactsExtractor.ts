@@ -24,7 +24,13 @@ export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor
   async extract(input: VacancyEvidenceExtractionInput): Promise<ExtractedVacancyEvidence> {
     const observation = normalizeVacancyEvidenceInput(input);
     const { vacancyText, contentOrigin } = textualEvidenceContent(input);
-    const lines = vacancyText.split(/\r?\n/u).map(normalizeLine).filter(Boolean);
+    const isLinkedInSelectedContext =
+      observation.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT" &&
+      observation.evidenceContent.context.providerKey === "LINKEDIN";
+    const selectedHeader = isLinkedInSelectedContext
+      ? linkedinHeader(vacancyText)
+      : vacancyText;
+    const lines = selectedHeader.split(/\r?\n/u).map(normalizeLine).filter(Boolean);
     const provenance = {
       sourceObservationId: observation.id,
       extractionMethod: "TEXT_EXTRACTION" as const,
@@ -40,15 +46,19 @@ export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor
       ? undefined
       : lines.slice(0, 16).map(extractLocation).find((value) => value !== null));
     const engagement = lines.map(extractEngagement).find((value) => value !== null);
-    const workMode = lines.map(extractWorkMode).find((value) => value !== null);
-    const compensation = extractCompensation(vacancyText);
+    const workMode = isLinkedInSelectedContext
+      ? extractLinkedInHeaderWorkMode(selectedHeader)
+      : lines.map(extractWorkMode).find((value) => value !== null);
+    const compensation = isLinkedInSelectedContext
+      ? extractLinkedInHeaderCompensation(selectedHeader)
+      : extractCompensation(vacancyText);
 
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
       ...(title === undefined ? {} : { vacancyTitles: [{ value: title, provenance }] }),
       ...(location === undefined ? {} : { locations: [{ value: location, role: "WORKPLACE", provenance }] }),
       ...(engagement === undefined ? {} : { engagements: [{ ...engagement, provenance }] }),
-      ...(workMode === undefined ? {} : { workModes: [{ value: workMode, provenance }] }),
+      ...(workMode === undefined || workMode === null ? {} : { workModes: [{ value: workMode, provenance }] }),
       ...(compensation === null ? {} : { compensations: [{ ...compensation, provenance }] }),
     });
   }
@@ -91,8 +101,23 @@ function extractEngagement(line: string): Omit<VacancyEngagementEvidence, "prove
 }
 
 function extractWorkMode(line: string): VacancyWorkModeEvidence["value"] | null {
+  if (/^sur\s+site$/iu.test(line)) return "ON_SITE";
   if (/^hybride$/iu.test(line)) return "HYBRID";
   if (/^(?:t[eé]l[eé]travail|[àa]\s+distance|remote)$/iu.test(line)) return "REMOTE";
+  return null;
+}
+
+function linkedinHeader(text: string): string {
+  return text.split(/\n[ \t]*[ÀA] propos de l['’]offre d['’]emploi[ \t]*\n/iu)[0] ?? text;
+}
+
+function extractLinkedInHeaderWorkMode(
+  header: string,
+): VacancyWorkModeEvidence["value"] | null {
+  const normalized = normalizeLine(header);
+  if (/(?:^|[·\s])sur\s+site(?=$|[·\s])/iu.test(normalized)) return "ON_SITE";
+  if (/(?:^|[·\s])hybride(?=$|[·\s])/iu.test(normalized)) return "HYBRID";
+  if (/(?:^|[·\s])(?:t[eé]l[eé]travail|[àa]\s+distance|remote)(?=$|[·\s])/iu.test(normalized)) return "REMOTE";
   return null;
 }
 
@@ -100,6 +125,22 @@ type ExtractedCompensation = Pick<
   VacancyCompensationEvidence,
   "rawText" | "currency" | "minimum" | "maximum" | "period"
 >;
+
+function extractLinkedInHeaderCompensation(text: string): ExtractedCompensation | null {
+  const localizedRange =
+    /(?<![\p{L}\d])(\d+(?:[.,]\d+)?)\s*[kK]\s*€\s*(?:par\s+yr|per\s+year|par\s+an)\s*[–-]\s*(\d+(?:[.,]\d+)?)\s*[kK]\s*€\s*(?:par\s+yr|per\s+year|par\s+an)(?![\p{L}])/iu.exec(text);
+  if (localizedRange !== null) {
+    const amount = (value: string) => Number(value.replace(",", ".")) * 1000;
+    return {
+      rawText: normalizeLine(localizedRange[0]),
+      currency: "EUR",
+      minimum: amount(localizedRange[1]!),
+      maximum: amount(localizedRange[2]!),
+      period: "YEAR",
+    };
+  }
+  return extractCompensation(text);
+}
 
 function extractCompensation(text: string): ExtractedCompensation | null {
   const annual = /\bSalaire\s+brut\s*:\s*Annuel\s+de\s+([\d ]+(?:[.,]\d+)?)\s+Euros?\s+[àa]\s+([\d ]+(?:[.,]\d+)?)\s+Euros?\b/iu.exec(text);

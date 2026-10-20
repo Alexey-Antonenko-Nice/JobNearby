@@ -74,7 +74,10 @@ describe("processVacancyObservation", () => {
       },
     }));
     await processVacancyObservation("obs-a", fixture.dependencies);
+    fixture.processEmployerObservation.mockClear();
+    fixture.processEmployerObservation.mockRejectedValueOnce(new Error("Recognition must not replay"));
     const result = await processVacancyObservation("obs-a", fixture.dependencies);
+    expect(fixture.processEmployerObservation).not.toHaveBeenCalled();
     expect(result.canonicalVacancyId).toBe("canonical-generated");
     expect(result.canonicalVacancyOutcome).toBe("UPDATED_EXISTING");
     expect(result.observationAdded).toBe(false);
