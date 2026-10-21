@@ -11,6 +11,15 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("shows earlier compensation separately from the current salary with its observation date", async () => {
+    const current = review({ compensation: { minimum: 32000, maximum: 36000, currency: "EUR", period: "YEAR" } });
+    respond({ review: { ...current, vacancy: { ...current.vacancy, compensationHistory: [{ sourceObservationId: "old", observedAt: "2026-10-19T10:00:00Z", status: "RESOLVED", values: [{ minimum: 13, currency: "EUR", period: "HOUR" }] }] } } });
+    render(<ReviewPage />);
+    const history = await screen.findByRole("region", { name: "Compensation history" });
+    expect(within(history).getByText(/13 EUR \/ hour/)).toBeInTheDocument();
+    expect(history.querySelector("time")).toHaveAttribute("dateTime", "2026-10-19T10:00:00Z");
+    expect(within(history).queryByText(/32,000/)).not.toBeInTheDocument();
+  });
   it("shows Elite Robots history without a redundant direct employer confirmation", async () => {
     const history = employerHistory();
     respond({ review: { ...review({ status: "PROBABLY_RESOLVED", confirmationCandidate: null, isKnownEmployer: true }),

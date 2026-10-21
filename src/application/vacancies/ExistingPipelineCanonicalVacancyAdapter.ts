@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { scopeIndeedVacancyEvidence } from "../evidence/scopeIndeedVacancyEvidence.js";
+import { scopeProviderVacancyEvidence } from "../evidence/scopeProviderVacancyEvidence.js";
+import { resolveTemporalCompensationEvidence } from "./resolveTemporalCompensationEvidence.js";
+import type { CompensationHistoryEntry } from "../../domain/vacancies/CompensationHistoryEntry.js";
 
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 import type { EmployerCharacteristicEvidence } from "../../domain/evidence/EmployerCharacteristicEvidence.js";
@@ -60,7 +62,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
 
   buildCanonicalizeInput(
     input: ExistingPipelineCanonicalVacancyAdapterInput,
-  ): CanonicalizeVacancyInput {
+  ): CanonicalizeVacancyInput & { readonly compensationHistory: readonly CompensationHistoryEntry[] } {
     const observationIds = input.observations.map(({ id }) => id);
     const observationIdSet = new Set(observationIds);
     if (observationIds.length === 0 || observationIdSet.size !== observationIds.length) {
@@ -109,7 +111,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     const experienceCandidates: CanonicalCandidate<readonly ExperienceRequirement[]>[] = [];
     const travelCandidates: CanonicalCandidate<VacancyTravel>[] = [];
 
-    for (const observation of input.observations.map(scopeIndeedVacancyEvidence)) {
+    for (const observation of input.observations.map(scopeProviderVacancyEvidence)) {
       if (usable(observation.title)) {
         const { id } = addReference(
           observation.id,
@@ -288,7 +290,16 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     }
 
     const reconciledEngagementCandidates = reconcileEngagementCandidates(engagementCandidates);
-    const reconciledCompensationCandidates = reconcileCompensationCandidates(compensationCandidates);
+    const temporalCompensation = resolveTemporalCompensationEvidence(input.observations, compensationCandidates, [...references.values()]);
+    const reconciledCompensationCandidates = reconcileCompensationCandidates(temporalCompensation.current);
+    const compensationHistory: CompensationHistoryEntry[] = input.observations.flatMap((observation) => {
+      const historical = temporalCompensation.historical.filter((candidate) => candidate.supportingEvidenceIds.some((id) => references.get(id)?.sourceObservationId === observation.id));
+      if (historical.length === 0) return [];
+      const values = reconcileCompensationCandidates(historical);
+      return [{ sourceObservationId: observation.id, observedAt: new Date(observation.observedAt),
+        status: values.length === 1 ? "RESOLVED" as const : "CONFLICTED" as const,
+        values: values.map(({ value }) => value), supportingEvidenceIds: [...new Set(values.flatMap(({ supportingEvidenceIds }) => supportingEvidenceIds))] }];
+    }).sort((left, right) => right.observedAt.getTime() - left.observedAt.getTime() || left.sourceObservationId.localeCompare(right.sourceObservationId));
 
     const selectedLocations = selectCanonicalLocations(
       input.extractedEvidence.flatMap(({ locations }) => locations),
@@ -336,6 +347,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       locationCandidates,
       engagementCandidates: reconciledEngagementCandidates,
       compensationCandidates: reconciledCompensationCandidates,
+      compensationHistory,
       workModeCandidates,
       industryContextCandidates,
       languageRequirementCandidates,
@@ -513,6 +525,9 @@ function structuredEngagementTerms(value: string): string[] {
 }
 
 function structuredCompensation(rawText: string): CompensationValue {
+  // Existing Schema.org projection also emits a single amount, not a range.
+  const exact = /^\s*(\d+(?:[.,]\d+)?)\s+([A-Z]+)\s*\/\s*(HOUR|MONTH|YEAR)\s*$/u.exec(rawText);
+  if (exact !== null) return { rawText: rawText.trim(), minimum: Number(exact[1]!.replace(",", ".")), currency: exact[2]!, period: exact[3] as "HOUR" | "MONTH" | "YEAR" };
   const match = /^\s*([\d.]+)\s*-\s*([\d.]+)\s+([A-Z]+)\s*\/\s*(HOUR|MONTH|YEAR)\s*$/u.exec(rawText);
   if (match === null) return { rawText: rawText.trim() };
   const currency = match[3];

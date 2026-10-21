@@ -31,6 +31,7 @@ export class HostnameAcquisitionProviderRecognizer implements AcquisitionProvide
         return sourceName === "cadremploi.fr" ? "CADREMPLOI" : undefined;
       }
       if (hostname === "lhh.com" || hostname.endsWith(".lhh.com")) return sourceName === "lhh.com" ? "LHH" : undefined;
+      if (/^(?:www\.)?hellowork\.com$/u.test(hostname)) return sourceName === "hellowork.com" ? "HELLOWORK" : undefined;
       if (hostname !== sourceName) return undefined;
       return providersByHostname[hostname];
     } catch {

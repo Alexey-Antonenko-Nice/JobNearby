@@ -103,6 +103,7 @@ export interface ReviewView {
     readonly engagement: unknown | null;
     readonly workMode: unknown | null;
     readonly compensation: unknown | null;
+    readonly compensationHistory?: readonly { readonly sourceObservationId: string; readonly observedAt: string; readonly status: string; readonly values: readonly unknown[] }[];
     readonly latestObservedAt: string | null;
     readonly sourceObservationCount: number;
     readonly sourceLinks: readonly VacancySourceLink[];

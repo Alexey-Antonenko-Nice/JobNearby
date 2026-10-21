@@ -28,7 +28,7 @@ describe("ProviderCaptureRegistry", () => {
     ["jobsearch.daimlertruck.com", "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425255", undefined],
     ["burkert.com", "https://www.burkert.com/en/company-career/career/job-openings/teamleiter-kunststofftechnik-m-w-d", undefined],
     ["randstad.fr", "https://www.randstad.fr/emploi/x_001-mmo-0000054_10l/", undefined],
-    ["hellowork.com", "https://www.hellowork.com/fr-fr/emplois/82745536.html", undefined],
+    ["hellowork.com", "https://www.hellowork.com/fr-fr/emplois/82745536.html", "HELLOWORK"],
     ["meteojob.com", "https://www.meteojob.com/jobs/56378291", undefined],
   ] as const)("dispatches %s", (sourceName, url, providerKey) => {
     expect(capture(url, sourceName).providerKey).toBe(providerKey);

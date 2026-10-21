@@ -31,7 +31,7 @@ describe("BrowserCaptureAcquisitionAdapter", () => {
       content: {
         text: "Technicien Maintenance H/F\n\nACTUA SAVERNE\nHEUFT France",
       },
-      metadata: { userAgentFamily: "Chromium" },
+      metadata: { userAgentFamily: "Chromium", vacancyEvidenceScope: "SELECTED_VACANCY_REQUIRED" },
     });
     expect(result.externalId).toBe("123");
     expect(result.structuredFields).toBeUndefined();
@@ -87,7 +87,7 @@ describe("BrowserCaptureAcquisitionAdapter", () => {
     const result = adapter.toAcquisitionPackage(input, "acquisition-immutable");
     expect(input).toEqual(snapshot);
     input.browserMetadata.nested.tabId = 8;
-    expect(result.metadata).toEqual({ nested: { tabId: 4 } });
+    expect(result.metadata).toEqual({ nested: { tabId: 4 }, vacancyEvidenceScope: "SELECTED_VACANCY_REQUIRED" });
   });
 
   it("rejects missing or malformed URLs", () => {

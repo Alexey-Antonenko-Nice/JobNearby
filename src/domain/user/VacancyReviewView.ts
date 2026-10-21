@@ -33,6 +33,7 @@ export interface VacancyReviewView {
     readonly engagement: VacancyEngagement | null;
     readonly workMode: VacancyWorkMode | null;
     readonly compensation: VacancyCompensation | null;
+    readonly compensationHistory?: readonly import("../vacancies/CompensationHistoryEntry.js").CompensationHistoryEntry[];
     readonly latestObservedAt: Date | null;
     readonly sourceObservationCount: number;
     readonly sourceLinks: readonly VacancySourceLink[];

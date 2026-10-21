@@ -61,6 +61,7 @@ describe("provider vacancy ID browser acquisition", () => {
     const jobPosting = {
       "@type": "JobPosting",
       title: "Technicien Méthodes",
+      url: "https://www.hellowork.com/fr-fr/emplois/82745536.html",
       identifier: { "@type": "PropertyValue", name: "Supplay", value: "30683633 UZO8396A3ZWR" },
     };
     const html = `<script type="application/ld+json">${JSON.stringify(jobPosting)}</script>`;

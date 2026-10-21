@@ -1,4 +1,5 @@
 import { deriveVacancyContext } from "./deriveVacancyContext.js";
+import { getVacancyCompensationProjection } from "./getVacancyCompensationProjection.js";
 import { deriveEmployerActionContext } from "./deriveEmployerActionContext.js";
 import { getEmployerAliasSelection } from "./employerAliasReview.js";
 import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
@@ -47,6 +48,7 @@ export async function getVacancyReviewView(
     return observation;
   });
   const history = await getUserVacancyHistory(canonicalVacancyId, dependencies.interactionRepository);
+  const compensationProjection = await getVacancyCompensationProjection(vacancy, observations);
   const relationshipContext = await dependencies.publicationCampaignContextSource?.findBySourceObservationIds(observationIds)
     ?? { publicationFamilies: [], recruitmentCampaigns: [] };
   const derivedContext = deriveVacancyContext(canonicalVacancyId, observations, history.events);
@@ -90,13 +92,14 @@ export async function getVacancyReviewView(
     ...(memoryCandidates.length === 0 ? {} : { employerMemoryReview: { required: true as const, candidates: memoryCandidates } }),
     vacancy: {
       canonicalVacancyId,
-      canonicalizationStatus: vacancy.canonicalizationStatus,
+      canonicalizationStatus: compensationProjection.canonicalizationStatus,
       title: resolvedValue(vacancy.role)?.title ?? null,
       location: resolvedValue(vacancy.location),
       locationAlternatives: vacancy.location.alternatives?.map(({ value }) => value) ?? [],
       engagement: resolvedValue(vacancy.engagement),
       workMode: resolvedValue(vacancy.workMode),
-      compensation: resolvedValue(vacancy.compensation),
+      compensation: resolvedValue(compensationProjection.compensation),
+      ...(compensationProjection.history.length === 0 ? {} : { compensationHistory: compensationProjection.history }),
       latestObservedAt: latestDate(observations.map(({ observedAt }) => observedAt)),
       sourceObservationCount,
       sourceLinks: collectVacancySourceLinks(observations),

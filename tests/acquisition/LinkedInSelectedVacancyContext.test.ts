@@ -437,7 +437,6 @@ describe("LinkedIn selected-context acquisition integration", () => {
   it("leaves Schema.org and unknown-provider acquisition unchanged", () => {
     const jobPosting = { "@type": "JobPosting", title: "Technician" };
     for (const pageUrl of [
-      "https://www.hellowork.com/fr-fr/emplois/82745536.html",
       "https://www.meteojob.com/jobs/56378291",
       "https://example.com/jobs/42",
     ]) {

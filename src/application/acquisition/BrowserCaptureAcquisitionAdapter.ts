@@ -10,6 +10,8 @@ import { SchemaOrgJobPostingProjector } from "./SchemaOrgJobPostingProjector.js"
 import { ProviderCaptureRegistry } from "./ProviderCaptureRegistry.js";
 import { isPersonioHostname } from "./PersonioVacancy.js";
 
+import { helloWorkJobPostings } from "./HelloWorkVacancy.js";
+
 export const MAX_BROWSER_VISIBLE_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_BROWSER_HTML_BYTES = 5 * 1024 * 1024;
 
@@ -43,13 +45,17 @@ export class BrowserCaptureAcquisitionAdapter {
     const jsonLdJobPostings = evidenceHtml === undefined
       ? []
       : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(evidenceHtml));
-    const jobPostings = jsonLdJobPostings.length > 0
+    const jobPostings = providerCapture.providerKey === "HELLOWORK"
+      ? helloWorkJobPostings(html ?? "", pageUrl)
+      : jsonLdJobPostings.length > 0
       ? jsonLdJobPostings
       : evidenceHtml === undefined ? [] : this.jobPostingExtractor.extractHtml(evidenceHtml);
     const genericStructuredFields = jobPostings.length === 1
       ? this.jobPostingProjector.project(jobPostings[0]!)
       : undefined;
-    const structuredFields = providerCapture.structuredFields === undefined ? genericStructuredFields : {
+    const structuredFields = providerCapture.providerKey === "HELLOWORK" ? {
+      ...providerCapture.structuredFields, ...genericStructuredFields,
+    } : providerCapture.structuredFields === undefined ? genericStructuredFields : {
       ...genericStructuredFields,
       ...providerCapture.structuredFields,
     };
@@ -76,7 +82,7 @@ export class BrowserCaptureAcquisitionAdapter {
             }
           : {}),
       },
-      ...(structuredFields !== undefined ? { structuredFields } : {}),
+      ...(structuredFields !== undefined && Object.keys(structuredFields).length > 0 ? { structuredFields } : {}),
       ...(providerCapture.context === undefined ? {} : { contexts: [providerCapture.context] }),
       metadata: {
         ...(payload.browserMetadata === undefined ? {} : structuredClone(payload.browserMetadata)),
