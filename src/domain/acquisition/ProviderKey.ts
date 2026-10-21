@@ -1,1 +1,1 @@
-export type ProviderKey = "FRANCE_TRAVAIL" | "INDEED" | "LINKEDIN" | "JOOBLE" | "CADREMPLOI" | "LHH" | "PERSONIO";
+export type ProviderKey = "FRANCE_TRAVAIL" | "INDEED" | "LINKEDIN" | "JOOBLE" | "CADREMPLOI" | "LHH" | "PERSONIO" | "HELLOWORK";

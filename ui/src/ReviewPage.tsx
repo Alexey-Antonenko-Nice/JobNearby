@@ -81,6 +81,12 @@ export function ReviewPage(): React.JSX.Element {
       ["Location", review.vacancy.locationAlternatives.length > 1 ? `Multiple locations (${review.vacancy.locationAlternatives.map(formatLocation).join("; ")})` : formatLocation(review.vacancy.location)], ["Engagement", formatEngagement(review.vacancy.engagement)], ["Work mode", formatWorkMode(review.vacancy.workMode)], ["Compensation", formatCompensation(review.vacancy.compensation)],
       ["Canonicalization status", review.vacancy.canonicalizationStatus], ["Latest observed date", date(review.vacancy.latestObservedAt)], ["Source observation count", review.vacancy.sourceObservationCount],
     ]} /></section>
+    {Boolean(review.vacancy.compensationHistory?.length) && <section aria-label="Compensation history"><h2>Previously observed compensation</h2>
+      <ul>{review.vacancy.compensationHistory!.map((entry) => <li key={entry.sourceObservationId}>
+        {entry.values.map(formatCompensation).join("; ")}{entry.status === "CONFLICTED" && " (conflicting values)"}
+        {" - Observed: "}<time dateTime={entry.observedAt}>{date(entry.observedAt)}</time>
+      </li>)}</ul>
+    </section>}
     {review.vacancyContext && <><VacancyContextSection context={review.vacancyContext} /><PublicationCampaignContextSection context={review.vacancyContext} /></>}
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
