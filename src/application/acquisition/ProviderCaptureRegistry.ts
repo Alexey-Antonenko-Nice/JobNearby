@@ -1,3 +1,4 @@
+import { RandstadSelectedVacancyContextLocator, randstadFacts, randstadPublishedAt } from "./RandstadVacancy.js";
 import { ManpowerSelectedVacancyContextLocator, manpowerFacts } from "./ManpowerVacancy.js";
 import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
 import { extractBurkertApplyId } from "./BurkertVacancyIdentity.js";
@@ -52,6 +53,7 @@ export class ProviderCaptureRegistry {
     LHH: new LhhSelectedVacancyContextLocator(),
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
     TALENT: new TalentSelectedVacancyContextLocator(),
+    RANDSTAD: new RandstadSelectedVacancyContextLocator(),
     MANPOWER: new ManpowerSelectedVacancyContextLocator(),
     ADECCO: new AdeccoSelectedVacancyContextLocator(),
   };
@@ -72,7 +74,10 @@ export class ProviderCaptureRegistry {
       ? extractPersonioHeaderFacts(input.html) : undefined;
     const adeccoFacts = providerKey === "ADECCO" && context?.html ? adeccoSelectedFacts(context.html) : undefined;
     const manpower = providerKey === "MANPOWER" && context?.html ? manpowerFacts(context.html) : undefined;
-    const structuredFields = manpower ? { title: manpower.title, locationText: manpower.location, ...(manpower.publishedAt ? { publishedAt: manpower.publishedAt } : {}) }
+    const randstad = providerKey === "RANDSTAD" && context?.html ? randstadFacts(context.html) : undefined;
+    const randstadDate = context ? randstadPublishedAt(context) : undefined;
+    const structuredFields = randstad ? { title: randstad.title, locationText: randstad.location, ...(randstadDate ? { publishedAt: randstadDate } : {}) }
+      : manpower ? { title: manpower.title, locationText: manpower.location, ...(manpower.publishedAt ? { publishedAt: manpower.publishedAt } : {}) }
       : adeccoFacts ? { title: adeccoFacts.title, ...(adeccoFacts.location ? { locationText: adeccoFacts.location } : {}) }
       : providerKey === "TALENT" && context?.html !== undefined
       ? talentHeaderFields(context.html)
@@ -90,7 +95,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),
