@@ -29,7 +29,7 @@ export class ExplicitCandidateRequirementsExtractor implements VacancyEvidenceEx
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
       languageRequirements: extractLanguages(vacancyText).map((item) => ({ ...item, provenance })),
-      experienceRequirements: extractExperience(vacancyText).map((item) => ({ ...item, provenance })),
+      experienceRequirements: (observation.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT" && observation.evidenceContent.context.providerKey === "START_PEOPLE" ? [] : extractExperience(vacancyText)).map((item) => ({ ...item, provenance })),
       travelRequirements: extractTravel(vacancyText).map((item) => ({ ...item, provenance })),
     });
   }

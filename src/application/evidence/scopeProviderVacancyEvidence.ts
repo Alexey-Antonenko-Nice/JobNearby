@@ -1,3 +1,5 @@
+import { scopeStartPeopleVacancyEvidence } from "./scopeStartPeopleVacancyEvidence.js";
+import { scopeActualVacancyEvidence } from "./scopeActualVacancyEvidence.js";
 import { scopeCritVacancyEvidence } from "./scopeCritVacancyEvidence.js";
 import { scopeSynergieVacancyEvidence } from "./scopeSynergieVacancyEvidence.js";
 import { scopeRandstadVacancyEvidence } from "./scopeRandstadVacancyEvidence.js";
@@ -16,6 +18,8 @@ const boundedHelloWorkInput = Symbol("boundedHelloWorkInput");
 
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
 export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
+  if (input.source.sourceName === "startpeople.fr") return scopeStartPeopleVacancyEvidence(input);
+  if (input.source.sourceName === "actualgroup.com") return scopeActualVacancyEvidence(input);
   if (input.source.sourceName === "crit-job.com") return scopeCritVacancyEvidence(input);
   if (input.source.sourceName === "synergie.fr") return scopeSynergieVacancyEvidence(input);
   if (input.source.sourceName === "randstad.fr") return scopeRandstadVacancyEvidence(input);
