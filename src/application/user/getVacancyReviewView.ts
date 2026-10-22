@@ -1,3 +1,5 @@
+import { getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
+import type { ConfirmedOrganizationRoleRepository } from "../../domain/organizations/ConfirmedOrganizationRole.js";
 import { deriveVacancyContext } from "./deriveVacancyContext.js";
 import { getVacancyCompensationProjection } from "./getVacancyCompensationProjection.js";
 import { deriveEmployerActionContext } from "./deriveEmployerActionContext.js";
@@ -23,6 +25,7 @@ import { employerConfirmationCandidate, isEmployerConfirmationRedundant } from "
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
   dependencies: {
+    readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
     readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
     readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
@@ -33,9 +36,11 @@ export async function getVacancyReviewView(
     readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
   },
 ): Promise<VacancyReviewView> {
-  const vacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
-  if (vacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
+  const storedVacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
+  if (storedVacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
 
+  const agencyProjection = await getRecruitingAgencyProjection(storedVacancy, dependencies.agencyMemoryRepository);
+  const vacancy = agencyProjection.vacancy;
   const observationIds = [...new Set(vacancy.sourceObservationIds)];
   const repository = dependencies.sourceObservationRepository;
   const loaded = repository.findByIds
@@ -85,6 +90,10 @@ export async function getVacancyReviewView(
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(dependencies.agencyMemoryRepository ? { agencyContext: {
+      candidates: agencyProjection.context.candidates.map(({ candidateId, name, role }) => ({ candidateId, name, role })),
+      known: agencyProjection.context.known, ambiguousNames: agencyProjection.context.ambiguousNames,
+    } } : {}),
     vacancyContext,
     ...(employerActionContext === null ? {} : { employerActionContext }),
     ...(employerMemory === null ? {} : { employerHistory: employerMemory }),

@@ -1,3 +1,4 @@
+import { ManpowerSelectedVacancyContextLocator, manpowerFacts } from "./ManpowerVacancy.js";
 import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
 import { extractBurkertApplyId } from "./BurkertVacancyIdentity.js";
 import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
@@ -15,6 +16,8 @@ import { extractPersonioHeaderFacts } from "./PersonioVacancy.js";
 import { HelloWorkSelectedVacancyContextLocator, helloWorkHeaderFields } from "./HelloWorkVacancy.js";
 
 import { TalentSelectedVacancyContextLocator, talentHeaderFields } from "./TalentSelectedVacancyContextLocator.js";
+
+import { AdeccoSelectedVacancyContextLocator, adeccoSelectedFacts } from "./AdeccoSelectedVacancyContextLocator.js";
 
 export interface ProviderCaptureInput {
   readonly sourceName: string;
@@ -49,6 +52,8 @@ export class ProviderCaptureRegistry {
     LHH: new LhhSelectedVacancyContextLocator(),
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
     TALENT: new TalentSelectedVacancyContextLocator(),
+    MANPOWER: new ManpowerSelectedVacancyContextLocator(),
+    ADECCO: new AdeccoSelectedVacancyContextLocator(),
   };
 
   capture(input: ProviderCaptureInput): ProviderCaptureResult {
@@ -65,7 +70,11 @@ export class ProviderCaptureRegistry {
         });
     const personioHeader = providerKey === "PERSONIO" && externalId !== undefined && input.html !== undefined
       ? extractPersonioHeaderFacts(input.html) : undefined;
-    const structuredFields = providerKey === "TALENT" && context?.html !== undefined
+    const adeccoFacts = providerKey === "ADECCO" && context?.html ? adeccoSelectedFacts(context.html) : undefined;
+    const manpower = providerKey === "MANPOWER" && context?.html ? manpowerFacts(context.html) : undefined;
+    const structuredFields = manpower ? { title: manpower.title, locationText: manpower.location, ...(manpower.publishedAt ? { publishedAt: manpower.publishedAt } : {}) }
+      : adeccoFacts ? { title: adeccoFacts.title, ...(adeccoFacts.location ? { locationText: adeccoFacts.location } : {}) }
+      : providerKey === "TALENT" && context?.html !== undefined
       ? talentHeaderFields(context.html)
       : providerKey === "HELLOWORK" && context?.html !== undefined
       ? helloWorkHeaderFields(context.html)
@@ -81,7 +90,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),

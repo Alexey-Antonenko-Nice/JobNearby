@@ -1,3 +1,4 @@
+import { RecruitingAgencySection } from "./RecruitingAgencySection";
 import { PublicationCampaignContextSection } from "./PublicationCampaignContextSection";
 import { useEffect, useState } from "react";
 
@@ -115,6 +116,7 @@ export function ReviewPage(): React.JSX.Element {
       <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "CONFIRM")}>Confirm employer</button>{" "}
       <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "REJECT")}>Not this employer</button>
     </article>)}</section>}
+    <RecruitingAgencySection review={review} onConfirmed={setReview} disabled={pending} />
     <section><h2>Organization context</h2>{organizationGroups.map(([label, key]) => <Organizations key={key} label={label} values={review.organizations[key] ?? []} required={key === "employerRelationships"} />)}</section>
     <section><h2>Review signals</h2><ul className="signals">{signals(review).map((signal) => <li key={signal}>{signal}</li>)}</ul></section>
     <section><h2>Actions</h2><div className="actions">{actions.map((action) => <button key={action} type="button" disabled={pending} onClick={() => void submit(action)}>{action}</button>)}</div></section>

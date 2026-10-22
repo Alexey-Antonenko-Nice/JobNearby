@@ -1,3 +1,4 @@
+import { ManpowerVacancyEvidenceExtractor } from "./ManpowerVacancyEvidenceExtractor.js";
 import { CompositeVacancyEvidenceExtractor } from "./CompositeVacancyEvidenceExtractor.js";
 import { CoreVacancyHeaderFactsExtractor } from "./CoreVacancyHeaderFactsExtractor.js";
 import { DirectFieldVacancyEvidenceExtractor } from "./DirectFieldVacancyEvidenceExtractor.js";
@@ -12,8 +13,12 @@ import { LinkedInSelectedVacancyEvidenceExtractor } from "./LinkedInSelectedVaca
 import { CadremploiSelectedVacancyEvidenceExtractor } from "./CadremploiSelectedVacancyEvidenceExtractor.js";
 import { LhhSelectedVacancyEvidenceExtractor } from "./LhhSelectedVacancyEvidenceExtractor.js";
 
+import { AdeccoSelectedVacancyEvidenceExtractor } from "./AdeccoSelectedVacancyEvidenceExtractor.js";
+
 export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtractor {
   return new CompositeVacancyEvidenceExtractor([
+    new ManpowerVacancyEvidenceExtractor(),
+    new AdeccoSelectedVacancyEvidenceExtractor(),
     new WorkdayVacancyEvidenceExtractor(),
     new PersonioVacancyEvidenceExtractor(),
     new JoobleSelectedVacancyEvidenceExtractor(),

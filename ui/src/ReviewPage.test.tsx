@@ -11,6 +11,34 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("confirms an agency through its dedicated action while leaving the employer unresolved", async () => {
+    const initial = { ...review({ status: "UNRESOLVED" }), agencyContext: { candidates: [{ candidateId: "agency-candidate", name: "Crit", role: "STAFFING_AGENCY" }], known: [], ambiguousNames: [] } };
+    respond({ review: initial });
+    respond({ review: { ...initial, agencyContext: { candidates: [], known: [{ name: "Crit", role: "STAFFING_AGENCY", memoryId: "private-memory-id", source: "USER_CONFIRMED" }], ambiguousNames: [] } } });
+    render(<ReviewPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm as recruiting agency" }));
+    expect(await screen.findByText(/Staffing agency — Confirmed/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm as recruiting agency" })).not.toBeInTheDocument();
+    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(screen.queryByText("private-memory-id")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/recruiting-agency-confirmation");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ candidateId: "agency-candidate" });
+  });
+  it("shows recognized agency memory without another confirmation or a new human claim", async () => {
+    respond({ review: { ...review(), agencyContext: { candidates: [], known: [{ name: "Actual", role: "RECRUITER", memoryId: "memory", source: "AGENCY_MEMORY" }], ambiguousNames: [] } } });
+    render(<ReviewPage />);
+    expect(await screen.findByText(/Recognized from confirmed agency memory/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm as recruiting agency" })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it("surfaces stale agency confirmation errors", async () => {
+    respond({ review: { ...review({ status: "UNRESOLVED" }), agencyContext: { candidates: [{ candidateId: "stale", name: "Crit", role: "STAFFING_AGENCY" }], known: [], ambiguousNames: [] } } });
+    respond({ error: "Recruiting agency candidate is no longer eligible for confirmation." }, 409);
+    render(<ReviewPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Confirm as recruiting agency" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("no longer eligible");
+    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+  });
   it("shows earlier compensation separately from the current salary with its observation date", async () => {
     const current = review({ compensation: { minimum: 32000, maximum: 36000, currency: "EUR", period: "YEAR" } });
     respond({ review: { ...current, vacancy: { ...current.vacancy, compensationHistory: [{ sourceObservationId: "old", observedAt: "2026-10-19T10:00:00Z", status: "RESOLVED", values: [{ minimum: 13, currency: "EUR", period: "HOUR" }] }] } } });

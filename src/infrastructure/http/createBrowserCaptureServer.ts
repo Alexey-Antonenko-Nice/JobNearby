@@ -16,6 +16,7 @@ export interface BrowserCaptureServerDependencies {
   readonly getVacancyInbox?: VacancyReviewWorkflow["getVacancyInbox"];
   readonly decideEmployerReview?: VacancyReviewWorkflow["decideEmployerReview"];
   readonly decideEmployerMemoryReview?: VacancyReviewWorkflow["decideEmployerMemoryReview"];
+  readonly confirmVacancyRecruitingAgency?: VacancyReviewWorkflow["confirmVacancyRecruitingAgency"];
   readonly confirmVacancyEmployer?: VacancyReviewWorkflow["confirmVacancyEmployer"];
   readonly recordVacancyReviewAction?: VacancyReviewWorkflow["recordVacancyReviewAction"];
 }
@@ -73,6 +74,14 @@ export function createBrowserCaptureServer(
         const body = await readJsonBody(request, "Employer memory review");
         if (!isRecord(body) || typeof body.employerClusterId !== "string" || !body.employerClusterId.trim() || !["CONFIRM", "REJECT"].includes(String(body.decision)) || Object.keys(body).some((key) => !["employerClusterId", "decision"].includes(key))) throw new InvalidRequestError("Employer memory review payload is invalid.");
         sendJson(response, 200, { review: await dependencies.decideEmployerMemoryReview({ canonicalVacancyId: decodePathId(memoryReviewMatch[1]!), employerClusterId: body.employerClusterId, decision: body.decision as "CONFIRM" | "REJECT" }) });
+        return;
+      }
+      const agencyConfirmationMatch = /^\/vacancies\/([^/]+)\/recruiting-agency-confirmation$/u.exec(path);
+      if (request.method === "POST" && agencyConfirmationMatch !== null && dependencies.confirmVacancyRecruitingAgency !== undefined) {
+        operation = "review";
+        const body = await readJsonBody(request, "Recruiting agency confirmation");
+        if (!isRecord(body) || typeof body.candidateId !== "string" || !body.candidateId.trim() || Object.keys(body).some((key) => key !== "candidateId")) throw new InvalidRequestError("Recruiting agency candidate is required.");
+        sendJson(response, 201, { review: await dependencies.confirmVacancyRecruitingAgency({ canonicalVacancyId: decodePathId(agencyConfirmationMatch[1]!), candidateId: body.candidateId }) });
         return;
       }
       const employerConfirmationMatch = /^\/vacancies\/([^/]+)\/employer-confirmation$/u.exec(path);
@@ -204,6 +213,7 @@ function errorStatus(
   if (operation === "capture") {
     return message.startsWith("Browser capture could not be persisted:") ? 500 : 400;
   }
+  if (message === "Recruiting agency candidate is no longer eligible for confirmation.") return 409;
   if (message === "Employer review candidate is no longer eligible.") return 409;
   if (message === "Employer memory candidate is no longer eligible for review."
     || message === "Employer candidate is no longer eligible for confirmation.") return 409;

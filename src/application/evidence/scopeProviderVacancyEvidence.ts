@@ -1,3 +1,4 @@
+import { scopeManpowerVacancyEvidence } from "./scopeManpowerVacancyEvidence.js";
 import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import { HelloWorkSelectedVacancyContextLocator, helloWorkHeaderFields, helloWorkJobPostings, helloWorkVacancyId } from "../acquisition/HelloWorkVacancy.js";
@@ -6,10 +7,14 @@ import { scopeIndeedVacancyEvidence } from "./scopeIndeedVacancyEvidence.js";
 
 import { scopeTalentVacancyEvidence } from "./scopeTalentVacancyEvidence.js";
 
+import { scopeAdeccoVacancyEvidence } from "./scopeAdeccoVacancyEvidence.js";
+
 const boundedHelloWorkInput = Symbol("boundedHelloWorkInput");
 
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
 export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
+  if (input.source.sourceName === "manpower.com") return scopeManpowerVacancyEvidence(input);
+  if (input.source.sourceName === "adecco.com") return scopeAdeccoVacancyEvidence(input);
   if (input.source.sourceName === "talent.com") return scopeTalentVacancyEvidence(input);
   if (input.source.sourceName !== "hellowork.com") return scopeIndeedVacancyEvidence(input);
   if (boundedHelloWorkInput in input) return input;

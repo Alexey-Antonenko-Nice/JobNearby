@@ -109,6 +109,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     >[] = [];
     const languageRequirementCandidates: CanonicalCandidate<readonly VacancyLanguageRequirement[]>[] = [];
     const experienceCandidates: CanonicalCandidate<readonly ExperienceRequirement[]>[] = [];
+    const positionCountCandidates: CanonicalCandidate<{ readonly type: "EXACT"; readonly value: number }>[] = [];
     const travelCandidates: CanonicalCandidate<VacancyTravel>[] = [];
 
     for (const observation of input.observations.map(scopeProviderVacancyEvidence)) {
@@ -153,6 +154,10 @@ export class ExistingPipelineCanonicalVacancyAdapter {
     const industryContextCandidates: CanonicalCandidate<readonly string[]>[] = [];
 
     for (const aggregate of input.extractedEvidence) {
+      for (const count of aggregate.positionCounts ?? []) {
+        const { id } = addReference(count.provenance.sourceObservationId, "VACANCY_POSITION_COUNT_EVIDENCE", count.rawText);
+        positionCountCandidates.push({ value: { type: "EXACT", value: count.value }, supportingEvidenceIds: [id], confidence: count.provenance.confidence });
+      }
       for (const title of aggregate.vacancyTitles) {
         const { id } = evidenceItemReference(
           references,
@@ -353,6 +358,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       languageRequirementCandidates,
       experienceCandidates,
       travelCandidates,
+      positionCountCandidates,
       derivation: input.derivation,
     };
   }

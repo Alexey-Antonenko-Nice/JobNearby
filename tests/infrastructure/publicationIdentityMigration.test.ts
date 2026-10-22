@@ -73,7 +73,7 @@ describe("M12.8 additive migration", () => {
     const before = snapshots(); migrateDatabase(db); migrateDatabase(db);
     expect(snapshots()).toEqual(before);
     expect(await canonical.findById(vacancy.id)).toEqual(vacancy);
-    expect(db.prepare("SELECT count(*) AS n FROM schema_migrations").get()).toEqual({ n: 8 });
+    expect(db.prepare("SELECT count(*) AS n FROM schema_migrations").get()).toEqual({ n: 9 });
     expect(db.prepare("SELECT * FROM recruitment_campaign_memberships").all()).toEqual([]);
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });

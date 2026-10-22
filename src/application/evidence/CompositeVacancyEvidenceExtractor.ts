@@ -46,6 +46,7 @@ export class CompositeVacancyEvidenceExtractor
 
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
+      ...(results.some((r) => r.positionCounts !== undefined) ? { positionCounts: unique(results.flatMap((r) => r.positionCounts ?? []), (item) => `${item.value}\u0000${item.rawText}\u0000${provenanceKey(item.provenance)}`) } : {}),
       organizations: unique(
         results.flatMap(({ organizations }) => organizations),
         organizationKey,
