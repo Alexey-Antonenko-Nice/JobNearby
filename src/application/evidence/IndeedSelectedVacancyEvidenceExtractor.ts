@@ -98,7 +98,9 @@ function companyJobsHeaderCompensation(html: string) {
 function nativeHeaderLocation(html: string): string | undefined {
   const metadata = indeedElementsWithAttribute(html, "data-testid", "company-info-metadata");
   if (metadata.length !== 1) return undefined;
-  return htmlToIndeedText(metadata[0]!).split(/\r?\n/u).map(normalizeText)
+  // A company anchor can sit directly before the locality's block element.
+  // Preserve that block boundary rather than joining company and location.
+  return htmlToIndeedText(metadata[0]!.replace(/<div\b/giu, "\n<div")).split(/\r?\n/u).map(normalizeText)
     .find((line) => /^[\p{L}][\p{L}\s'’.-]{1,80}\s*\(\d{2,3}\)$/u.test(line));
 }
 
