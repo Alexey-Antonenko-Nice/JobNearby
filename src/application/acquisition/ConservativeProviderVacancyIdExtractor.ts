@@ -1,3 +1,4 @@
+import { manpowerVacancyId } from "./ManpowerVacancy.js";
 import type {
   ProviderVacancyIdExtractionInput,
   ProviderVacancyIdExtractor,
@@ -10,10 +11,14 @@ import { indeedUrlVacancyId } from "./IndeedSelectedVacancyContextLocator.js";
 
 import { talentVacancyId } from "./TalentSelectedVacancyContextLocator.js";
 
+import { adeccoVacancyId } from "./AdeccoSelectedVacancyContextLocator.js";
+
 type ExtractionRule = (url: URL) => string | undefined;
 
 const rules: Readonly<Record<string, ExtractionRule>> = {
   "hellowork.com": extractHellowork,
+  "manpower.com": (url) => manpowerVacancyId(url.href),
+  "adecco.com": (url) => adeccoVacancyId(url.href),
   "talent.com": (url) => talentVacancyId(url.href),
   "meteojob.com": extractMeteojob,
   "indeed.com": (url) => indeedUrlVacancyId(url.href),

@@ -45,7 +45,10 @@ import {
   type TravelRequirementEvidence,
 } from "./CandidateRequirementEvidence.js";
 
+import { createVacancyPositionCountEvidence, type VacancyPositionCountEvidence } from "./VacancyPositionCountEvidence.js";
+
 export interface ExtractedVacancyEvidence {
+  readonly positionCounts?: readonly VacancyPositionCountEvidence[];
   readonly sourceObservationId: SourceObservationId;
   readonly organizations: readonly OrganizationEvidence[];
   readonly locations: readonly LocationEvidence[];
@@ -62,6 +65,7 @@ export interface ExtractedVacancyEvidence {
 }
 
 export interface CreateExtractedVacancyEvidenceInput {
+  readonly positionCounts?: readonly VacancyPositionCountEvidence[];
   readonly sourceObservationId: SourceObservationId;
   readonly organizations?: readonly OrganizationEvidence[];
   readonly locations?: readonly LocationEvidence[];
@@ -86,6 +90,7 @@ export function createExtractedVacancyEvidence(
   );
   const result: ExtractedVacancyEvidence = {
     sourceObservationId,
+    ...(input.positionCounts === undefined ? {} : { positionCounts: input.positionCounts.map(createVacancyPositionCountEvidence) }),
     organizations: (input.organizations ?? []).map(createOrganizationEvidence),
     locations: (input.locations ?? []).map(createLocationEvidence),
     people: (input.people ?? []).map(createPersonEvidence),
@@ -107,6 +112,7 @@ export function createExtractedVacancyEvidence(
   };
 
   const allEvidence = [
+    ...(result.positionCounts ?? []),
     ...result.organizations,
     ...result.locations,
     ...result.people,

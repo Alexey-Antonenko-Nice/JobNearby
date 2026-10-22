@@ -89,6 +89,11 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly agencyContext?: {
+    readonly candidates: readonly { candidateId: string; name: string; role: "RECRUITER" | "STAFFING_AGENCY" }[];
+    readonly known: readonly { name: string; role: "RECRUITER" | "STAFFING_AGENCY"; memoryId: string; source: "USER_CONFIRMED" | "AGENCY_MEMORY" }[];
+    readonly ambiguousNames: readonly string[];
+  };
   readonly vacancyContext?: VacancyContext;
   readonly employerActionContext?: EmployerActionContext;
   readonly employerHistory?: EmployerHistory;
@@ -190,6 +195,14 @@ export async function decideNamedClientEmployer(canonicalVacancyId: string, cand
 export async function decideEmployerAlias(canonicalVacancyId: string, candidateId: string, employerClusterId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
   const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "ALIAS_SELECTION", candidateId, employerClusterId, decision }),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { review: ReviewView }).review;
+}
+
+export async function confirmRecruitingAgency(canonicalVacancyId: string, candidateId: string): Promise<ReviewView> {
+  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/recruiting-agency-confirmation`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidateId }),
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;

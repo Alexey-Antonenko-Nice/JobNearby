@@ -1,3 +1,5 @@
+import { getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
+import type { ConfirmedOrganizationRoleRepository } from "../../domain/organizations/ConfirmedOrganizationRole.js";
 import { hasRejectedEmployerMemory, getEmployerMemoryReviewCandidates } from "./employerMemoryReview.js";
 import { createEmployerCluster } from "../recognition/createEmployerCluster.js";
 import { createObservationClusterAssignment } from "../recognition/createObservationClusterAssignment.js";
@@ -12,6 +14,7 @@ export async function confirmVacancyEmployer(
   canonicalVacancyId: string,
   candidateName: string,
   dependencies: {
+    readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
     readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findById">;
     readonly employerClusterRepository: EmployerClusterRepository;
@@ -20,8 +23,9 @@ export async function confirmVacancyEmployer(
     readonly generateId?: () => string;
   },
 ): Promise<void> {
-  const vacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
-  if (vacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
+  const storedVacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
+  if (storedVacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
+  const vacancy = (await getRecruitingAgencyProjection(storedVacancy, dependencies.agencyMemoryRepository)).vacancy;
   if ((await getEmployerMemoryReviewCandidates(vacancy, dependencies)).length > 0) throw new Error("Employer memory candidate must be reviewed before direct confirmation.");
   const candidate = employerConfirmationCandidate(vacancy.organizationRelationships);
   if (await hasRejectedEmployerMemory(vacancy, candidate, dependencies)) throw new Error("Employer candidate was rejected in employer memory review.");

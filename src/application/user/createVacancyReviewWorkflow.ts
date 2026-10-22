@@ -1,3 +1,5 @@
+import { confirmVacancyRecruitingAgency, getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
+import type { ConfirmedOrganizationRoleRepository } from "../../domain/organizations/ConfirmedOrganizationRole.js";
 import { decideEmployerAlias } from "./employerAliasReview.js";
 import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import { decideNamedClientEmployer } from "./namedClientEmployerReview.js";
@@ -22,6 +24,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
   readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
   readonly aliasRepository?: EmployerAliasEvidenceRepository;
   readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll" | "findById">;
@@ -40,6 +43,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.agencyMemoryRepository ? { agencyMemoryRepository: dependencies.agencyMemoryRepository } : {}),
     ...(dependencies.publicationCampaignContextSource ? { publicationCampaignContextSource: dependencies.publicationCampaignContextSource } : {}),
     ...(dependencies.aliasRepository ? { aliasRepository: dependencies.aliasRepository } : {}),
     canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
@@ -50,12 +54,20 @@ export function createVacancyReviewWorkflow(
     ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
   return {
+    confirmVacancyRecruitingAgency: async (input: { readonly canonicalVacancyId: string; readonly candidateId: string }) => {
+      await confirmVacancyRecruitingAgency(input.canonicalVacancyId, input.candidateId, {
+        canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
+        ...(dependencies.agencyMemoryRepository ? { agencyMemoryRepository: dependencies.agencyMemoryRepository } : {}),
+        ...(dependencies.now ? { now: dependencies.now } : {}), ...(dependencies.generateId ? { generateId: dependencies.generateId } : {}),
+      });
+      return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
+    },
     decideEmployerReview: async (input: EmployerReviewDecision & { readonly canonicalVacancyId: string }) => {
       const vacancy = await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId);
       if (!vacancy) throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);
       if (input.type === "CONFIRMED_MEMORY") await decideEmployerMemoryReview(vacancy, input.employerClusterId, input.decision, reviewDependencies);
       else if (input.type === "ALIAS_SELECTION") await decideEmployerAlias(vacancy, input.candidateId, input.employerClusterId, input.decision, { ...reviewDependencies, ...(dependencies.recognitionPersistence ? { recognitionPersistence: dependencies.recognitionPersistence } : {}) });
-      else await decideNamedClientEmployer(vacancy, input.candidateId, input.decision, { ...reviewDependencies, ...(dependencies.recognitionPersistence ? { recognitionPersistence: dependencies.recognitionPersistence } : {}) });
+      else await decideNamedClientEmployer((await getRecruitingAgencyProjection(vacancy, dependencies.agencyMemoryRepository)).vacancy, input.candidateId, input.decision, { ...reviewDependencies, ...(dependencies.recognitionPersistence ? { recognitionPersistence: dependencies.recognitionPersistence } : {}) });
       return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
     },
     decideEmployerMemoryReview: async (input: { readonly canonicalVacancyId: string; readonly employerClusterId: string; readonly decision: "CONFIRM" | "REJECT" }) => {
@@ -72,6 +84,7 @@ export function createVacancyReviewWorkflow(
         throw new Error("Employer confirmation is unavailable.");
       }
       await confirmVacancyEmployer(input.canonicalVacancyId, input.candidateName, {
+        ...(dependencies.agencyMemoryRepository ? { agencyMemoryRepository: dependencies.agencyMemoryRepository } : {}),
         ...(dependencies.aliasRepository ? { aliasRepository: dependencies.aliasRepository } : {}),
         canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
         employerClusterRepository: dependencies.employerClusterWriter,
