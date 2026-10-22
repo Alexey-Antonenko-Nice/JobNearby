@@ -45,7 +45,7 @@ export async function ingestBrowserCapture(
       const saved = await dependencies.repository.saveOrReuseBrowserSnapshot(observation, {
         id: (dependencies.generateCaptureOccurrenceId ?? randomUUID)(),
         capturedAt: observation.observedAt,
-        capturedUrl: payload.pageUrl,
+        capturedUrl: acquisition.sourceUrl ?? payload.pageUrl,
       });
       sourceObservationId = saved.sourceObservationId;
     } else {

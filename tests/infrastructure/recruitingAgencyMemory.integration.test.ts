@@ -62,6 +62,23 @@ function fixture(db = createDatabase(":memory:")) {
 }
 
 describe("human-confirmed agency memory", () => {
+  it("classifies the PROMAN selected branch without fuzzy-matching parent or other branch memories", async () => {
+    const f = fixture();
+    try {
+      await f.add("proman-parent", "PROMAN"); await f.confirm("proman-parent");
+      await f.add("proman-paris", "PROMAN PARIS"); await f.confirm("proman-paris");
+      const runtime = createCaptureProcessingRuntime(f.db);
+      const result = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://mon-espace.proman-emploi.fr/dashboard?offre_id=1197787",
+        pageTitle: "PROMAN vacancy", html: readFileSync("tests/fixtures/promanSelectedVacancy.html", "utf8"), visibleText: "PROMAN current vacancy", capturedAt: date });
+      if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
+      const view = await f.workflow.getVacancyReview(result.processing.canonicalVacancyId);
+      expect(view.agencyContext?.known).toEqual([]);
+      expect(view.agencyContext?.candidates).toEqual([expect.objectContaining({ name: "PROMAN AIX EXPERTISE 2", role: "STAFFING_AGENCY" })]);
+      expect(view.employer.status).toBe("UNRESOLVED"); expect(view.employer.confirmationCandidate).toBeNull();
+      expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 2 });
+    } finally { f.db.close(); }
+  });
+
   it("classifies the Start People agency card without fuzzy-matching parent or other branch memories", async () => {
     const f = fixture();
     try {

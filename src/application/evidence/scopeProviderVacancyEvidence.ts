@@ -1,3 +1,4 @@
+import { scopePromanVacancyEvidence } from "./scopePromanVacancyEvidence.js";
 import { scopeStartPeopleVacancyEvidence } from "./scopeStartPeopleVacancyEvidence.js";
 import { scopeActualVacancyEvidence } from "./scopeActualVacancyEvidence.js";
 import { scopeCritVacancyEvidence } from "./scopeCritVacancyEvidence.js";
@@ -18,6 +19,7 @@ const boundedHelloWorkInput = Symbol("boundedHelloWorkInput");
 
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
 export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
+  if (input.source.sourceName === "mon-espace.proman-emploi.fr") return scopePromanVacancyEvidence(input);
   if (input.source.sourceName === "startpeople.fr") return scopeStartPeopleVacancyEvidence(input);
   if (input.source.sourceName === "actualgroup.com") return scopeActualVacancyEvidence(input);
   if (input.source.sourceName === "crit-job.com") return scopeCritVacancyEvidence(input);
