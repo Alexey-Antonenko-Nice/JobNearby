@@ -39,8 +39,11 @@ export class BrowserCaptureAcquisitionAdapter {
     const providerCapture = this.providerCaptureRegistry.capture({
       sourceName, sourceUrl: pageUrl, ...(html === undefined ? {} : { html }),
     });
+    const privateDashboard = providerCapture.providerKey === "PROMAN";
+    const persistedUrl = privateDashboard ? privateDashboardUrl(pageUrl, providerCapture.externalId) : pageUrl;
     // Never project search/account JSON-LD or microdata into selected-job fields.
-    // The immutable full-page content is still retained for diagnostics.
+    // Public providers retain original content for diagnostics. Authenticated
+    // PROMAN captures retain only the sanitized selected vacancy.
     const evidenceHtml = providerCapture.requiresSelectedVacancyContext ? providerCapture.context?.html : html;
     const jsonLdJobPostings = evidenceHtml === undefined
       ? []
@@ -67,12 +70,12 @@ export class BrowserCaptureAcquisitionAdapter {
         sourceType: "BROWSER",
         sourceName,
       },
-      sourceUrl: pageUrl,
+      sourceUrl: persistedUrl,
       ...(providerCapture.externalId === undefined ? {} : { externalId: providerCapture.externalId }),
-      ...(payload.pageTitle.trim().length > 0 ? { pageTitle: payload.pageTitle.trim() } : {}),
+      ...(privateDashboard ? { pageTitle: providerCapture.structuredFields?.title ?? "PROMAN dashboard" } : payload.pageTitle.trim().length > 0 ? { pageTitle: payload.pageTitle.trim() } : {}),
       content: {
-        text: normalizeVisibleText(visibleText),
-        ...(html !== undefined ? { html } : {}),
+        text: privateDashboard ? providerCapture.context?.text ?? "PROMAN: no safely selected vacancy" : normalizeVisibleText(visibleText),
+        ...(privateDashboard ? { html: providerCapture.context?.html ?? "<div></div>" } : html !== undefined ? { html } : {}),
         ...(jobPostings.length > 0
           ? {
               structuredPayload: {
@@ -85,7 +88,7 @@ export class BrowserCaptureAcquisitionAdapter {
       ...(structuredFields !== undefined && Object.keys(structuredFields).length > 0 ? { structuredFields } : {}),
       ...(providerCapture.context === undefined ? {} : { contexts: [providerCapture.context] }),
       metadata: {
-        ...(payload.browserMetadata === undefined ? {} : structuredClone(payload.browserMetadata)),
+        ...(privateDashboard || payload.browserMetadata === undefined ? {} : structuredClone(payload.browserMetadata)),
         ...(providerCapture.requiresSelectedVacancyContext ? { vacancyEvidenceScope: "SELECTED_VACANCY_REQUIRED" } : {}),
       },
     });
@@ -139,4 +142,10 @@ function validateContent(value: string, label: string, maximumBytes: number): st
 
 function normalizeVisibleText(value: string): string {
   return value.replace(/\r\n?/gu, "\n").trim();
+}
+
+/** Query strings and fragments can contain session/account state. Keep routing identity only. */
+function privateDashboardUrl(pageUrl: string, externalId: string | undefined): string {
+  const url = new URL(pageUrl);
+  return new URL("/dashboard" + (externalId ? `?offre_id=${externalId}` : ""), url.origin).href;
 }

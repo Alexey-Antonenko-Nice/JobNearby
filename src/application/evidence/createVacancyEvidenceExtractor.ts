@@ -1,3 +1,4 @@
+import { PromanVacancyEvidenceExtractor } from "./PromanVacancyEvidenceExtractor.js";
 import { StartPeopleVacancyEvidenceExtractor } from "./StartPeopleVacancyEvidenceExtractor.js";
 import { ActualVacancyEvidenceExtractor } from "./ActualVacancyEvidenceExtractor.js";
 import { CritVacancyEvidenceExtractor } from "./CritVacancyEvidenceExtractor.js";
@@ -22,6 +23,7 @@ import { AdeccoSelectedVacancyEvidenceExtractor } from "./AdeccoSelectedVacancyE
 
 export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtractor {
   return new CompositeVacancyEvidenceExtractor([
+    new PromanVacancyEvidenceExtractor(),
     new StartPeopleVacancyEvidenceExtractor(),
     new ActualVacancyEvidenceExtractor(),
     new CritVacancyEvidenceExtractor(),
