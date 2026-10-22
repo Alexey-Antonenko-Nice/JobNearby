@@ -9,23 +9,24 @@ export class IndeedSelectedVacancyContextLocator implements SelectedVacancyConte
     if (!isIndeedHostname(sourceUrl.hostname)) return undefined;
     const html = stripIndeedScripts(input.html);
     const companyJobs = isIndeedCompanyJobsUrl(input.sourceUrl);
-    const details = findBoundedJobDetails(html, companyJobs);
+    const directView = sourceUrl.pathname === "/viewjob";
+    const details = findBoundedJobDetails(html, companyJobs, directView);
     if (details.length !== 1) return undefined;
     const detailHtml = details[0]!;
     const detailIds = explicitDetailIds(detailHtml, input.sourceUrl);
     if (detailIds.size > 1) return undefined;
     const companyPane = companyJobs && /data-testid\s*=\s*["']JobDetail["']/u.test(detailHtml);
+    const nativePane = /data-testid\s*=\s*["']viewjob-main-content["']/iu.test(detailHtml);
     const urlId = indeedUrlVacancyId(input.sourceUrl);
-    const externalId = [...detailIds][0] ?? (companyPane ? urlId : undefined);
+    const externalId = [...detailIds][0] ?? (companyPane || (directView && nativePane) ? urlId : undefined);
     if (externalId === undefined) return undefined;
     const urlKeys = [...sourceUrl.searchParams.getAll("vjk"), ...(supportsJkQuery(sourceUrl) ? sourceUrl.searchParams.getAll("jk") : [])].filter(Boolean);
     if (urlKeys.some((key) => key !== externalId)) return undefined;
     if ((input.externalId !== undefined && input.externalId !== externalId)
       || (urlId !== undefined && urlId !== externalId)) return undefined;
     const selectedResults = findSelectedResults(html);
-    const nativePane = /data-testid=["']viewjob-main-content["']/iu.test(detailHtml);
     // Legacy panes require the independent selected-card association. Native
-    // direct pages may have no results column, but must carry their own job key.
+    // direct pages may instead use the explicit URL key after bounding the job.
     if ((!nativePane && !companyPane && selectedResults.length !== 1) || selectedResults.length > 1) return undefined;
     if (selectedResults.some((card) => !hasClass(openingTags(card, "div")[0] ?? "", `job_${externalId}`)
       || !containsMatchingJobKey(card, externalId))) return undefined;
@@ -42,6 +43,7 @@ export class IndeedSelectedVacancyContextLocator implements SelectedVacancyConte
         urlId === undefined ? "SELECTED_DETAIL_EXTERNAL_ID" : "URL_EXTERNAL_ID",
         ...(selectedResults.length === 1 ? ["MATCHING_SELECTED_RESULT"] : []),
         "BOUNDED_JOB_DETAIL",
+        ...(directView && nativePane ? ["INDEED_DIRECT_JOB_HEADER_AND_CONTENT"] : []),
         ...(detailIds.size === 1 ? ["DETAIL_EXTERNAL_ID_MATCH"] : []),
       ],
       text,
@@ -74,7 +76,7 @@ export function requiresIndeedSelectedContext(sourceUrl: string, html = ""): boo
   try {
     const url = new URL(sourceUrl);
     if (!isIndeedHostname(url.hostname)) return false;
-    return url.pathname === "/" || url.pathname === "/jobs" || isIndeedCompanyJobsUrl(sourceUrl)
+    return url.pathname === "/" || url.pathname === "/jobs" || url.pathname === "/viewjob" || isIndeedCompanyJobsUrl(sourceUrl)
       || /(?:job-full-details|jobsearch-ViewjobPaneWrapper|rnvjContainerDesktop|viewjob-main-content|vjs-highlight)/u.test(stripIndeedScripts(html));
   } catch { return false; }
 }
@@ -95,7 +97,11 @@ function containsMatchingJobKey(html: string, externalId: string): boolean {
   return openingTags(html, "a").some((tag) => attribute(tag, "data-jk") === externalId);
 }
 
-function findBoundedJobDetails(html: string, companyJobs: boolean): string[] {
+function findBoundedJobDetails(html: string, companyJobs: boolean, directView: boolean): string[] {
+  if (directView) {
+    const mains = indeedElementsWithAttribute(html, "data-testid", "viewjob-main-content");
+    if (mains.length > 0) return boundDirectJob(mains);
+  }
   const details: string[] = [];
   for (const match of openingTagMatches(html, "section")) {
     const tag = match[0];
@@ -125,6 +131,27 @@ function findBoundedJobDetails(html: string, companyJobs: boolean): string[] {
     }
   }
   return details;
+}
+
+function boundDirectJob(mains: readonly string[]): string[] {
+  if (mains.length !== 1) return [];
+  const main = mains[0]!;
+  const headers = indeedElementsWithAttribute(main, "data-testid", "desktop-job-header");
+  const contents = indeedElementsWithAttribute(main, "data-testid", "viewjob-job-content");
+  if (headers.length !== 1 || contents.length !== 1
+    || indeedElementsWithAttribute(headers[0]!, "data-testid", "vj-job-title").length !== 1
+    || indeedElementsWithAttribute(headers[0]!, "data-testid", "company-info-metadata").length !== 1
+    || indeedElementsWithAttribute(contents[0]!, "data-testid", "vj-job-title").length !== 0
+    || headers[0]!.includes(contents[0]!) || contents[0]!.includes(headers[0]!)) return [];
+  const bounded = headers[0]! + contents[0]!;
+  // Reject embedded navigation/cards rather than broadening the text scope.
+  if (/<(?:aside|nav|footer)\b/iu.test(bounded)
+    || /\sdata-testid\s*=\s*["'](?:JobList|JobDetail|job-card|standalone-desktop-search-page)["']/iu.test(bounded)
+    || openingTags(bounded, "div").some((tag) => hasClass(tag, "result"))) return [];
+  // Keep the container's identity attributes, but discard its search form,
+  // recommendations, account controls, and other sibling content.
+  const opening = /^<([a-z][\w-]*)\b[^>]*>/iu.exec(main)!;
+  return [`${opening[0]}${bounded}</${opening[1]!}>`];
 }
 
 function explicitDetailIds(html: string, sourceUrl: string): Set<string> {

@@ -140,11 +140,11 @@ describe("Indeed native selected-vacancy isolation", () => {
     expect(poisoned.displayedCompanyName).toBe("Other Company");
   });
 
-  it("preserves the generic direct-job path and extracts jk identity", async () => {
+  it("retains direct URL identity but rejects unassociated page-level JSON-LD", async () => {
     const { acquisition, observation } = capture(`<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", title: "Direct title H/F", hiringOrganization: { name: "Direct Company" }, jobLocation: { address: { addressLocality: "Lyon" } } })}</script>`, `https://fr.indeed.com/viewjob?jk=${id}`);
     expect(acquisition.externalId).toBe(id);
-    expect(observation.title).toBe("Direct title H/F");
-    expect((await createVacancyEvidenceExtractor().extract(observation)).vacancyTitles).toContainEqual(expect.objectContaining({ value: "Direct title H/F" }));
+    expect(observation.title).toBeUndefined();
+    expect((await createVacancyEvidenceExtractor().extract(observation)).vacancyTitles).toEqual([]);
   });
 
   it("isolates a native direct-job pane without claiming a selected-card association", () => {
