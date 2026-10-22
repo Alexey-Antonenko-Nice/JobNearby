@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
@@ -61,6 +62,24 @@ function fixture(db = createDatabase(":memory:")) {
 }
 
 describe("human-confirmed agency memory", () => {
+  it("classifies a Crit branch from explicit client evidence without borrowing confirmed parent memory", async () => {
+    const f = fixture();
+    try {
+      await f.add("parent-crit", "Crit"); await f.confirm("parent-crit");
+      const runtime = createCaptureProcessingRuntime(f.db);
+      const result = await runtime.captureAndProcessBrowserVacancy({
+        pageUrl: "https://www.crit-job.com/offres/1e5128d8-42dd-4d6a-9f04-37cdb5922cf8", pageTitle: "Crit vacancy",
+        html: readFileSync("tests/fixtures/critDirectVacancy.html", "utf8"), visibleText: "Crit current vacancy", capturedAt: date,
+      });
+      if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
+      const view = await f.workflow.getVacancyReview(result.processing.canonicalVacancyId);
+      expect(view.agencyContext?.known).toEqual([]);
+      expect(view.agencyContext?.candidates).toEqual([expect.objectContaining({ name: "CRIT ILLKIRCH-GRAFFENSTADEN Industrie", role: "STAFFING_AGENCY" })]);
+      expect(view.employer.confirmationCandidate).toBeNull();
+      expect(view.employer.status).toBe("UNRESOLVED");
+      expect(f.db.prepare("SELECT organization_name FROM confirmed_organization_roles").all()).toEqual([{ organization_name: "Crit" }]);
+    } finally { f.db.close(); }
+  });
   it.each(["ACTUAL MARSEILLE", "Crit", "Jubil Intérim", "Randstad", "LHH", "Manpower"])("offers and confirms explicit staffing evidence for %s without changing employer/source history", async (name) => {
     const f = fixture();
     try {

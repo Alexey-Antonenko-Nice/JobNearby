@@ -356,7 +356,7 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       workModeCandidates,
       industryContextCandidates,
       languageRequirementCandidates,
-      experienceCandidates,
+      experienceCandidates: reconcileExperienceCandidates(experienceCandidates),
       travelCandidates,
       positionCountCandidates,
       derivation: input.derivation,
@@ -547,6 +547,18 @@ function structuredCompensation(rawText: string): CompensationValue {
 
 function malformedCompensation(value: CompensationValue): boolean {
   return value.minimum !== undefined && value.minimum > 0 && value.maximum === 0;
+}
+
+/** Wording variants remain separate evidence, but share a canonical meaning. */
+function reconcileExperienceCandidates(candidates: readonly CanonicalCandidate<readonly ExperienceRequirement[]>[]): CanonicalCandidate<readonly ExperienceRequirement[]>[] {
+  const values = new Map<string, ExperienceRequirement>();
+  const key = ({ minimumYears, maximumYears, unit, context }: ExperienceRequirement) => JSON.stringify([unit, minimumYears, maximumYears, context]);
+  for (const candidate of candidates) for (const requirement of candidate.value) {
+    if (!values.has(key(requirement))) values.set(key(requirement), requirement);
+  }
+  return candidates.map(candidate => ({ ...candidate,
+    value: [...new Set(candidate.value.map(key))].sort().map(identity => values.get(identity)!),
+  }));
 }
 
 function reconcileEngagementCandidates(candidates: readonly CanonicalCandidate<EngagementValue>[]): CanonicalCandidate<EngagementValue>[] {
