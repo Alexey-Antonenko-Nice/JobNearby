@@ -1,3 +1,4 @@
+import { RandstadVacancyEvidenceExtractor } from "./RandstadVacancyEvidenceExtractor.js";
 import { ManpowerVacancyEvidenceExtractor } from "./ManpowerVacancyEvidenceExtractor.js";
 import { CompositeVacancyEvidenceExtractor } from "./CompositeVacancyEvidenceExtractor.js";
 import { CoreVacancyHeaderFactsExtractor } from "./CoreVacancyHeaderFactsExtractor.js";
@@ -17,6 +18,7 @@ import { AdeccoSelectedVacancyEvidenceExtractor } from "./AdeccoSelectedVacancyE
 
 export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtractor {
   return new CompositeVacancyEvidenceExtractor([
+    new RandstadVacancyEvidenceExtractor(),
     new ManpowerVacancyEvidenceExtractor(),
     new AdeccoSelectedVacancyEvidenceExtractor(),
     new WorkdayVacancyEvidenceExtractor(),
