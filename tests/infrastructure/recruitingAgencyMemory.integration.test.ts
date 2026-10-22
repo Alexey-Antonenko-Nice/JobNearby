@@ -62,6 +62,39 @@ function fixture(db = createDatabase(":memory:")) {
 }
 
 describe("human-confirmed agency memory", () => {
+  it("classifies the Start People agency card without fuzzy-matching parent or other branch memories", async () => {
+    const f = fixture();
+    try {
+      await f.add("start-parent", "Start People"); await f.confirm("start-parent");
+      await f.add("start-paris", "Start People PARIS"); await f.confirm("start-paris");
+      const runtime = createCaptureProcessingRuntime(f.db);
+      const result = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://www.startpeople.fr/offre-emploi/strasbourg/coordinateur-technique-referent-atelier-h-f/9481983",
+        pageTitle: "Start People vacancy", html: readFileSync("tests/fixtures/startPeopleDirectVacancy.html", "utf8"), visibleText: "Start People current vacancy", capturedAt: date });
+      if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
+      const view = await f.workflow.getVacancyReview(result.processing.canonicalVacancyId);
+      expect(view.agencyContext?.known).toEqual([]);
+      expect(view.agencyContext?.candidates).toEqual([expect.objectContaining({ name: "Start People STRASBOURG BTP", role: "STAFFING_AGENCY" })]);
+      expect(view.employer.status).toBe("UNRESOLVED"); expect(view.employer.confirmationCandidate).toBeNull();
+      expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 2 });
+    } finally { f.db.close(); }
+  });
+
+  it("classifies the Actual agency card without fuzzy-matching parent or other branch memories", async () => {
+    const f = fixture();
+    try {
+      await f.add("actual-parent", "Actual"); await f.confirm("actual-parent");
+      await f.add("actual-marseille", "ACTUAL MARSEILLE"); await f.confirm("actual-marseille");
+      const runtime = createCaptureProcessingRuntime(f.db);
+      const result = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://www.actualgroup.com/offres-emploi/teleconseiller-h-f-lu-re1254192a397912",
+        pageTitle: "Actual vacancy", html: readFileSync("tests/fixtures/actualDirectVacancy.html", "utf8"), visibleText: "Actual current vacancy", capturedAt: date });
+      if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
+      const view = await f.workflow.getVacancyReview(result.processing.canonicalVacancyId);
+      expect(view.agencyContext?.known).toEqual([]);
+      expect(view.agencyContext?.candidates).toEqual([expect.objectContaining({ name: "Actual emploi Schiltigheim", role: "STAFFING_AGENCY" })]);
+      expect(view.employer.status).toBe("UNRESOLVED"); expect(view.employer.confirmationCandidate).toBeNull();
+      expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 2 });
+    } finally { f.db.close(); }
+  });
   it("classifies a Crit branch from explicit client evidence without borrowing confirmed parent memory", async () => {
     const f = fixture();
     try {

@@ -1,3 +1,5 @@
+import { startPeopleVacancyId } from "./StartPeopleVacancy.js";
+import { actualVacancyId } from "./ActualVacancy.js";
 import { critVacancyId } from "./CritVacancy.js";
 import { synergieVacancyId } from "./SynergieVacancy.js";
 import { manpowerVacancyId } from "./ManpowerVacancy.js";
@@ -20,6 +22,8 @@ type ExtractionRule = (url: URL) => string | undefined;
 const rules: Readonly<Record<string, ExtractionRule>> = {
   "synergie.fr": (url) => synergieVacancyId(url.href),
   "crit-job.com": (url) => critVacancyId(url.href),
+  "startpeople.fr": (url) => startPeopleVacancyId(url.href),
+  "actualgroup.com": (url) => actualVacancyId(url.href),
   "hellowork.com": extractHellowork,
   "manpower.com": (url) => manpowerVacancyId(url.href),
   "adecco.com": (url) => adeccoVacancyId(url.href),

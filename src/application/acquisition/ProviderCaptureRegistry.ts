@@ -1,3 +1,5 @@
+import { StartPeopleSelectedVacancyContextLocator, startPeopleFacts, startPeoplePublishedAt } from "./StartPeopleVacancy.js";
+import { ActualSelectedVacancyContextLocator, actualFacts } from "./ActualVacancy.js";
 import { CritSelectedVacancyContextLocator, critFacts, critPublishedAt } from "./CritVacancy.js";
 import { SynergieSelectedVacancyContextLocator, synergieFacts, synergiePublishedAt } from "./SynergieVacancy.js";
 import { RandstadSelectedVacancyContextLocator, randstadFacts, randstadPublishedAt } from "./RandstadVacancy.js";
@@ -55,6 +57,8 @@ export class ProviderCaptureRegistry {
     LHH: new LhhSelectedVacancyContextLocator(),
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
     TALENT: new TalentSelectedVacancyContextLocator(),
+    START_PEOPLE: new StartPeopleSelectedVacancyContextLocator(),
+    ACTUAL: new ActualSelectedVacancyContextLocator(),
     CRIT: new CritSelectedVacancyContextLocator(),
     SYNERGIE: new SynergieSelectedVacancyContextLocator(),
     RANDSTAD: new RandstadSelectedVacancyContextLocator(),
@@ -84,7 +88,12 @@ export class ProviderCaptureRegistry {
     const synergieDate = context?.html && providerKey === "SYNERGIE" ? synergiePublishedAt(context.html) : undefined;
     const crit = providerKey === "CRIT" && context?.html ? critFacts(context.html) : undefined;
     const critDate = providerKey === "CRIT" ? critPublishedAt(context?.metadata) : undefined;
-    const structuredFields = crit ? { title: crit.title, locationText: crit.values["Location"]!, ...(critDate ? { publishedAt: critDate } : {}) }
+    const actual = providerKey === "ACTUAL" && context?.html ? actualFacts(context.html) : undefined;
+    const startPeople = providerKey === "START_PEOPLE" && context?.html ? startPeopleFacts(context.html) : undefined;
+    const startPeopleDate = context?.html && providerKey === "START_PEOPLE" ? startPeoplePublishedAt(context.html) : undefined;
+    const structuredFields = startPeople ? { title: startPeople.title, locationText: startPeople.values["Localisation"]!, ...(startPeopleDate ? { publishedAt: startPeopleDate } : {}) }
+      : actual ? { title: actual.title, locationText: actual.location }
+      : crit ? { title: crit.title, locationText: crit.values["Location"]!, ...(critDate ? { publishedAt: critDate } : {}) }
       : synergie ? { title: synergie.title, locationText: synergie.values["Lieu de la mission"]!, ...(synergieDate ? { publishedAt: synergieDate } : {}) }
       : randstad ? { title: randstad.title, locationText: randstad.location, ...(randstadDate ? { publishedAt: randstadDate } : {}) }
       : manpower ? { title: manpower.title, locationText: manpower.location, ...(manpower.publishedAt ? { publishedAt: manpower.publishedAt } : {}) }
@@ -105,7 +114,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),
