@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { getRecruitingAgencyProjection } from "../../src/application/user/recruitingAgencyReview.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
@@ -8,6 +10,62 @@ import type { SourceObservation } from "../../src/domain/capture/SourceObservati
 import { fromSelectedVacancyContext } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 
 function observation(text: string): SourceObservation { return { id: "linkedin", source: { sourceType: "JOB_BOARD", sourceName: "linkedin.com", sourceUrl: "https://www.linkedin.com/jobs/view/4461178074/x", externalId: "4461178074" }, observedAt: new Date("2026-09-06T12:00:00Z"), metadata: {} }; }
+
+async function selectedEvidence(text: string) {
+  const o = observation(text);
+  const input = fromSelectedVacancyContext(o, { kind: "SELECTED_VACANCY", associationMethod: "PROVIDER_LOCATOR", providerKey: "LINKEDIN",
+    text, html: `<section data-linkedin-selected-vacancy-context="direct-view">${text}</section>` });
+  return { o, evidence: await createVacancyEvidenceExtractor().extract(input) };
+}
+
+describe("LinkedIn recruitment-specific agency classification", () => {
+  it("keeps the saved Kickmaker regression displayed-only and eligible for human employer confirmation", async () => {
+    const text = readFileSync("tests/fixtures/linkedinKickmaker.txt", "utf8");
+    const { o, evidence } = await selectedEvidence(text);
+    expect(evidence.organizations.filter(r => r.value === "Kickmaker")).toEqual([expect.objectContaining({ role: "DISPLAYED_COMPANY" })]);
+    const canonical = new ExistingPipelineCanonicalVacancyAdapter(new DeterministicCanonicalVacancyCanonicalizer()).canonicalize({
+      canonicalVacancyId: "kickmaker", observations: [o], extractedEvidence: [evidence],
+      employerCluster: createEmployerCluster({ status: "UNRESOLVED", displayLabel: "Unknown employer" }, { now: () => new Date("2026-10-22"), generateId: () => "unknown" }),
+      derivation: { algorithm: "test", algorithmVersion: "1", derivedAt: new Date("2026-10-22") },
+    });
+    expect(canonical.organizationRelationships.some(r => r.role === "RECRUITER" || r.role === "STAFFING_AGENCY")).toBe(false);
+    const projection = await getRecruitingAgencyProjection(canonical, { findByNormalizedName: async () => [], append: async () => false });
+    expect(projection.context.candidates).toEqual([]);
+    expect(employerConfirmationCandidate(projection.vacancy.organizationRelationships)).toBe("Kickmaker");
+    expect(canonical.organizationRelationships.filter(r => r.role === "EMPLOYER")).toEqual([expect.objectContaining({ employerClusterId: "unknown" })]);
+    expect(canonical.organizationRelationships.find(r => r.role === "EMPLOYER")?.rawName).toBeUndefined();
+  });
+  it.each([
+    "Nova est une industrialization agency.", "Nova is an engineering agency.", "Nova is a design agency.",
+    "Nova is a consulting company providing engineering services and outsourcing.",
+    "Nova accompagne les entreprises dans l’industrialisation de leurs produits.",
+    "La diversité est une valeur essentielle de Nova tout au long du processus de recrutement.",
+    "Nova's recruitment team reviews applications as part of our hiring process.",
+    "Nova propose un poste en intérim dans son équipe interne.",
+  ])("does not infer agency services from generic business/internal hiring text: %s", async body => {
+    const { evidence } = await selectedEvidence(`Nova\nIngénieur Mécanique\nÀ propos de l’offre d’emploi\n${body}`);
+    expect(evidence.organizations.filter(r => ["RECRUITMENT_AGENCY", "STAFFING_AGENCY"].includes(r.role))).toEqual([]);
+  });
+  it.each([
+    ["Alpha est un cabinet de recrutement spécialisé.", "RECRUITMENT_AGENCY"],
+    ["Alpha est une agence de recrutement.", "RECRUITMENT_AGENCY"],
+    ["Alpha is a recruiting agency.", "RECRUITMENT_AGENCY"],
+    ["Alpha is a recruitment agency.", "RECRUITMENT_AGENCY"],
+    ["Alpha est spécialisée dans le recrutement.", "RECRUITMENT_AGENCY"],
+    ["Alpha décrit son activité de recrutement.", "RECRUITMENT_AGENCY"],
+    ["Alpha recrute pour notre client.", "RECRUITMENT_AGENCY"],
+    ["Alpha recruits for our client.", "RECRUITMENT_AGENCY"],
+    ["Alpha est une agence d’intérim.", "STAFFING_AGENCY"],
+    ["Alpha is a temporary staffing agency.", "STAFFING_AGENCY"],
+    ["Alpha is an employment agency.", "STAFFING_AGENCY"],
+    ["Alpha est spécialisée dans l’intérim.", "STAFFING_AGENCY"],
+    ["Alpha specializes in interim, recruitment, outsourcing and executive search.", "STAFFING_AGENCY"],
+    ["Alpha specializes in recruitment.", "RECRUITMENT_AGENCY"],
+  ])("retains explicit agency evidence: %s", async (body, role) => {
+    const { evidence } = await selectedEvidence(`Alpha\nIngénieur Mécanique\nÀ propos de l’offre d’emploi\n${body}`);
+    expect(evidence.organizations).toContainEqual(expect.objectContaining({ value: "Alpha", role }));
+  });
+});
 
 describe("LinkedIn direct selected header evidence", () => {
   it("extracts Manpower header facts and staffing contradiction", async () => {

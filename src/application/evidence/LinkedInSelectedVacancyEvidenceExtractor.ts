@@ -43,15 +43,19 @@ function classifyLinkedInIntermediary(
   const brand = displayedCompany.split("|")[0]!.trim().split(/\s+/u)[0]!;
   if (brand.length === 0) return undefined;
   const brandPattern = new RegExp(escapeRegExp(brand), "giu");
-  const recruitmentTerms = /\b(?:int[eé]rim|recrutement|outsourcing|headhunting|chasse\s+de\s+t[eê]te|executive\s+search)\b/iu;
-  const staffingTerms = /\b(?:int[eé]rim|outsourcing)\b/iu;
+  // Internal hiring/equal-opportunity prose is not an agency service claim.
+  // In particular, bare "recrutement", "agency" or "outsourcing" is insufficient.
+  const staffingTerms = /\b(?:agence\s+d['’](?:int[eé]rim|emploi)|travail\s+temporaire|(?:temporary\s+)?staffing(?:\s+agency)?|employment\s+agency)\b/iu;
+  const recruitmentTerms = /\b(?:cabinet\s+de\s+recrutement|agence\s+de\s+recrutement|recruit(?:ment|ing)\s+agency|headhunting|chasse\s+de\s+t[eê]te|executive\s+search|(?:recrute|recrutons|recherche|recherchons)\s+pour\s+(?:(?:le\s+compte\s+de\s+)?(?:notre|son|nos|ses)|un)\s+clients?|recruits?\s+for\s+(?:our|a|its)\s+client)\b/iu;
+  const services = /\b(?:sp[eé]cialis[ée]+\s+(?:dans|en)\s+|sp[eé]cialiste\s+(?:du|de)\s+|activit[eé]\s+d['’e]\s*|services?\s+de\s+|speciali[sz]es?\s+in\s+)(?:le\s+|l['’])?(int[eé]rim|interim|recrutement|recruitment|recruiting|staffing)\b/iu;
   for (const match of body.matchAll(brandPattern)) {
     const excerpt = body.slice(
       Math.max(0, match.index - 180),
       Math.min(body.length, match.index + brand.length + 180),
     );
-    if (recruitmentTerms.test(excerpt)) {
-      return staffingTerms.test(excerpt) ? "STAFFING_AGENCY" : "RECRUITMENT_AGENCY";
+    const service = services.exec(excerpt);
+    if (staffingTerms.test(excerpt) || recruitmentTerms.test(excerpt) || service !== null) {
+      return staffingTerms.test(excerpt) || /^(?:int[eé]rim|interim|staffing)$/iu.test(service?.[1] ?? "") ? "STAFFING_AGENCY" : "RECRUITMENT_AGENCY";
     }
   }
   return undefined;
