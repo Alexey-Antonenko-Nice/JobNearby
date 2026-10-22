@@ -8,10 +8,13 @@ import { extractWorkdayVacancyId } from "./WorkdayVacancy.js";
 import { extractPersonioVacancyId, isPersonioSource } from "./PersonioVacancy.js";
 import { indeedUrlVacancyId } from "./IndeedSelectedVacancyContextLocator.js";
 
+import { talentVacancyId } from "./TalentSelectedVacancyContextLocator.js";
+
 type ExtractionRule = (url: URL) => string | undefined;
 
 const rules: Readonly<Record<string, ExtractionRule>> = {
   "hellowork.com": extractHellowork,
+  "talent.com": (url) => talentVacancyId(url.href),
   "meteojob.com": extractMeteojob,
   "indeed.com": (url) => indeedUrlVacancyId(url.href),
   "linkedin.com": extractLinkedIn,

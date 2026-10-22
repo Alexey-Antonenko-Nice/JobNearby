@@ -4,10 +4,13 @@ import { HelloWorkSelectedVacancyContextLocator, helloWorkHeaderFields, helloWor
 import { SchemaOrgJobPostingProjector } from "../acquisition/SchemaOrgJobPostingProjector.js";
 import { scopeIndeedVacancyEvidence } from "./scopeIndeedVacancyEvidence.js";
 
+import { scopeTalentVacancyEvidence } from "./scopeTalentVacancyEvidence.js";
+
 const boundedHelloWorkInput = Symbol("boundedHelloWorkInput");
 
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
 export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
+  if (input.source.sourceName === "talent.com") return scopeTalentVacancyEvidence(input);
   if (input.source.sourceName !== "hellowork.com") return scopeIndeedVacancyEvidence(input);
   if (boundedHelloWorkInput in input) return input;
   const acquisition = record(input.metadata.acquisition);

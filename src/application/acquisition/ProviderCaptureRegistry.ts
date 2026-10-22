@@ -14,6 +14,8 @@ import { extractPersonioHeaderFacts } from "./PersonioVacancy.js";
 
 import { HelloWorkSelectedVacancyContextLocator, helloWorkHeaderFields } from "./HelloWorkVacancy.js";
 
+import { TalentSelectedVacancyContextLocator, talentHeaderFields } from "./TalentSelectedVacancyContextLocator.js";
+
 export interface ProviderCaptureInput {
   readonly sourceName: string;
   readonly sourceUrl: string;
@@ -46,6 +48,7 @@ export class ProviderCaptureRegistry {
     CADREMPLOI: new CadremploiSelectedVacancyContextLocator(),
     LHH: new LhhSelectedVacancyContextLocator(),
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
+    TALENT: new TalentSelectedVacancyContextLocator(),
   };
 
   capture(input: ProviderCaptureInput): ProviderCaptureResult {
@@ -62,7 +65,9 @@ export class ProviderCaptureRegistry {
         });
     const personioHeader = providerKey === "PERSONIO" && externalId !== undefined && input.html !== undefined
       ? extractPersonioHeaderFacts(input.html) : undefined;
-    const structuredFields = providerKey === "HELLOWORK" && context?.html !== undefined
+    const structuredFields = providerKey === "TALENT" && context?.html !== undefined
+      ? talentHeaderFields(context.html)
+      : providerKey === "HELLOWORK" && context?.html !== undefined
       ? helloWorkHeaderFields(context.html)
       : personioHeader !== undefined
       ? {
@@ -76,7 +81,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),
