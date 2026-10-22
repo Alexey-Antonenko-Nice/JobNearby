@@ -170,14 +170,16 @@ function extractBoundedOrganizationRoles(
   }
 
   for (const match of text.matchAll(
-    /\bnotre\s+agence\s+([\p{L}\d][\p{L}\d&'’().\-\s]{1,60}?)\s+(?:recherche|recrute)\b/giu,
+    /\b(?:notre\s+)?agence\s+([\p{L}\d][\p{L}\d&'’().\-\s]{1,60}?)\s+(?:recherche|recrute)\b/giu,
   )) {
     addOrganizationRole(results, match[1] ?? "", "RECRUITER");
   }
   for (const match of text.matchAll(
     /(?:^|[.!?\n])\s*([\p{Lu}][\p{L}\d&'’().\-]*(?:\s+[\p{Lu}][\p{L}\d&'’().\-]*){0,4})\s+(?:recherche|recrute)\b/gu,
   )) {
-    addOrganizationRole(results, match[1] ?? "", "RECRUITER");
+    // This capture is immediately followed by a recruiting verb. Introductory
+    // "Notre Agence" / "Agence" is grammar here, not a second organization.
+    addOrganizationRole(results, (match[1] ?? "").replace(/^(?:Notre\s+)?Agence\s+/iu, ""), "RECRUITER");
   }
   for (const match of text.matchAll(
     /\bConsulting\s*&\s*Solutions\s+d['’]([\p{Lu}][\p{L}\d&'’().\-]*(?:\s+[\p{Lu}][\p{L}\d&'’().\-]*){0,4})\b/gu,

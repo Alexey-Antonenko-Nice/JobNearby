@@ -492,6 +492,37 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
     ]));
   });
 
+  it("deduplicates experience wording within and across observations without dropping evidence", async () => {
+    const first = observation("first", { description: "1 à 2 ans. Expérience de 1 à 2 ans. 1-2 ans." });
+    const second = observation("second", { description: "Expérience de 1-2 ans." });
+    const extractor = new ExplicitCandidateRequirementsExtractor();
+    const evidence = [await extractor.extract(first), await extractor.extract(second)];
+    const before = structuredClone(evidence);
+    const vacancy = canonicalize([first, second], evidence);
+    expect(vacancy.experienceRequirements.status).toBe("RESOLVED");
+    expect(vacancy.experienceRequirements.value).toEqual([expect.objectContaining({ minimumYears: 1, maximumYears: 2, unit: "YEAR" })]);
+    expect(vacancy.experienceRequirements.supportingEvidenceIds).toHaveLength(evidence.flatMap(e => e.experienceRequirements).length);
+    expect(evidence).toEqual(before);
+  });
+
+  it("preserves genuinely different experience ranges as alternatives", async () => {
+    const first = observation("first", { description: "1 à 2 ans." });
+    const second = observation("second", { description: "3 à 4 ans." });
+    const extractor = new ExplicitCandidateRequirementsExtractor();
+    const vacancy = canonicalize([first, second], [await extractor.extract(first), await extractor.extract(second)]);
+    expect(vacancy.experienceRequirements.status).toBe("CONFLICTED");
+    expect(vacancy.experienceRequirements.alternatives).toHaveLength(2);
+  });
+
+  it("preserves equal experience bounds when their requirement contexts differ", () => {
+    const evidence = createExtractedVacancyEvidence({ sourceObservationId: "one", experienceRequirements: [
+      { rawText: "1-2 ans mécanique", minimumYears: 1, maximumYears: 2, unit: "YEAR", context: "mechanics", provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 1 } },
+      { rawText: "1-2 ans électricité", minimumYears: 1, maximumYears: 2, unit: "YEAR", context: "electrical", provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 1 } },
+    ] });
+    const withContexts = { ...evidence, experienceRequirements: evidence.experienceRequirements.map((item, index) => ({ ...item, context: index === 0 ? "mechanics" : "electrical" })) };
+    expect(canonicalize([observation("one")], [withContexts]).experienceRequirements.value).toHaveLength(2);
+  });
+
   it("keeps differing requirement evidence as canonical alternatives", async () => {
     const first = observation("first", { description: "English required." });
     const second = observation("second", { description: "German preferred." });

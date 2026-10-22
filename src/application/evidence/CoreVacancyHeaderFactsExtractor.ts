@@ -23,10 +23,10 @@ const TITLE_MARKER = /\b(?:h\s*\/\s*f|f\s*\/\s*h|m\s*\/\s*f|f\s*\/\s*m)\b/iu;
 export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor {
   async extract(input: VacancyEvidenceExtractionInput): Promise<ExtractedVacancyEvidence> {
     const observation = normalizeVacancyEvidenceInput(input);
-    // Randstad's labeled summary is handled by its provider extractor. Its
+    // These labeled summaries are handled by their provider extractors. A
     // numeric reference (for example 307-UST-...) is not a department/location.
     if (observation.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
-      && observation.evidenceContent.context.providerKey === "RANDSTAD") {
+      && ["RANDSTAD", "SYNERGIE", "CRIT"].includes(observation.evidenceContent.context.providerKey ?? "")) {
       return createExtractedVacancyEvidence({ sourceObservationId: observation.id });
     }
     const { vacancyText, contentOrigin } = textualEvidenceContent(input);

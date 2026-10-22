@@ -28,6 +28,17 @@ describe("ExplicitTextVacancyEvidenceExtractor", () => {
     });
   }
 
+  it("normalizes recruiting sentence introductions without a provider/name special case", async () => {
+    const result = await extractor.extract(selectedContext("Notre Agence ALPHA Paris recrute pour son client.\nAgence ALPHA Paris recrute pour son client.\nALPHA Paris recrute pour son client."));
+    expect(result.organizations.filter(o => o.role === "RECRUITER").map(o => o.value)).toEqual(["ALPHA Paris"]);
+  });
+
+  it("preserves agency-like prefixes in explicitly labeled organization names", async () => {
+    const result = await extractor.extract(selectedContext("Recruteur: Notre Agence Alpha\nEmployeur: Agence Beta"));
+    expect(result.organizations).toContainEqual(expect.objectContaining({ value: "Notre Agence Alpha", role: "RECRUITER" }));
+    expect(result.organizations).toContainEqual(expect.objectContaining({ value: "Agence Beta", role: "EMPLOYER" }));
+  });
+
   it("preserves explicit France Travail employer and contextual organization roles", async () => {
     const result = await extractor.extract(selectedContext([
       "Ingénieur Industrialisation Composants Plastiques H/F",
