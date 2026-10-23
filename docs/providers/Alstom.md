@@ -57,13 +57,72 @@ year/month/hour) can supply those fields. A missing pay period is not inferred;
 contradictory or unsupported labels remain unknown. No generic full-page salary
 or mode fallback is enabled for this provider.
 
-Organization identity comes from `Company:`, not the hostname. Contextual EMPLOYER
+Organization identity comes from `Company:` / `Entreprise:`, not the hostname. Contextual EMPLOYER
 evidence requires matching first-person company wording (`At Alstom, we ...`) and
 the equal-opportunity-employer statement, without recruiting-for-client wording.
 The contextual confidence is 0.98; it is not a human confirmation. Without that
 support the company remains displayed-only. Existing vacancy-specific human role
 decisions remain authoritative, with recommendations independently derived from
 current source evidence. No organization role is globally forced by this host.
+
+## French-language detail pages
+
+Saved observation `95822852-da45-44ac-a12d-ff77fd060e8c` belongs to canonical
+`21982106-6f24-4e11-81ab-97f40f8a986e` and already has posting ID `1440812133`.
+Its description contains the separate requisition `526342`.
+
+The actual rejection was in `alstomFacts`: the stable `job-location` and
+`job-company` elements were present, but their labels were **Lieu:** and
+**Entreprise:**. English-only `Location:` / `Company:` checks returned no values,
+rejecting the selected context. Apply links and the description boundary were
+already valid. Independently, `23 oct. 2026` did not match the old English
+three-letter-month parser; that would leave publication unknown, rather than reject
+the entire context.
+
+The same provider-local rules now accept Location/Lieu and Company/Entreprise,
+case-insensitively with normalized spacing. The explicitly labelled Date field
+accepts English month abbreviations and French abbreviated/full month names,
+including trailing abbreviation dots and accented months. Month names use an
+explicit dictionary and UTC calendar-day round-trip validation; unsupported,
+ambiguous numeric or impossible dates remain unknown. Duplicate date/field blocks
+still reject an uncertain boundary. No full-page or generic provider fallback was added.
+
+The French regression yields **Technicien de maintenance Peinture F/H**,
+**Crespin, 59, FR**, **Alstom**, and publication **2026-10-23**. The complete
+description is retained through its final equal-opportunities statement. This saved
+French description has no tables; the English fixture still verifies its complete
+table. Navigation, alerts, application controls and unrelated jobs are excluded.
+Salary, engagement and work mode remain UNKNOWN: shifts, flexibility and availability
+are not employment-type or workplace-mode labels.
+
+French contextual employer evidence requires the displayed company to be named in
+the statement that it guarantees equal opportunities and acts **en tant qu’employeur**.
+Neither translated labels nor the hostname establish that role. Explicit recruiting
+for a client blocks this direct-employer reading. The contextual role retains 0.98
+confidence, while human decisions remain authoritative and all alternative role
+actions remain available.
+
+`alstomFrenchSelectedVacancy.html` preserves the public saved vacancy shell and full
+description, omitting scripts/forms/decorative styles and surrounding it with
+adversarial UI content. English controls, every French month, invalid dates,
+localized labels, uncertain boundaries, distinct IDs, and prior employer/agency
+decisions are covered. No identity-continuity change was necessary: the existing
+posting-ID claim already points to the original French canonical. Repaired captures
+can add a new immutable observation; exact recaptures then reuse it, and changed
+content stays on that canonical without duplicating human history.
+
+For this page, restart the rebuilt backend (`npm run capture:server`) and recapture
+the Crespin detail page. Verify that the review URL still uses
+`21982106-6f24-4e11-81ab-97f40f8a986e`, then capture identically again to check the
+occurrence increment. No reconfirmation of an existing human choice is needed.
+
+French-extension verification: **211 focused tests in 4 files**, including **88
+Alstom tests**; **1,970 backend tests in 126 files** and **66 UI tests in 5 files**
+passed. Backend/UI builds, typecheck and diff check passed. Replaying the original
+stored HTML in a serialized in-memory database retained the French canonical,
+reused the repaired observation on identical capture, and preserved the original
+snapshot, human decisions and repeat-capture assignment/cluster history. The live
+database was opened read-only; no migration or live repair was performed.
 
 ## Legacy continuity and recapture
 

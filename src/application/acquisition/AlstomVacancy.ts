@@ -40,13 +40,24 @@ function hidden(html: string) {
 const byId = (html: string, id: string) => alstomElements(html, open => attr(open, "id") === id);
 const flat = (html: string) => randstadText(html).replace(/\s+/gu, " ").trim();
 function publishedDate(html: string) {
-  const match = /^Date:\s*(\d{1,2}) ([A-Za-z]{3}) (\d{4})$/u.exec(flat(html));
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  if (!match || !months.includes(match[2]!)) return undefined;
-  const iso = `${match[3]}-${String(months.indexOf(match[2]!) + 1).padStart(2, "0")}-${match[1]!.padStart(2, "0")}`;
+  // The labelled publication day is locale-aware; never use Date.parse's locale
+  // heuristics, the capture timestamp, or the microdata's time of day.
+  const match = /^Date:\s*(\d{1,2})\s+([\p{L}]+)\.?\s+(\d{4})$/iu.exec(flat(html));
+  const months: Readonly<Record<string, number>> = {
+    jan:1, janv:1, janvier:1, feb:2, fevr:2, fevrier:2,
+    mar:3, mars:3, apr:4, avr:4, avril:4, may:5, mai:5,
+    jun:6, juin:6, jul:7, juil:7, juillet:7, aug:8, aout:8,
+    sep:9, sept:9, septembre:9, oct:10, octobre:10,
+    nov:11, novembre:11, dec:12, decembre:12,
+  };
+  const token = match?.[2]?.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  const month = token === undefined ? undefined : months[token];
+  if (!match || month === undefined) return undefined;
+  const iso = `${match[3]}-${String(month).padStart(2,"0")}-${match[1]!.padStart(2,"0")}`;
   const date = new Date(`${iso}T00:00:00Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === iso ? date : undefined;
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0,10) === iso ? date : undefined;
 }
+
 export function alstomFacts(html: string) {
   const titles = byId(html, "job-title"),
     locations = byId(html, "job-location"),
@@ -58,13 +69,17 @@ export function alstomFacts(html: string) {
   if (parts.some(hidden)) return undefined;
   if (parts.some(part => /<(?:nav|aside|footer|form|input|select|button)\b/iu.test(part))) return undefined;
   const title = flat(titles[0]!),
-    location = /^Location:\s*(.+)$/u.exec(flat(locations[0]!))?.[1],
-    company = /^Company:\s*(.+)$/u.exec(flat(companies[0]!))?.[1];
+    location = /^(?:Location|Lieu)\s*:\s*(.+)$/iu.exec(flat(locations[0]!))?.[1],
+    company = /^(?:Company|Entreprise)\s*:\s*(.+)$/iu.exec(flat(companies[0]!))?.[1];
   const description = randstadText(descriptions[0]!);
   const requisitions = [...description.matchAll(/\bReq\s+ID:\s*(\d+)\b/giu)];
   if (!title || title.length > 250 || !location || !company || requisitions.length !== 1) return undefined;
   const escaped = company.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const directEmployer = new RegExp(`\\bAt ${escaped},?\\s+we\\b`, "iu").test(description) && /\b(?:we['’]re|we are|an?)\s+(?:an?\s+)?equal[- ]opportunity employer\b/iu.test(description) && !/\b(?:recruiting|hiring)\s+for\s+our\s+client\b/iu.test(description);
+  const englishEmployer = new RegExp(`\\bAt ${escaped},?\\s+we\\b`, "iu").test(description)
+    && /\b(?:we['’]re|we are|an?)\s+(?:an?\s+)?equal[- ]opportunity employer\b/iu.test(description);
+  const frenchEmployer = new RegExp(`\\b${escaped}\\s+garantit\\s+l['’]égalité des chances[^.!?\\n]{0,160}\\ben tant qu['’]employeur\\b`, "iu").test(description);
+  const clientHiring = /\b(?:recruiting|hiring)\s+for\s+our\s+client\b|\b(?:recrutons|recrute)\s+pour\s+(?:notre|le)\s+client\b/iu.test(description);
+  const directEmployer = (englishEmployer || frenchEmployer) && !clientHiring;
   return {
     title,
     location,
