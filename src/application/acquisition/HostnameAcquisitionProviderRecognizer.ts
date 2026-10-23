@@ -43,6 +43,7 @@ export class HostnameAcquisitionProviderRecognizer implements AcquisitionProvide
       if (/^(?:www\.)?actualgroup\.com$/u.test(hostname)) return sourceName === "actualgroup.com" ? "ACTUAL" : undefined;
       if (/^(?:www\.)?startpeople\.fr$/u.test(hostname)) return sourceName === "startpeople.fr" ? "START_PEOPLE" : undefined;
       if (hostname === "mon-espace.proman-emploi.fr") return sourceName === hostname ? "PROMAN" : undefined;
+      if (/^(?:www\.)?apec\.fr$/u.test(hostname)) return sourceName === "apec.fr" ? "APEC" : undefined;
       if (/^(?:fr\.|www\.)?gigroup\.com$/u.test(hostname)) return sourceName === "gigroup.com" ? "GI_GROUP" : undefined;
       if (hostname !== sourceName) return undefined;
       return providersByHostname[hostname];

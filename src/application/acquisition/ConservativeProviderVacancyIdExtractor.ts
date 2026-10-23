@@ -1,5 +1,6 @@
 import { isKellyWorkdaySource, kellyVacancyId } from "./KellyWorkdayVacancy.js";
 import { giGroupVacancyId } from "./GiGroupVacancy.js";
+import { apecVacancyId } from "./ApecVacancy.js";
 import { promanVacancyId } from "./PromanVacancy.js";
 import { startPeopleVacancyId } from "./StartPeopleVacancy.js";
 import { actualVacancyId } from "./ActualVacancy.js";
@@ -26,6 +27,7 @@ const rules: Readonly<Record<string, ExtractionRule>> = {
   "synergie.fr": (url) => synergieVacancyId(url.href),
   "crit-job.com": (url) => critVacancyId(url.href),
   "gigroup.com": (url) => giGroupVacancyId(url.href),
+  "apec.fr": (url) => apecVacancyId(url.href),
   "mon-espace.proman-emploi.fr": (url) => promanVacancyId(url.href),
   "startpeople.fr": (url) => startPeopleVacancyId(url.href),
   "actualgroup.com": (url) => actualVacancyId(url.href),

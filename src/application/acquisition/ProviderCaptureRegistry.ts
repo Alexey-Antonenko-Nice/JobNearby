@@ -1,4 +1,5 @@
 import { KellySelectedVacancyContextLocator, kellyFacts } from "./KellyWorkdayVacancy.js";
+import { ApecSelectedVacancyContextLocator, apecFacts, apecIdentity, apecPublishedAt } from "./ApecVacancy.js";
 import { GiGroupSelectedVacancyContextLocator, giGroupFacts, giGroupPublishedAt } from "./GiGroupVacancy.js";
 import { PromanSelectedVacancyContextLocator, promanFacts, promanPublishedAt } from "./PromanVacancy.js";
 import { StartPeopleSelectedVacancyContextLocator, startPeopleFacts, startPeoplePublishedAt } from "./StartPeopleVacancy.js";
@@ -61,6 +62,7 @@ export class ProviderCaptureRegistry {
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
     TALENT: new TalentSelectedVacancyContextLocator(),
     KELLY_WORKDAY: new KellySelectedVacancyContextLocator(),
+    APEC: new ApecSelectedVacancyContextLocator(),
     GI_GROUP: new GiGroupSelectedVacancyContextLocator(),
     PROMAN: new PromanSelectedVacancyContextLocator(),
     START_PEOPLE: new StartPeopleSelectedVacancyContextLocator(),
@@ -102,7 +104,14 @@ export class ProviderCaptureRegistry {
     const giGroup = providerKey === "GI_GROUP" && context?.html ? giGroupFacts(context.html) : undefined;
     const giGroupDate = context?.html && providerKey === "GI_GROUP" ? giGroupPublishedAt(context.html) : undefined;
     const kelly = providerKey === "KELLY_WORKDAY" && context?.html ? kellyFacts(context.html) : undefined;
-    const structuredFields = kelly ? { title: kelly.title, locationText: kelly.values.locations! }
+    const apec = providerKey === "APEC" && context?.html ? apecFacts(context.html) : undefined;
+    const apecDate = providerKey === "APEC" ? apecPublishedAt(context) : undefined;
+    // Conflicting identifiers on an APEC page are never published as an exact identity.
+    const apecConflict = providerKey === "APEC" && input.html !== undefined && externalId !== undefined
+      && apecIdentity({ sourceUrl: input.sourceUrl, html: input.html, externalId }).status === "CONFLICT";
+    const structuredFields = apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
+        ...(apec.contract ? { contractText: apec.contract } : {}), ...(apec.salaryText ? { salaryText: apec.salaryText } : {}), ...(apecDate ? { publishedAt: apecDate } : {}) }
+      : kelly ? { title: kelly.title, locationText: kelly.values.locations! }
       : giGroup ? { title: giGroup.title, locationText: giGroup.location, ...(giGroupDate ? { publishedAt: giGroupDate } : {}) }
       : proman ? { title: proman.title, locationText: proman.location, ...(promanDate ? { publishedAt: promanDate } : {}) }
       : startPeople ? { title: startPeople.title, locationText: startPeople.values["Localisation"]!, ...(startPeopleDate ? { publishedAt: startPeopleDate } : {}) }
@@ -124,11 +133,11 @@ export class ProviderCaptureRegistry {
       : providerKey !== "KELLY_WORKDAY" && input.html !== undefined && isWorkdaySource(input.sourceName, input.sourceUrl)
       ? extractWorkdayStructuredFields(input.html, input.sourceUrl)
       : undefined;
-    const selectedExternalId = context?.providerExternalId ?? externalId;
+    const selectedExternalId = apecConflict ? undefined : context?.providerExternalId ?? externalId;
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "APEC" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),

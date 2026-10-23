@@ -146,6 +146,14 @@ export class SqliteSourceObservationRepository
     return rows.map(mapRowToObservation);
   }
 
+  async findUnidentifiedBySourceUrlFragment(sourceName: string, fragment: string): Promise<readonly SourceObservation[]> {
+    const rows = this.db.prepare(`
+      SELECT * FROM source_observations
+      WHERE source_name = ? AND external_id IS NULL AND instr(source_url, ?) > 0 ORDER BY id
+    `).all(sourceName, fragment) as SourceObservationRow[];
+    return rows.map(mapRowToObservation);
+  }
+
   async countCaptureOccurrences(ids: readonly SourceObservationId[]): Promise<number> {
     if (ids.length === 0) return 0;
     const row = this.db.prepare(`

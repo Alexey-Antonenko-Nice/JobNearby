@@ -32,6 +32,12 @@ export class InMemorySourceObservationRepository
     });
   }
 
+  async findUnidentifiedBySourceUrlFragment(sourceName: string, fragment: string): Promise<readonly SourceObservation[]> {
+    return [...this.observations.values()].filter((candidate) =>
+      candidate.source.sourceName === sourceName && candidate.source.externalId === undefined
+      && (candidate.source.sourceUrl ?? "").includes(fragment));
+  }
+
   async findById(
     id: SourceObservationId,
   ): Promise<SourceObservation | null> {
