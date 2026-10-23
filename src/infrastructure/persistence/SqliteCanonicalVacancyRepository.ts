@@ -1,3 +1,4 @@
+import { EMPLOYER_IDENTITY_ALGORITHM } from "../../domain/user/EmployerIdentityReview.js";
 import type Database from "better-sqlite3";
 
 import {
@@ -111,6 +112,19 @@ export class SqliteCanonicalVacancyRepository
         validated.id,
       );
       if (!sameSet(claimedObservationIds, validated.sourceObservationIds)) {
+        throw new CanonicalVacancyStaleProjectionError(validated.id);
+      }
+      // An in-flight capture must not restore a pointer computed before an explicit
+      // identity selection. Retrying reloads the effective memberships.
+      const selectedIdentities = this.db.prepare(`
+        SELECT DISTINCT a.employer_cluster_id AS id FROM observation_cluster_assignments a
+        JOIN canonical_vacancy_source_observations m ON m.source_observation_id=a.source_observation_id
+        WHERE m.canonical_vacancy_id=? AND a.superseded_at IS NULL
+          AND a.status='USER_CONFIRMED' AND a.algorithm=?
+      `).all(validated.id, EMPLOYER_IDENTITY_ALGORITHM) as {id:string}[];
+      if (selectedIdentities.length && (selectedIdentities.length !== 1 ||
+        !validated.organizationRelationships.some(r => r.role === "EMPLOYER" && r.employerClusterId === selectedIdentities[0]!.id) ||
+        validated.organizationRelationships.some(r => r.role === "EMPLOYER" && r.employerClusterId && r.employerClusterId !== selectedIdentities[0]!.id))) {
         throw new CanonicalVacancyStaleProjectionError(validated.id);
       }
       const projectionExists = this.db.prepare(`

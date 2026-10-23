@@ -50,3 +50,11 @@ Coverage includes Kelly/Crit recommendations and overrides, all alternative acti
 selected-vacancy boundaries, history precedence, coexistence, source immutability,
 recapture continuity, duplicate requests, concurrent/stale decisions, transactional
 rollback, HTTP validation and additive migration.
+
+## Employer identity is a separate decision
+
+Confirming EMPLOYER remains vacancy-specific. To explicitly reuse a prior employer
+identity, use the separate [Employer identity workflow](EmployerIdentitySelection.md).
+It remains available after role confirmation and shows prior vacancies/locations.
+Names and careers domains are advisory. Identity selection changes this vacancy's
+assignments atomically, preserves role history, and never merges employer clusters.

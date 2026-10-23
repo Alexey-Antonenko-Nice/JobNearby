@@ -1,3 +1,5 @@
+import { decideEmployerIdentity, searchEmployerIdentityCandidates } from "./employerIdentityReview.js";
+import type { EmployerIdentityDecisionInput, EmployerIdentityDecisionStore } from "../../domain/user/EmployerIdentityReview.js";
 import { decideVacancyOrganizationRole, type OrganizationRoleDecisionInput } from "./decideVacancyOrganizationRole.js";
 import type { VacancyOrganizationRoleDecisionRepository } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { confirmVacancyRecruitingAgency, getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
@@ -26,6 +28,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly employerIdentityDecisionStore?: EmployerIdentityDecisionStore;
   readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
   readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
   readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
@@ -46,6 +49,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.employerIdentityDecisionStore ? { employerIdentityDecisionStore: dependencies.employerIdentityDecisionStore } : {}),
     ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository } : {}),
     ...(dependencies.agencyMemoryRepository ? { agencyMemoryRepository: dependencies.agencyMemoryRepository } : {}),
     ...(dependencies.publicationCampaignContextSource ? { publicationCampaignContextSource: dependencies.publicationCampaignContextSource } : {}),
@@ -58,6 +62,15 @@ export function createVacancyReviewWorkflow(
     ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
   return {
+    searchEmployerIdentities: async (input: { readonly canonicalVacancyId: string; readonly query: string }) => {
+      if (!dependencies.organizationRoleDecisionRepository) throw Error("Employer identity review is unavailable.");
+      return searchEmployerIdentityCandidates(input.canonicalVacancyId, input.query, {...dependencies, organizationRoleDecisionRepository:dependencies.organizationRoleDecisionRepository});
+    },
+    decideEmployerIdentity: async (input: EmployerIdentityDecisionInput) => {
+      if (!dependencies.employerIdentityDecisionStore || !dependencies.organizationRoleDecisionRepository) throw Error("Employer identity review is unavailable.");
+      await decideEmployerIdentity(input, {...dependencies, employerIdentityDecisionStore:dependencies.employerIdentityDecisionStore, organizationRoleDecisionRepository:dependencies.organizationRoleDecisionRepository});
+      return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
+    },
     decideVacancyOrganizationRole: async (input: OrganizationRoleDecisionInput) => {
       if (!dependencies.organizationRoleDecisionRepository) throw new Error("Organization role review is unavailable.");
       await decideVacancyOrganizationRole(input, { ...dependencies, organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository });

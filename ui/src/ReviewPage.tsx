@@ -1,3 +1,4 @@
+import { EmployerIdentitySection } from "./EmployerIdentitySection";
 import { OrganizationRoleSection } from "./OrganizationRoleSection";
 import { RecruitingAgencySection } from "./RecruitingAgencySection";
 import { PublicationCampaignContextSection } from "./PublicationCampaignContextSection";
@@ -92,6 +93,7 @@ export function ReviewPage(): React.JSX.Element {
     {review.vacancyContext && <><VacancyContextSection context={review.vacancyContext} /><PublicationCampaignContextSection context={review.vacancyContext} /></>}
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
+    <EmployerIdentitySection review={review} onConfirmed={setReview} disabled={pending} />
     {review.employerHistory ? <EmployerHistorySection history={review.employerHistory} context={review.employerActionContext} organizations={review.organizations} /> :
       <section><h2>Employer memory</h2>{review.employer.employerClusterId !== null && (review.employer.status === "RESOLVED" || review.employer.status === "PROBABLY_RESOLVED")
         ? <Details values={[["Employer status", review.employer.status], ["Previous vacancies from this employer", review.employer.previousVacancyCount],

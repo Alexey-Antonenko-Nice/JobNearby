@@ -1,3 +1,4 @@
+import { SqliteEmployerIdentityDecisionStore } from "../persistence/SqliteEmployerIdentityDecisionStore.js";
 import { SqliteVacancyOrganizationRoleDecisionRepository } from "../persistence/SqliteVacancyOrganizationRoleDecisionRepository.js";
 import { SqliteConfirmedOrganizationRoleRepository } from "../persistence/SqliteConfirmedOrganizationRoleRepository.js";
 import { SqlitePublicationCampaignContextSource } from "../persistence/SqlitePublicationCampaignContextSource.js";
@@ -23,6 +24,7 @@ const runtime = createCaptureProcessingRuntime(database, {
   },
 });
 const reviewWorkflow = createVacancyReviewWorkflow({
+  employerIdentityDecisionStore: new SqliteEmployerIdentityDecisionStore(database),
   organizationRoleDecisionRepository: new SqliteVacancyOrganizationRoleDecisionRepository(database),
   agencyMemoryRepository: new SqliteConfirmedOrganizationRoleRepository(database),
   publicationCampaignContextSource: new SqlitePublicationCampaignContextSource(database),
@@ -37,6 +39,8 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
 const server = createBrowserCaptureServer({
+  decideEmployerIdentity: reviewWorkflow.decideEmployerIdentity,
+  searchEmployerIdentities: reviewWorkflow.searchEmployerIdentities,
   decideVacancyOrganizationRole: reviewWorkflow.decideVacancyOrganizationRole,
   captureAndProcessBrowserVacancy: runtime.captureAndProcessBrowserVacancy,
   getVacancyInbox: reviewWorkflow.getVacancyInbox,

@@ -10,6 +10,8 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly decideEmployerIdentity?: VacancyReviewWorkflow["decideEmployerIdentity"];
+  readonly searchEmployerIdentities?: VacancyReviewWorkflow["searchEmployerIdentities"];
   readonly decideVacancyOrganizationRole?: VacancyReviewWorkflow["decideVacancyOrganizationRole"];
   readonly captureAndProcessBrowserVacancy: (
     payload: BrowserCapturePayload,
@@ -76,6 +78,22 @@ export function createBrowserCaptureServer(
         const body = await readJsonBody(request, "Employer memory review");
         if (!isRecord(body) || typeof body.employerClusterId !== "string" || !body.employerClusterId.trim() || !["CONFIRM", "REJECT"].includes(String(body.decision)) || Object.keys(body).some((key) => !["employerClusterId", "decision"].includes(key))) throw new InvalidRequestError("Employer memory review payload is invalid.");
         sendJson(response, 200, { review: await dependencies.decideEmployerMemoryReview({ canonicalVacancyId: decodePathId(memoryReviewMatch[1]!), employerClusterId: body.employerClusterId, decision: body.decision as "CONFIRM" | "REJECT" }) });
+        return;
+      }
+      const identitySearchMatch = /^\/vacancies\/([^/]+)\/employer-identity-search$/u.exec(path);
+      if (request.method === "GET" && identitySearchMatch && dependencies.searchEmployerIdentities) {
+        operation = "review";
+        const query = new URL(request.url ?? "/", "http://localhost").searchParams.get("q") ?? "";
+        if (query.trim().length < 2 || query.length > 200) throw new InvalidRequestError("Enter at least two characters to search employer identities.");
+        sendJson(response, 200, { employerIdentitySearch: await dependencies.searchEmployerIdentities({ canonicalVacancyId: decodePathId(identitySearchMatch[1]!), query }) });
+        return;
+      }
+      const identityMatch = /^\/vacancies\/([^/]+)\/employer-identity-decisions$/u.exec(path);
+      if (request.method === "POST" && identityMatch && dependencies.decideEmployerIdentity) {
+        operation = "review";
+        const body = await readJsonBody(request, "Employer identity decision");
+        if (!isRecord(body) || typeof body.requestId !== "string" || !body.requestId.trim() || body.requestId.length > 200 || typeof body.employerClusterId !== "string" || !body.employerClusterId.trim() || typeof body.candidateToken !== "string" || !/^[a-f0-9]{64}$/u.test(body.candidateToken) || !["USE_EXISTING","KEEP_SEPARATE"].includes(String(body.decision)) || Object.keys(body).some(key => !["requestId","employerClusterId","candidateToken","decision"].includes(key))) throw new InvalidRequestError("Employer identity decision payload is invalid.");
+        sendJson(response, 201, {review: await dependencies.decideEmployerIdentity({canonicalVacancyId:decodePathId(identityMatch[1]!),requestId:body.requestId,employerClusterId:body.employerClusterId,candidateToken:body.candidateToken,decision:body.decision as "USE_EXISTING"|"KEEP_SEPARATE"})});
         return;
       }
       const organizationRoleMatch = /^\/vacancies\/([^/]+)\/organization-role-decisions$/u.exec(path);
@@ -220,6 +238,7 @@ function errorStatus(
   error: unknown,
 ): number {
   if (/^CanonicalVacancy ".+" does not exist\.$/u.test(message)) return 404;
+  if (message.startsWith("Employer identity review is stale")) return 409;
   if (message.startsWith("Organization role review is stale") || message === "Organization role override requires confirmation." || message === "Organization role request ID was already used." || message === "Use the vacancy-specific organization role actions.") return 409;
   if (operation === "capture") {
     return message.startsWith("Browser capture could not be persisted:") ? 500 : 400;
