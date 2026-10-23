@@ -23,6 +23,8 @@ import type { SourceObservation } from "../../src/domain/capture/SourceObservati
 import { describeEmployerProjection } from "../../src/infrastructure/database/EmployerProjectionDiagnostic.js";
 const url = "https://jobsearch.alstom.com/job/Charleroi-Software-Developer/1440956933/";
 const html = readFileSync("tests/fixtures/alstomSelectedVacancy.html", "utf8");
+const frenchHtml = readFileSync("tests/fixtures/alstomFrenchSelectedVacancy.html", "utf8");
+const frenchUrl = "https://jobsearch.alstom.com/job/Crespin-Technicien-de-maintenance-Peinture-FH-59/1440812133/";
 const capturedAt = new Date("2026-10-24T10:00:00Z");
 const payload = {
   pageUrl: url,
@@ -42,11 +44,11 @@ function capture(content = html, pageUrl = url) {
     observation: new DeterministicAcquisitionCaptureMapper().toSourceObservation(acquisition, "observation")
   };
 }
-async function project(content = html) {
+async function project(content = html, pageUrl = url) {
   const {
     acquisition,
     observation
-  } = capture(content);
+  } = capture(content, pageUrl);
   const evidence = await createVacancyEvidenceExtractor().extract(observation);
   const canonical = new ExistingPipelineCanonicalVacancyAdapter(new DeterministicCanonicalVacancyCanonicalizer()).canonicalize({
     canonicalVacancyId: "canonical",
@@ -66,6 +68,73 @@ async function project(content = html) {
   };
 }
 describe("bounded Alstom careers capture", () => {
+  it("captures the saved French page with its localized labels/date and full description", async () => {
+    const { acquisition, observation, evidence, canonical } = await project(frenchHtml, frenchUrl);
+    expect(acquisition.contexts?.[0]).toMatchObject({providerKey:"ALSTOM",providerExternalId:"1440812133",metadata:{requisitionId:"526342"}});
+    expect(canonical.role.value?.title).toBe("Technicien de maintenance Peinture F/H");
+    expect(canonical.location.value?.rawText).toBe("Crespin, 59, FR");
+    expect(observation.publishedAt?.toISOString()).toBe("2026-10-23T00:00:00.000Z");
+    expect(acquisition.contexts?.[0]?.text).toContain("Vous réalisez la maintenance curative");
+    expect(acquisition.contexts?.[0]?.text).toContain("de toute autre caractéristique protégée par la loi locale");
+    expect(acquisition.contexts?.[0]?.html).not.toMatch(/<nav|<aside|<form|<input|Créer une alerte|999999|Autre poste/iu);
+    expect(evidence.externalIdentifiers).toContainEqual(expect.objectContaining({identifierType:"URL_POSTING_ID",value:"1440812133"}));
+    expect(evidence.externalIdentifiers).toContainEqual(expect.objectContaining({identifierType:"REQUISITION_ID",value:"526342"}));
+    expect(evidence.organizations).toContainEqual(expect.objectContaining({value:"Alstom",role:"DISPLAYED_COMPANY"}));
+    expect(evidence.organizations).toContainEqual(expect.objectContaining({value:"Alstom",role:"EMPLOYER",provenance:expect.objectContaining({confidence:.98})}));
+    for (const field of [canonical.engagement,canonical.compensation,canonical.workMode]) expect(field.status).toBe("UNKNOWN");
+  });
+  it.each([
+    frenchHtml.replace("en tant qu’employeur", "en tant que groupe"),
+    frenchHtml.replace('Entreprise: </strong>\n                <span>Alstom</span>','Entreprise: </strong>\n                <span>Autre entreprise</span>'),
+    frenchHtml.replace("Req ID:", "Nous recrutons pour notre client. Req ID:"),
+  ])("requires current French employer evidence rather than branding or client responsibilities", async content => {
+    const {evidence}=await project(content,frenchUrl);
+    expect(evidence.organizations.some(o=>o.role==="EMPLOYER")).toBe(false);
+  });
+  it.each([
+    ["23 oct. 2026","2026-10-23"], ["23 OCT. 2026","2026-10-23"],
+    ["23 octobre 2026","2026-10-23"], ["23 Oct 2026","2026-10-23"],
+    ["29 févr. 2024","2024-02-29"], ["1 août 2026","2026-08-01"],
+    ["2 déc. 2026","2026-12-02"], ["3 janv. 2026","2026-01-03"],
+    ["4 avr. 2026","2026-04-04"], ["5 mai 2026","2026-05-05"],
+    ["6 juin 2026","2026-06-06"], ["7 juil. 2026","2026-07-07"],
+    ["8 sept. 2026","2026-09-08"], ["9 nov. 2026","2026-11-09"],
+    ["10 mars 2026","2026-03-10"],
+  ])("normalizes the selected labelled date %s", async (value, iso) => {
+    const {observation,acquisition}=await project(frenchHtml.replace("23 oct. 2026",value!), frenchUrl);
+    expect(acquisition.contexts).toHaveLength(1);
+    expect(observation.publishedAt?.toISOString()).toBe(iso+"T00:00:00.000Z");
+  });
+  it.each(["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"])("retains the English month %s",async month=>{
+    const index=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].indexOf(month)+1;
+    expect((await project(html.replace("23 Oct 2026",`23 ${month} 2026`))).observation.publishedAt?.toISOString()).toBe(`2026-${String(index).padStart(2,"0")}-23T00:00:00.000Z`);
+  });
+  it("normalizes French casing and non-breaking spaces without dropping label validation",async()=>{
+    const {observation,canonical}=await project(frenchHtml.replace("Lieu:","LIEU&nbsp;:").replace("Entreprise:","ENTREPRISE&nbsp;:").replace("23 oct. 2026","23&nbsp;oct.&nbsp;2026"),frenchUrl);
+    expect(observation.publishedAt?.toISOString()).toBe("2026-10-23T00:00:00.000Z");
+    expect(canonical.location.value?.rawText).toBe("Crespin, 59, FR");
+  });
+  it.each(["31 févr. 2026","29 févr. 2025","32 oct. 2026","0 oct. 2026","23 inconnu 2026","23/10/2026"])("does not invent a date from unsupported/invalid French text: %s", async value => {
+    const {observation,acquisition}=await project(frenchHtml.replace("23 oct. 2026",value),frenchUrl);
+    expect(acquisition.contexts).toHaveLength(1);expect(observation.publishedAt).toBeUndefined();
+  });
+  it.each([
+    frenchHtml.replace("Lieu:","Adresse inconnue:"),
+    frenchHtml.replace("Entreprise:","Libellé inconnu:"),
+    frenchHtml.replace('id="job-location"','id="unknown-location"'),
+    frenchHtml.replace('class="jobdescription"','class="unknown-description"'),
+    frenchHtml.replace('class="jobDisplayShell"','class="jobDisplayShell" hidden'),
+    frenchHtml.replace('id="job-title"','id="job-title" style="display:none"'),
+    frenchHtml.replace('id="job-date"','id="job-date">Date: 1 janv. 2020</p><p id="job-date"'),
+    frenchHtml.replace('id="job-company"','id="job-company">Entreprise: Autre</p><p id="job-company"'),
+    frenchHtml.replace('/talentcommunity/apply/1440812133/','/talentcommunity/apply/526342/'),
+    frenchHtml.replace('Req ID:','Req ID: 123. Req ID:'),
+    frenchHtml.replace('class="jobdescription"','class="jobdescription"><nav>Other jobs</nav><span'),
+  ])("retains strict boundaries and same-type identity checks on localized pages",async content=>{
+    const {acquisition,evidence}=await project(content,frenchUrl);
+    expect(acquisition.externalId).toBe("1440812133");expect(acquisition.contexts).toBeUndefined();
+    expect(evidence.vacancyTitles).toEqual([]);expect(evidence.organizations).toEqual([]);
+  });
   it.each([url, url.slice(0, -1), url + "?utm_source=control#detail"])("validates the detail route: %s", value => expect(alstomPostingId(value)).toBe("1440956933"));
   it.each([url.replace("jobsearch.alstom.com", "alstom.com"), url.replace("jobsearch.alstom.com", "jobsearch.alstom.com.evil.test"), url.replace("/job/", "/search/"), url.replace("1440956933", "not-an-id"), "https://jobsearch.alstom.com/search/?q=1440956933", "javascript:1440956933"])("rejects unsupported routes: %s", value => expect(alstomPostingId(value)).toBeUndefined());
   it("captures the header and complete table description while excluding surrounding modules", async () => {
@@ -227,13 +296,14 @@ function fixture() {
   };
   const workflow = createVacancyReviewWorkflow(deps),
     runtime = createCaptureProcessingRuntime(db);
-  async function legacy(id = "de0183ea-1779-412c-a581-281272772f27", canonicalId = "ac370925-2f6f-4f7f-9bef-bf3dcec97235", content = html, pageUrl = url) {
+  async function legacy(id = "de0183ea-1779-412c-a581-281272772f27", canonicalId = "ac370925-2f6f-4f7f-9bef-bf3dcec97235", content = html, pageUrl = url, externalId?: string) {
     const observation: SourceObservation = {
       id,
       source: {
         sourceType: "BROWSER_CAPTURE",
         sourceName: "jobsearch.alstom.com",
-        sourceUrl: pageUrl
+        sourceUrl: pageUrl,
+        ...(externalId ? {externalId} : {})
       },
       observedAt: new Date("2026-10-23T20:08:42Z"),
       rawContent: payload.visibleText,
@@ -282,6 +352,42 @@ function fixture() {
   };
 }
 describe("Alstom legacy continuity and recapture", () => {
+  it.each(["EMPLOYER","STAFFING_AGENCY"] as const)("preserves the identified French canonical and prior human %s choice across repaired/exact/changed captures",async role=>{
+    const f=fixture();try{
+      const {observation,canonicalId}=await f.legacy("95822852-da45-44ac-a12d-ff77fd060e8c","21982106-6f24-4e11-81ab-97f40f8a986e",frenchHtml,frenchUrl,"1440812133");
+      await f.workflow.recordVacancyReviewAction({canonicalVacancyId:canonicalId,type:"REVIEWED"});
+      const card=(await f.workflow.getVacancyReview(canonicalId)).organizationRoleReview![0]!;
+      const confirmed=await f.workflow.decideVacancyOrganizationRole({canonicalVacancyId:canonicalId,identityKey:card.identityKey,requestId:"french-human-role",role,candidateToken:card.candidateToken,acknowledgeContradiction:true});
+      const decisions=f.db.prepare("SELECT * FROM vacancy_organization_role_decisions ORDER BY rowid").all();
+      const original=await f.deps.sourceObservationRepository.findById(observation.id);
+      const p={...payload,html:frenchHtml,pageUrl:frenchUrl,pageTitle:"Technicien de maintenance Peinture F/H"};
+      const repaired=await f.runtime.captureAndProcessBrowserVacancy(p);
+      expect(repaired.processing).toMatchObject({status:"PROCESSED",canonicalVacancyId:canonicalId,observationAdded:true});
+      expect(repaired.capture.observationId).not.toBe(observation.id);
+      const selected=await f.deps.sourceObservationRepository.findById(repaired.capture.observationId);
+      expect(selected?.publishedAt?.toISOString()).toBe("2026-10-23T00:00:00.000Z");
+      expect(selected?.metadata.acquisition).toMatchObject({contexts:[expect.objectContaining({providerExternalId:"1440812133",metadata:expect.objectContaining({requisitionId:"526342"})})]});
+      const assignments=f.db.prepare("SELECT * FROM observation_cluster_assignments ORDER BY rowid").all();
+      const clusters=f.db.prepare("SELECT * FROM employer_clusters ORDER BY rowid").all();
+      const repeated=await f.runtime.captureAndProcessBrowserVacancy({...p,capturedAt:new Date("2026-10-25")});
+      expect(repeated.capture.observationId).toBe(repaired.capture.observationId);
+      expect(repeated.processing).toMatchObject({canonicalVacancyId:canonicalId,observationAdded:false});
+      expect(await f.deps.sourceObservationRepository.countCaptureOccurrences([repaired.capture.observationId])).toBe(2);
+      expect(f.db.prepare("SELECT * FROM observation_cluster_assignments ORDER BY rowid").all()).toEqual(assignments);
+      expect(f.db.prepare("SELECT * FROM employer_clusters ORDER BY rowid").all()).toEqual(clusters);
+      const changed=await f.runtime.captureAndProcessBrowserVacancy({...p,html:frenchHtml.replace("526342</span>","526342</span> Mise à jour du descriptif."),capturedAt:new Date("2026-10-26")});
+      expect(changed.capture.observationId).not.toBe(repaired.capture.observationId);
+      expect(changed.processing).toMatchObject({canonicalVacancyId:canonicalId,observationAdded:true});
+      const view=await f.workflow.getVacancyReview(canonicalId);
+      expect(view.organizationRoleReview![0]).toMatchObject({name:"Alstom",recommendedRole:"EMPLOYER",confirmedRole:role});
+      expect(view.organizationRoleReview![0]?.actions.map(a=>a.role)).toEqual(["EMPLOYER","STAFFING_AGENCY","RECRUITER","CLIENT","CONSULTANCY"]);
+      expect(view.employer.employerClusterId).toBe(confirmed.employer.employerClusterId);
+      expect(view.user.currentState).toBe("REVIEWED");
+      expect(f.db.prepare("SELECT * FROM vacancy_organization_role_decisions ORDER BY rowid").all()).toEqual(decisions);
+      expect(await f.deps.sourceObservationRepository.findById(observation.id)).toEqual(original);
+      expect(await f.deps.canonicalVacancyRepository.findAll()).toHaveLength(1);
+    }finally{f.db.close();}
+  });
   it("distinguishes a stale stored employer projection from the human assignment and safely refreshes it on exact recapture", async () => {
     const f = fixture();
     try {
