@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { describeEmployerProjection } from "./EmployerProjectionDiagnostic.js";
 
 import { createVacancyEvidenceExtractor } from "../../application/evidence/createVacancyEvidenceExtractor.js";
 import type { CompositeVacancyEvidenceExtractor } from "../../application/evidence/CompositeVacancyEvidenceExtractor.js";
@@ -270,6 +271,9 @@ async function reportObservation(
         confidence: field.confidence, alternatives: parseJson(field.alternatives),
       })),
       employerRelationships: organizations.filter(({ role }) => role === "EMPLOYER"),
+      employerProjection: describeEmployerProjection(organizations, row.employer_cluster_id === null ? null : {
+        clusterId: row.employer_cluster_id, status: row.assignment_status,
+      }),
       organizationRelationships: organizations,
       ambiguitiesOrConflicts: fields.filter(({ status }) =>
         status === "AMBIGUOUS" || status === "CONFLICTED",

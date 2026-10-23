@@ -1,3 +1,4 @@
+import { AlstomSelectedVacancyContextLocator, alstomFacts } from "./AlstomVacancy.js";
 import { KellySelectedVacancyContextLocator, kellyFacts } from "./KellyWorkdayVacancy.js";
 import { ApecSelectedVacancyContextLocator, apecFacts, apecIdentity, apecPublishedAt } from "./ApecVacancy.js";
 import { GiGroupSelectedVacancyContextLocator, giGroupFacts, giGroupPublishedAt } from "./GiGroupVacancy.js";
@@ -62,6 +63,7 @@ export class ProviderCaptureRegistry {
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
     TALENT: new TalentSelectedVacancyContextLocator(),
     KELLY_WORKDAY: new KellySelectedVacancyContextLocator(),
+    ALSTOM: new AlstomSelectedVacancyContextLocator(),
     APEC: new ApecSelectedVacancyContextLocator(),
     GI_GROUP: new GiGroupSelectedVacancyContextLocator(),
     PROMAN: new PromanSelectedVacancyContextLocator(),
@@ -109,7 +111,8 @@ export class ProviderCaptureRegistry {
     // Conflicting identifiers on an APEC page are never published as an exact identity.
     const apecConflict = providerKey === "APEC" && input.html !== undefined && externalId !== undefined
       && apecIdentity({ sourceUrl: input.sourceUrl, html: input.html, externalId }).status === "CONFLICT";
-    const structuredFields = apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
+    const alstom = providerKey === "ALSTOM" && context?.html ? alstomFacts(context.html) : undefined;
+    const structuredFields = alstom ? { title: alstom.title, displayedCompanyName: alstom.company, locationText: alstom.location, ...(alstom.publishedAt ? { publishedAt: alstom.publishedAt } : {}) } : apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
         ...(apec.contract ? { contractText: apec.contract } : {}), ...(apec.salaryText ? { salaryText: apec.salaryText } : {}), ...(apecDate ? { publishedAt: apecDate } : {}) }
       : kelly ? { title: kelly.title, locationText: kelly.values.locations! }
       : giGroup ? { title: giGroup.title, locationText: giGroup.location, ...(giGroupDate ? { publishedAt: giGroupDate } : {}) }
@@ -137,7 +140,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "APEC" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "APEC" || providerKey === "ALSTOM" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),
