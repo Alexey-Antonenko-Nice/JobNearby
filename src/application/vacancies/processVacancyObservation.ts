@@ -1,3 +1,4 @@
+import { EMPLOYER_IDENTITY_ALGORITHM } from "../../domain/user/EmployerIdentityReview.js";
 import { resolveLegacyAlstomContinuity } from "./resolveLegacyAlstomContinuity.js";
 import { randomUUID } from "node:crypto";
 import { scopeProviderVacancyEvidence } from "../evidence/scopeProviderVacancyEvidence.js";
@@ -181,6 +182,7 @@ export async function processVacancyObservation(
           requestedEvidenceInput,
           establishedEmployerCluster,
           dependencies.employerRecognition,
+          (await Promise.all(basis.observationIds.filter(id => id !== sourceObservationId).map(id => dependencies.employerRecognition.assignmentRepository.findByObservationId(id)))).flat().some(a => a.algorithm === EMPLOYER_IDENTITY_ALGORITHM),
         );
       const employerCluster = await resolveCanonicalEmployerCluster(
         basis.observationIds,
@@ -257,7 +259,12 @@ async function processEmployerObservationWithCanonicalContinuity(
   observation: VacancyEvidenceExtractionInput,
   establishedEmployerCluster: EmployerCluster,
   dependencies: ProcessObservationDependencies,
+  explicitIdentityChoice = false,
 ): Promise<ProcessObservationResult> {
+  if (explicitIdentityChoice) {
+    const assignment = await recordCanonicalEmployerContinuity(observation.id, establishedEmployerCluster, dependencies, true);
+    return {outcome:"MATCHED_EXISTING_CLUSTER",employerCluster:establishedEmployerCluster,assignment};
+  }
   const evaluation = await evaluateObservationEmployerCluster(
     observation,
     dependencies,
@@ -297,6 +304,7 @@ async function recordCanonicalEmployerContinuity(
   sourceObservationId: SourceObservationId,
   employerCluster: EmployerCluster,
   dependencies: ProcessObservationDependencies,
+  explicitIdentityChoice = false,
 ) {
   const existing = await dependencies.assignmentRepository
     .findEffectiveByObservationId(sourceObservationId);
@@ -318,8 +326,9 @@ async function recordCanonicalEmployerContinuity(
         status: "ACCEPTED",
         algorithm: EMPLOYER_CONTINUITY_ALGORITHM,
         algorithmVersion: EMPLOYER_CONTINUITY_ALGORITHM_VERSION,
-        explanation:
-          "Employer membership inherited from canonical vacancy history after no evidence-based match.",
+        explanation: explicitIdentityChoice
+          ? "Employer membership inherited from this vacancy's explicit employer identity choice."
+          : "Employer membership inherited from canonical vacancy history after no evidence-based match.",
       },
       {
         repository: dependencies.assignmentRepository,

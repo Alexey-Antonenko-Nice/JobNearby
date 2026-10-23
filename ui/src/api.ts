@@ -89,6 +89,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly employerIdentityReview?: import("../../src/domain/user/EmployerIdentityReview").EmployerIdentityReview | null;
   readonly organizationRoleReview?: readonly import("../../src/domain/organizations/VacancyOrganizationRoleDecision.js").OrganizationRoleReviewItem[];
   readonly agencyContext?: {
     readonly candidates: readonly { candidateId: string; name: string; role: "RECRUITER" | "STAFFING_AGENCY" }[];
@@ -217,4 +218,20 @@ export async function decideOrganizationRole(canonicalVacancyId: string, input: 
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;
+}
+
+export async function searchEmployerIdentities(canonicalVacancyId: string, query: string): Promise<NonNullable<ReviewView["employerIdentityReview"]>> {
+  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-identity-search?q=${encodeURIComponent(query)}`);
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as {employerIdentitySearch:NonNullable<ReviewView["employerIdentityReview"]>}).employerIdentitySearch;
+}
+
+export async function decideEmployerIdentity(canonicalVacancyId: string, input: {
+  requestId: string; employerClusterId: string; candidateToken: string; decision: "USE_EXISTING" | "KEEP_SEPARATE";
+}): Promise<ReviewView> {
+  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-identity-decisions`, {
+    method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(input),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as {review:ReviewView}).review;
 }

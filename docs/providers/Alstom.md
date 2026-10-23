@@ -218,3 +218,13 @@ title/workplace/publication date, and left all three unsupported fields UNKNOWN.
 The selected context retained one complete description table. Identical replay
 reused its repaired observation and increased occurrences to two. The original
 source row, existing assignments and human decision rows compared unchanged.
+
+### Choosing a shared employer identity
+
+Separate Alstom confirmations can have separate clusters: the role confirmation
+checks the current vacancy's cluster, while repaired captures can retain their own
+unresolved history. This does not prove distinct legal employers or justify merging
+by name. The [Employer identity workflow](../EmployerIdentitySelection.md) now shows
+prior vacancies and locations after EMPLOYER confirmation. Explicitly choose an
+existing identity or Keep separate. Neither this implementation nor its read-only
+live inspection chooses an identity for the two Alstom vacancies.

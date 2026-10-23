@@ -1,3 +1,4 @@
+import { getEmployerIdentityReview } from "./employerIdentityReview.js";
 import { buildOrganizationRoleReview, projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
 import type { VacancyOrganizationRoleDecisionRepository } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
@@ -27,6 +28,7 @@ import { employerConfirmationCandidate, isEmployerConfirmationRedundant } from "
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
   dependencies: {
+    readonly employerIdentityDecisionStore?: import("../../domain/user/EmployerIdentityReview.js").EmployerIdentityDecisionStore;
     readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
     readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
     readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
@@ -95,6 +97,7 @@ export async function getVacancyReviewView(
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(dependencies.employerIdentityDecisionStore && dependencies.organizationRoleDecisionRepository ? { employerIdentityReview: await getEmployerIdentityReview(canonicalVacancyId, {...dependencies, organizationRoleDecisionRepository:dependencies.organizationRoleDecisionRepository}) } : {}),
     ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleReview: await buildOrganizationRoleReview(storedVacancy, observations, { ...dependencies, organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository }) } : {}),
     ...(dependencies.agencyMemoryRepository ? { agencyContext: {
       candidates: agencyProjection.context.candidates.map(({ candidateId, name, role }) => ({ candidateId, name, role })),

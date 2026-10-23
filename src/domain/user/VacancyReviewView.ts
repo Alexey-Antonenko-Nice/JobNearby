@@ -19,6 +19,7 @@ export interface VacancyReviewOrganizationRelationship {
 }
 
 export interface VacancyReviewView {
+  readonly employerIdentityReview?: import("./EmployerIdentityReview.js").EmployerIdentityReview | null;
   readonly organizationRoleReview?: readonly import("../organizations/VacancyOrganizationRoleDecision.js").OrganizationRoleReviewItem[];
   readonly agencyContext?: import("../organizations/ConfirmedOrganizationRole.js").AgencyReviewContext;
   readonly vacancyContext: import("./VacancyContext.js").VacancyContext;
