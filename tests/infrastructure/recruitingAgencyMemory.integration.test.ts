@@ -62,6 +62,25 @@ function fixture(db = createDatabase(":memory:")) {
 }
 
 describe("human-confirmed agency memory", () => {
+  it("keeps a Kelly corporate vacancy unresolved and eligible as direct employer despite confirmed Kelly agency memory", async () => {
+    const f = fixture();
+    try {
+      await f.add("kelly-agency", "Kelly", "STAFFING_AGENCY"); await f.confirm("kelly-agency");
+      const before = f.db.prepare("SELECT * FROM confirmed_organization_roles ORDER BY id").all();
+      const result = await createCaptureProcessingRuntime(f.db).captureAndProcessBrowserVacancy({
+        pageUrl: "https://kellyservices.wd503.myworkdayjobs.com/en-US/corporatecareers-kellyservices-com/details/Supervisor-Site_JR100451",
+        pageTitle: "Corporate Careers", html: readFileSync("tests/fixtures/kellyWorkdaySelectedVacancy.html", "utf8"), visibleText: "Corporate Remote JR100451", capturedAt: date,
+      });
+      if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
+      const view = await f.workflow.getVacancyReview(result.processing.canonicalVacancyId);
+      expect(view.employer.status).toBe("UNRESOLVED"); expect(view.employer.confirmationCandidate).toBe("Kelly");
+      expect(view.agencyContext?.known).toEqual([]); expect(view.agencyContext?.candidates).toEqual([]);
+      const vacancy = await f.deps.canonicalVacancyRepository.findById(result.processing.canonicalVacancyId);
+      expect(vacancy?.organizationRelationships.some(item => item.role === "STAFFING_AGENCY" || item.role === "RECRUITER")).toBe(false);
+      expect((await f.deps.assignmentRepository.findEffectiveByObservationId(result.capture.observationId))?.status).toBe("ACCEPTED");
+      expect(f.db.prepare("SELECT * FROM confirmed_organization_roles ORDER BY id").all()).toEqual(before);
+    } finally { f.db.close(); }
+  });
   it("classifies the Gi Group legal identity without fuzzy-matching parent or other branch memories", async () => {
     const f = fixture();
     try {
@@ -227,7 +246,7 @@ describe("human-confirmed agency memory", () => {
       expect(original).toEqual(before);
     } finally { f.db.close(); }
   });
-  it("recognizes agency roles during a future browser capture without confirming the employer", async () => {
+  it("keeps historical agency roles as review support without forcing a future capture role", async () => {
     const f = fixture();
     try {
       await f.add("first", "Agency", "RECRUITER"); await f.confirm("first");
@@ -237,7 +256,7 @@ describe("human-confirmed agency memory", () => {
         html: '<script type="application/ld+json">{"@type":"JobPosting","title":"Technicien H/F","hiringOrganization":{"name":"Agency"}}</script>' });
       if (captured.processing.status !== "PROCESSED") throw Error("Processing failed");
       const current = (await f.deps.canonicalVacancyRepository.findById(captured.processing.canonicalVacancyId))!;
-      expect(current.organizationRelationships).toContainEqual(expect.objectContaining({ role: "RECRUITER", rawName: "Agency" }));
+      expect(current.organizationRelationships.some(r => r.role === "RECRUITER" && r.rawName === "Agency")).toBe(false);
       const review = await f.workflow.getVacancyReview(current.id);
       expect(review.agencyContext?.known[0]?.source).toBe("AGENCY_MEMORY");
       expect(review.agencyContext?.candidates).toEqual([]);
@@ -357,20 +376,20 @@ describe("human-confirmed agency memory", () => {
       expect((await reopened.workflow.getVacancyReview("first")).agencyContext?.known[0]?.source).toBe("USER_CONFIRMED");
       expect(() => copy.prepare("UPDATE confirmed_organization_roles SET role='RECRUITER'").run()).toThrow("append-only");
       expect(() => copy.prepare("DELETE FROM confirmed_organization_roles").run()).toThrow("append-only");
-      expect(copy.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 9 });
+      expect(copy.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 10 });
     } finally { reopened?.db.close(); f.db.close(); }
   });
   it("upgrades a populated version 8 database additively and idempotently", async () => {
     const f = fixture();
     try {
       await f.add("existing");
-      f.db.exec("DROP TABLE confirmed_organization_roles; DELETE FROM schema_migrations WHERE version=9");
+      f.db.exec("DROP TABLE vacancy_organization_role_decisions; DROP TABLE confirmed_organization_roles; DELETE FROM schema_migrations WHERE version>=9");
       const tables = (f.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> 'schema_migrations' ORDER BY name").all() as { name: string }[]).map((row) => row.name);
       const snapshot = () => JSON.stringify(tables.map((table) => [table, f.db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all()]));
       const before = snapshot();
       migrateDatabase(f.db); migrateDatabase(f.db);
       expect(snapshot()).toBe(before);
-      expect(f.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 9 });
+      expect(f.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 10 });
       expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 0 });
     } finally { f.db.close(); }
   });

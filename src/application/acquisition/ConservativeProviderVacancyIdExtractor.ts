@@ -1,3 +1,4 @@
+import { isKellyWorkdaySource, kellyVacancyId } from "./KellyWorkdayVacancy.js";
 import { giGroupVacancyId } from "./GiGroupVacancy.js";
 import { promanVacancyId } from "./PromanVacancy.js";
 import { startPeopleVacancyId } from "./StartPeopleVacancy.js";
@@ -46,6 +47,7 @@ export class ConservativeProviderVacancyIdExtractor
   implements ProviderVacancyIdExtractor
 {
   extract(input: ProviderVacancyIdExtractionInput): string | undefined {
+    if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return kellyVacancyId(input.sourceUrl);
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return extractPersonioVacancyId(input.sourceUrl);
     if (input.sourceName.endsWith(".myworkdayjobs.com")) {
       try {

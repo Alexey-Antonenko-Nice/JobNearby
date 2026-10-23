@@ -17,6 +17,8 @@ const databasePath = join(process.cwd(), ".vacancy-review-workflow-test.sqlite")
 describe("VacancyReviewWorkflow SQLite integration", () => {
   afterEach(() => { if (existsSync(databasePath)) unlinkSync(databasePath); });
 
+  // Real file-backed migrations and restart include durable disk writes, which
+  // can exceed Vitest's default five seconds on Windows under suite load.
   it("persists actions across restart while changing only private rows", async () => {
     let db = createDatabase(databasePath);
     const sources = new SqliteSourceObservationRepository(db);
@@ -56,7 +58,7 @@ describe("VacancyReviewWorkflow SQLite integration", () => {
       .toEqual([{ event_type: "REVIEWED" }, { event_type: "APPLIED" }]);
     expect(publicSnapshot(db)).toEqual(beforePublic);
     db.close();
-  });
+  }, 15_000);
 });
 
 type Db = ReturnType<typeof createDatabase>;

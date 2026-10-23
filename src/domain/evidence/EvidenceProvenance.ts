@@ -12,6 +12,7 @@ export type EvidenceContentOrigin =
 
 export interface EvidenceProvenance {
   readonly organizationRoleMemoryId?: string;
+  readonly organizationRoleDecisionId?: string;
   readonly sourceObservationId: SourceObservationId;
   readonly extractionMethod: EvidenceExtractionMethod;
   readonly confidence: number;
@@ -33,6 +34,7 @@ const contentOrigins: readonly EvidenceContentOrigin[] = [
 export function createEvidenceProvenance(
   provenance: EvidenceProvenance,
 ): EvidenceProvenance {
+  if (provenance.organizationRoleDecisionId !== undefined && (!provenance.organizationRoleDecisionId.trim() || provenance.extractionMethod !== "USER_CONFIRMED")) throw new Error("Human role evidence requires its vacancy decision.");
   if (provenance.organizationRoleMemoryId !== undefined
     && (!provenance.organizationRoleMemoryId.trim() || provenance.extractionMethod !== "EXTERNAL_SOURCE")) {
     throw new Error("Derived agency evidence must reference external organization-role memory.");
@@ -60,6 +62,7 @@ export function createEvidenceProvenance(
   }
 
   return {
+    ...(provenance.organizationRoleDecisionId ? { organizationRoleDecisionId: provenance.organizationRoleDecisionId } : {}),
     ...(provenance.organizationRoleMemoryId === undefined ? {} : { organizationRoleMemoryId: provenance.organizationRoleMemoryId }),
     sourceObservationId: provenance.sourceObservationId.trim(),
     extractionMethod: provenance.extractionMethod,
