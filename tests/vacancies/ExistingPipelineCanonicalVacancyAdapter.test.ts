@@ -282,6 +282,20 @@ describe("ExistingPipelineCanonicalVacancyAdapter", () => {
     expect(vacancy.compensation).toMatchObject({ status: "RESOLVED", value: { minimum: 14, maximum: 17.5, currency: "EUR", period: "HOUR" } });
   });
 
+  it("enriches an identical unitless salary range from explicit period evidence while retaining both references", () => {
+    const first = createExtractedVacancyEvidence({ sourceObservationId: "one", compensations: [{ rawText: "2300 € à 2800 €", minimum: 2300, maximum: 2800, currency: "EUR", provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 1 } }] });
+    const second = createExtractedVacancyEvidence({ sourceObservationId: "two", compensations: [{ rawText: "EUR 2300–2800 / MONTH", minimum: 2300, maximum: 2800, currency: "EUR", period: "MONTH", provenance: { sourceObservationId: "two", extractionMethod: "DIRECT_FIELD", confidence: 1 } }] });
+    const vacancy = canonicalize([observation("one"), observation("two")], [first, second]);
+    expect(vacancy.compensation).toMatchObject({ status: "RESOLVED", value: { rawText: "2300 € à 2800 €", minimum: 2300, maximum: 2800, currency: "EUR", period: "MONTH" } });
+    expect(vacancy.compensation.supportingEvidenceIds).toHaveLength(2);
+  });
+  it.each([
+    { currency: "USD", maximum: 2800 }, { currency: "EUR", maximum: 2900 },
+  ])("does not enrich a salary period across incompatible currency or range", ({ currency, maximum }) => {
+    const first = createExtractedVacancyEvidence({ sourceObservationId: "one", compensations: [{ rawText: "2300–2800 EUR", minimum: 2300, maximum: 2800, currency: "EUR", provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 1 } }] });
+    const second = createExtractedVacancyEvidence({ sourceObservationId: "two", compensations: [{ rawText: "Explicit monthly range", minimum: 2300, maximum, currency, period: "MONTH", provenance: { sourceObservationId: "two", extractionMethod: "DIRECT_FIELD", confidence: 1 } }] });
+    expect(canonicalize([observation("one"), observation("two")], [first, second]).compensation.status).toBe("CONFLICTED");
+  });
   it("combines orthogonal working-time and contract evidence without a conflict", () => {
     const cdi = createExtractedVacancyEvidence({ sourceObservationId: "one", engagements: [{ rawTerms: ["CDI"], normalizedTerms: ["INDEFINITE"], provenance: { sourceObservationId: "one", extractionMethod: "TEXT_EXTRACTION", confidence: 0.98 } }] });
     const fullTime = canonicalize([observation("one", { contractText: "FULL_TIME" })], [cdi]);

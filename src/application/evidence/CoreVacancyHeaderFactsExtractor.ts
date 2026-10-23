@@ -26,7 +26,7 @@ export class CoreVacancyHeaderFactsExtractor implements VacancyEvidenceExtractor
     // These labeled summaries are handled by their provider extractors. A
     // numeric reference (for example 307-UST-...) is not a department/location.
     if (observation.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
-      && ["RANDSTAD", "SYNERGIE", "CRIT", "ACTUAL", "START_PEOPLE", "PROMAN"].includes(observation.evidenceContent.context.providerKey ?? "")) {
+      && ["RANDSTAD", "SYNERGIE", "CRIT", "ACTUAL", "START_PEOPLE", "PROMAN", "GI_GROUP"].includes(observation.evidenceContent.context.providerKey ?? "")) {
       return createExtractedVacancyEvidence({ sourceObservationId: observation.id });
     }
     const { vacancyText, contentOrigin } = textualEvidenceContent(input);

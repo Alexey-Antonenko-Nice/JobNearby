@@ -580,8 +580,9 @@ function reconcileCompensationCandidates(candidates: readonly CanonicalCandidate
       continue;
     }
     const current = reconciled[index]!;
-    const value = compensationRangeSize(candidate.value) > compensationRangeSize(current.value)
-      ? candidate.value : current.value;
+    const value = current.value.period === undefined && candidate.value.period !== undefined && sameCompensationAmounts(current.value, candidate.value)
+      ? { ...current.value, period: candidate.value.period }
+      : compensationRangeSize(candidate.value) > compensationRangeSize(current.value) ? candidate.value : current.value;
     reconciled[index] = {
       value,
       supportingEvidenceIds: [...new Set([...current.supportingEvidenceIds, ...candidate.supportingEvidenceIds])],
@@ -591,11 +592,18 @@ function reconcileCompensationCandidates(candidates: readonly CanonicalCandidate
 }
 
 function compensationCompatible(left: CompensationValue, right: CompensationValue): boolean {
-  if (left.currency !== right.currency || left.period !== right.period) return false;
+  if (left.currency !== right.currency) return false;
+  // An explicit unit can enrich an otherwise identical unitless range. It
+  // cannot join different ranges, currencies, or contradictory explicit units.
+  if (left.period !== right.period) return (left.period === undefined || right.period === undefined) && sameCompensationAmounts(left, right);
   if (left.minimum === undefined || right.minimum === undefined) return stableCompensation(left) === stableCompensation(right);
   const leftMax = left.maximum ?? left.minimum;
   const rightMax = right.maximum ?? right.minimum;
   return left.minimum <= rightMax && right.minimum <= leftMax;
+}
+
+function sameCompensationAmounts(left: CompensationValue, right: CompensationValue): boolean {
+  return left.minimum !== undefined && left.maximum !== undefined && left.minimum === right.minimum && left.maximum === right.maximum;
 }
 
 function compensationRangeSize(value: CompensationValue): number { return value.maximum === undefined || value.minimum === undefined ? 0 : value.maximum - value.minimum; }
