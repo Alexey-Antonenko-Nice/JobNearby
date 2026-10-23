@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { scopeProviderVacancyEvidence } from "../evidence/scopeProviderVacancyEvidence.js";
+import { resolveLegacyApecContinuity } from "./resolveLegacyApecContinuity.js";
 
 import type {
   SourceObservation,
@@ -129,6 +130,7 @@ export async function processVacancyObservation(
   const requestedEvidenceInput = evidenceExtractionInputFor(requestedObservation);
 
   const proposedCanonicalVacancyId =
+    await resolveLegacyApecContinuity(requestedObservation, dependencies) ??
     (dependencies.generateCanonicalVacancyId ?? randomUUID)();
   const claim = await dependencies.canonicalVacancyRepository.claimIdentity(
     sourceObservationId,
