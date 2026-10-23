@@ -1,3 +1,4 @@
+import { scopeAlstomVacancyEvidence } from "./scopeAlstomVacancyEvidence.js";
 import { KELLY_WORKDAY_HOST } from "../acquisition/KellyWorkdayVacancy.js";
 import { scopeKellyVacancyEvidence } from "./scopeKellyVacancyEvidence.js";
 import { scopeApecVacancyEvidence } from "./scopeApecVacancyEvidence.js";
@@ -24,6 +25,7 @@ const boundedHelloWorkInput = Symbol("boundedHelloWorkInput");
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
 export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
   if (input.source.sourceName === KELLY_WORKDAY_HOST) return scopeKellyVacancyEvidence(input);
+  if (input.source.sourceName === "jobsearch.alstom.com") return scopeAlstomVacancyEvidence(input);
   if (input.source.sourceName === "apec.fr") return scopeApecVacancyEvidence(input);
   if (input.source.sourceName === "gigroup.com") return scopeGiGroupVacancyEvidence(input);
   if (input.source.sourceName === "mon-espace.proman-emploi.fr") return scopePromanVacancyEvidence(input);

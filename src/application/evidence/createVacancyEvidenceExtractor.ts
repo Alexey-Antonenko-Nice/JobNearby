@@ -1,3 +1,4 @@
+import { AlstomVacancyEvidenceExtractor } from "./AlstomVacancyEvidenceExtractor.js";
 import { KellyVacancyEvidenceExtractor } from "./KellyVacancyEvidenceExtractor.js";
 import { ApecVacancyEvidenceExtractor } from "./ApecVacancyEvidenceExtractor.js";
 import { GiGroupVacancyEvidenceExtractor } from "./GiGroupVacancyEvidenceExtractor.js";
@@ -26,6 +27,7 @@ import { AdeccoSelectedVacancyEvidenceExtractor } from "./AdeccoSelectedVacancyE
 
 export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtractor {
   return new CompositeVacancyEvidenceExtractor([
+    new AlstomVacancyEvidenceExtractor(),
     new KellyVacancyEvidenceExtractor(),
     new ApecVacancyEvidenceExtractor(),
     new GiGroupVacancyEvidenceExtractor(),

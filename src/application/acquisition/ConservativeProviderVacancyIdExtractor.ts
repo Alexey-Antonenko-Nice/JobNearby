@@ -1,3 +1,4 @@
+import { alstomPostingId, ALSTOM_HOST } from "./AlstomVacancy.js";
 import { isKellyWorkdaySource, kellyVacancyId } from "./KellyWorkdayVacancy.js";
 import { giGroupVacancyId } from "./GiGroupVacancy.js";
 import { apecVacancyId } from "./ApecVacancy.js";
@@ -49,6 +50,7 @@ export class ConservativeProviderVacancyIdExtractor
   implements ProviderVacancyIdExtractor
 {
   extract(input: ProviderVacancyIdExtractionInput): string | undefined {
+    if (input.sourceName === ALSTOM_HOST) return alstomPostingId(input.sourceUrl);
     if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return kellyVacancyId(input.sourceUrl);
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return extractPersonioVacancyId(input.sourceUrl);
     if (input.sourceName.endsWith(".myworkdayjobs.com")) {
