@@ -112,6 +112,7 @@ export function parseApecSalary(raw: string) {
 function postings(html: string) {
   return new SchemaOrgJobPostingExtractor().extract(new LiteralJsonLdDocumentExtractor().extract(html));
 }
+export { byTag as htmlByTag, byClass as htmlByClass, cleanHtml, line as htmlLine, postings as jobPostings };
 function structuredReference(posting: Record<string, unknown>) {
   const identifier = record(posting.identifier)?.value ?? posting.identifier;
   return typeof identifier === "string" || typeof identifier === "number" ? String(identifier).trim().toUpperCase() : undefined;

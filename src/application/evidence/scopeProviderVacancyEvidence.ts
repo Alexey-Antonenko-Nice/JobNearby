@@ -2,6 +2,7 @@ import { scopeAlstomVacancyEvidence } from "./scopeAlstomVacancyEvidence.js";
 import { KELLY_WORKDAY_HOST } from "../acquisition/KellyWorkdayVacancy.js";
 import { scopeKellyVacancyEvidence } from "./scopeKellyVacancyEvidence.js";
 import { scopeApecVacancyEvidence } from "./scopeApecVacancyEvidence.js";
+import { scopeDirectEmploiVacancyEvidence } from "./scopeDirectEmploiVacancyEvidence.js";
 import { scopeGiGroupVacancyEvidence } from "./scopeGiGroupVacancyEvidence.js";
 import { scopePromanVacancyEvidence } from "./scopePromanVacancyEvidence.js";
 import { scopeStartPeopleVacancyEvidence } from "./scopeStartPeopleVacancyEvidence.js";
@@ -27,6 +28,7 @@ export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInp
   if (input.source.sourceName === KELLY_WORKDAY_HOST) return scopeKellyVacancyEvidence(input);
   if (input.source.sourceName === "jobsearch.alstom.com") return scopeAlstomVacancyEvidence(input);
   if (input.source.sourceName === "apec.fr") return scopeApecVacancyEvidence(input);
+  if (input.source.sourceName === "directemploi.com") return scopeDirectEmploiVacancyEvidence(input);
   if (input.source.sourceName === "gigroup.com") return scopeGiGroupVacancyEvidence(input);
   if (input.source.sourceName === "mon-espace.proman-emploi.fr") return scopePromanVacancyEvidence(input);
   if (input.source.sourceName === "startpeople.fr") return scopeStartPeopleVacancyEvidence(input);
