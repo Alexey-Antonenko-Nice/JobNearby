@@ -62,6 +62,23 @@ function fixture(db = createDatabase(":memory:")) {
 }
 
 describe("human-confirmed agency memory", () => {
+  it("classifies the Gi Group legal identity without fuzzy-matching parent or other branch memories", async () => {
+    const f = fixture();
+    try {
+      await f.add("gi-parent", "Gi Group"); await f.confirm("gi-parent");
+      await f.add("gi-holding", "Gi Group Holding"); await f.confirm("gi-holding");
+      const runtime = createCaptureProcessingRuntime(f.db);
+      const result = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://fr.gigroup.com/detail-offre-emploi/strasbourg-bas-rhin-technicien-de-maintenance-h-f/85929/",
+        pageTitle: "Gi Group vacancy", html: readFileSync("tests/fixtures/giGroupDirectVacancy.html", "utf8"), visibleText: "Gi Group current vacancy", capturedAt: date });
+      if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
+      const view = await f.workflow.getVacancyReview(result.processing.canonicalVacancyId);
+      expect(view.agencyContext?.known).toEqual([]);
+      expect(view.agencyContext?.candidates).toEqual([expect.objectContaining({ name: "Gi Group SpA", role: "STAFFING_AGENCY" })]);
+      expect(view.employer.status).toBe("UNRESOLVED"); expect(view.employer.confirmationCandidate).toBeNull();
+      expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 2 });
+    } finally { f.db.close(); }
+  });
+
   it("classifies the PROMAN selected branch without fuzzy-matching parent or other branch memories", async () => {
     const f = fixture();
     try {
