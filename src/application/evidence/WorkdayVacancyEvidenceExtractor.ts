@@ -1,3 +1,4 @@
+import { isKellyWorkdaySource } from "../acquisition/KellyWorkdayVacancy.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
 import { createExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import { normalizeVacancyEvidenceInput, type VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
@@ -9,7 +10,7 @@ export class WorkdayVacancyEvidenceExtractor implements VacancyEvidenceExtractor
     const html = observation.metadata.acquisition && typeof observation.metadata.acquisition === "object"
       ? (observation.metadata.acquisition as Record<string, unknown>).html
       : undefined;
-    if (typeof html !== "string" || observation.source.sourceUrl === undefined || !isWorkdaySource(observation.source.sourceName, observation.source.sourceUrl)) {
+    if (typeof html !== "string" || isKellyWorkdaySource(observation.source.sourceName, observation.source.sourceUrl ?? "") || observation.source.sourceUrl === undefined || !isWorkdaySource(observation.source.sourceName, observation.source.sourceUrl)) {
       return createExtractedVacancyEvidence({ sourceObservationId: observation.id });
     }
     const fields = extractWorkdayStructuredFields(html, observation.source.sourceUrl);

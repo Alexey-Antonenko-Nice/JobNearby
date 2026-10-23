@@ -1,3 +1,4 @@
+import { humanOrganizationRoles, type HumanOrganizationRole } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import type { BrowserCapturePayload } from "../../application/acquisition/BrowserCapturePayload.js";
@@ -9,6 +10,7 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly decideVacancyOrganizationRole?: VacancyReviewWorkflow["decideVacancyOrganizationRole"];
   readonly captureAndProcessBrowserVacancy: (
     payload: BrowserCapturePayload,
   ) => Promise<CaptureAndProcessBrowserVacancyResult>;
@@ -74,6 +76,14 @@ export function createBrowserCaptureServer(
         const body = await readJsonBody(request, "Employer memory review");
         if (!isRecord(body) || typeof body.employerClusterId !== "string" || !body.employerClusterId.trim() || !["CONFIRM", "REJECT"].includes(String(body.decision)) || Object.keys(body).some((key) => !["employerClusterId", "decision"].includes(key))) throw new InvalidRequestError("Employer memory review payload is invalid.");
         sendJson(response, 200, { review: await dependencies.decideEmployerMemoryReview({ canonicalVacancyId: decodePathId(memoryReviewMatch[1]!), employerClusterId: body.employerClusterId, decision: body.decision as "CONFIRM" | "REJECT" }) });
+        return;
+      }
+      const organizationRoleMatch = /^\/vacancies\/([^/]+)\/organization-role-decisions$/u.exec(path);
+      if (request.method === "POST" && organizationRoleMatch && dependencies.decideVacancyOrganizationRole) {
+        operation = "review";
+        const body = await readJsonBody(request, "Organization role decision");
+        if (!isRecord(body) || typeof body.requestId !== "string" || !body.requestId.trim() || body.requestId.length > 200 || typeof body.identityKey !== "string" || !body.identityKey.trim() || typeof body.candidateToken !== "string" || !/^[a-f0-9]{64}$/u.test(body.candidateToken) || !humanOrganizationRoles.includes(body.role as HumanOrganizationRole) || typeof body.acknowledgeContradiction !== "boolean" || Object.keys(body).some(key => !["requestId","identityKey","candidateToken","role","acknowledgeContradiction"].includes(key))) throw new InvalidRequestError("Organization role decision payload is invalid.");
+        sendJson(response, 201, { review: await dependencies.decideVacancyOrganizationRole({canonicalVacancyId:decodePathId(organizationRoleMatch[1]!),requestId:body.requestId,identityKey:body.identityKey,candidateToken:body.candidateToken,role:body.role as HumanOrganizationRole,acknowledgeContradiction:body.acknowledgeContradiction}) });
         return;
       }
       const agencyConfirmationMatch = /^\/vacancies\/([^/]+)\/recruiting-agency-confirmation$/u.exec(path);
@@ -210,6 +220,7 @@ function errorStatus(
   error: unknown,
 ): number {
   if (/^CanonicalVacancy ".+" does not exist\.$/u.test(message)) return 404;
+  if (message.startsWith("Organization role review is stale") || message === "Organization role override requires confirmation." || message === "Organization role request ID was already used." || message === "Use the vacancy-specific organization role actions.") return 409;
   if (operation === "capture") {
     return message.startsWith("Browser capture could not be persisted:") ? 500 : 400;
   }

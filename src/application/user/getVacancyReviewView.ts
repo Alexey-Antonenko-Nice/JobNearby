@@ -1,3 +1,5 @@
+import { buildOrganizationRoleReview, projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
+import type { VacancyOrganizationRoleDecisionRepository } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
 import type { ConfirmedOrganizationRoleRepository } from "../../domain/organizations/ConfirmedOrganizationRole.js";
 import { deriveVacancyContext } from "./deriveVacancyContext.js";
@@ -25,6 +27,7 @@ import { employerConfirmationCandidate, isEmployerConfirmationRedundant } from "
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
   dependencies: {
+    readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
     readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
     readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
     readonly aliasRepository?: EmployerAliasEvidenceRepository;
@@ -39,7 +42,9 @@ export async function getVacancyReviewView(
   const storedVacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
   if (storedVacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
 
-  const agencyProjection = await getRecruitingAgencyProjection(storedVacancy, dependencies.agencyMemoryRepository);
+  const agencyProjection = dependencies.organizationRoleDecisionRepository
+    ? { vacancy: projectOrganizationRoleDecisions(storedVacancy, await dependencies.organizationRoleDecisionRepository.listForVacancy(canonicalVacancyId)), context: { candidates: [], known: [], ambiguousNames: [] } }
+    : await getRecruitingAgencyProjection(storedVacancy, dependencies.agencyMemoryRepository);
   const vacancy = agencyProjection.vacancy;
   const observationIds = [...new Set(vacancy.sourceObservationIds)];
   const repository = dependencies.sourceObservationRepository;
@@ -81,7 +86,7 @@ export async function getVacancyReviewView(
   const knownEmployer = previousVacancies.length > 0;
   const sourceObservationCount = observations.length;
   const multipleObservations = sourceObservationCount > 1;
-  const groupedOrganizations = groupOrganizations(vacancy.organizationRelationships);
+  const groupedOrganizations = groupOrganizations(vacancy.organizationRelationships.map(r => r.role === "EMPLOYER" && r.employerClusterId && employerClusterId ? { ...r, employerClusterId } : r));
 
   const memoryCandidates = await getEmployerMemoryReviewCandidates(vacancy, dependencies);
   const namedClient = memoryCandidates.length === 0 ? await getNamedClientEmployerCandidate(vacancy, dependencies) : null;
@@ -90,6 +95,7 @@ export async function getVacancyReviewView(
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleReview: await buildOrganizationRoleReview(storedVacancy, observations, { ...dependencies, organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository }) } : {}),
     ...(dependencies.agencyMemoryRepository ? { agencyContext: {
       candidates: agencyProjection.context.candidates.map(({ candidateId, name, role }) => ({ candidateId, name, role })),
       known: agencyProjection.context.known, ambiguousNames: agencyProjection.context.ambiguousNames,

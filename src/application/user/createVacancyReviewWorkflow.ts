@@ -1,3 +1,5 @@
+import { decideVacancyOrganizationRole, type OrganizationRoleDecisionInput } from "./decideVacancyOrganizationRole.js";
+import type { VacancyOrganizationRoleDecisionRepository } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { confirmVacancyRecruitingAgency, getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
 import type { ConfirmedOrganizationRoleRepository } from "../../domain/organizations/ConfirmedOrganizationRole.js";
 import { decideEmployerAlias } from "./employerAliasReview.js";
@@ -24,6 +26,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
   readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
   readonly publicationCampaignContextSource?: import("./PublicationCampaignContextSource.js").PublicationCampaignContextSource;
   readonly aliasRepository?: EmployerAliasEvidenceRepository;
@@ -43,6 +46,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository } : {}),
     ...(dependencies.agencyMemoryRepository ? { agencyMemoryRepository: dependencies.agencyMemoryRepository } : {}),
     ...(dependencies.publicationCampaignContextSource ? { publicationCampaignContextSource: dependencies.publicationCampaignContextSource } : {}),
     ...(dependencies.aliasRepository ? { aliasRepository: dependencies.aliasRepository } : {}),
@@ -54,7 +58,13 @@ export function createVacancyReviewWorkflow(
     ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
   return {
+    decideVacancyOrganizationRole: async (input: OrganizationRoleDecisionInput) => {
+      if (!dependencies.organizationRoleDecisionRepository) throw new Error("Organization role review is unavailable.");
+      await decideVacancyOrganizationRole(input, { ...dependencies, organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository });
+      return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
+    },
     confirmVacancyRecruitingAgency: async (input: { readonly canonicalVacancyId: string; readonly candidateId: string }) => {
+      if (dependencies.organizationRoleDecisionRepository) throw new Error("Use the vacancy-specific organization role actions.");
       await confirmVacancyRecruitingAgency(input.canonicalVacancyId, input.candidateId, {
         canonicalVacancyRepository: dependencies.canonicalVacancyRepository,
         ...(dependencies.agencyMemoryRepository ? { agencyMemoryRepository: dependencies.agencyMemoryRepository } : {}),
@@ -63,6 +73,7 @@ export function createVacancyReviewWorkflow(
       return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
     },
     decideEmployerReview: async (input: EmployerReviewDecision & { readonly canonicalVacancyId: string }) => {
+      if (dependencies.organizationRoleDecisionRepository) throw new Error("Use the vacancy-specific organization role actions.");
       const vacancy = await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId);
       if (!vacancy) throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);
       if (input.type === "CONFIRMED_MEMORY") await decideEmployerMemoryReview(vacancy, input.employerClusterId, input.decision, reviewDependencies);
@@ -71,6 +82,7 @@ export function createVacancyReviewWorkflow(
       return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
     },
     decideEmployerMemoryReview: async (input: { readonly canonicalVacancyId: string; readonly employerClusterId: string; readonly decision: "CONFIRM" | "REJECT" }) => {
+      if (dependencies.organizationRoleDecisionRepository) throw new Error("Use the vacancy-specific organization role actions.");
       const vacancy = await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId);
       if (!vacancy) throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);
       await decideEmployerMemoryReview(vacancy, input.employerClusterId, input.decision, reviewDependencies);
@@ -80,6 +92,7 @@ export function createVacancyReviewWorkflow(
     getVacancyReview: (canonicalVacancyId: CanonicalVacancyId) =>
       getVacancyReviewView(canonicalVacancyId, reviewDependencies),
     confirmVacancyEmployer: async (input: { readonly canonicalVacancyId: string; readonly candidateName: string }) => {
+      if (dependencies.organizationRoleDecisionRepository) throw new Error("Use the vacancy-specific organization role actions.");
       if (dependencies.assignmentRepository === undefined || dependencies.employerClusterWriter === undefined) {
         throw new Error("Employer confirmation is unavailable.");
       }

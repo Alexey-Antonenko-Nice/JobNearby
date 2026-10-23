@@ -1,3 +1,4 @@
+import { migration010 } from "./migrations/010_create_vacancy_organization_role_decisions.js";
 import { migration009 } from "./migrations/009_create_confirmed_organization_roles.js";
 import { migration008 } from "./migrations/008_create_publication_families_and_recruitment_campaigns.js";
 import type Database from "better-sqlite3";
@@ -27,6 +28,7 @@ const migrations: readonly Migration[] = [
   migration007,
   migration008,
   migration009,
+  migration010,
 ];
 
 export function migrateDatabase(db: Database.Database): void {

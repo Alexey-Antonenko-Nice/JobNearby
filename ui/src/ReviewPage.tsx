@@ -1,3 +1,4 @@
+import { OrganizationRoleSection } from "./OrganizationRoleSection";
 import { RecruitingAgencySection } from "./RecruitingAgencySection";
 import { PublicationCampaignContextSection } from "./PublicationCampaignContextSection";
 import { useEffect, useState } from "react";
@@ -96,8 +97,8 @@ export function ReviewPage(): React.JSX.Element {
         ? <Details values={[["Employer status", review.employer.status], ["Previous vacancies from this employer", review.employer.previousVacancyCount],
           ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)]]} />
         : <p>{review.employer.status === "CONFLICTED" ? "Employer identity requires review" : "Employer unresolved / not linked"}</p>}</section>}
-    {review.employer.confirmationCandidate != null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}
-    {review.employerReview?.candidates.filter((candidate) => candidate.type === "ALIAS_SELECTION").map((candidate) => <section key={candidate.candidateId}>
+    {review.organizationRoleReview === undefined && review.employer.confirmationCandidate != null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}
+    {review.organizationRoleReview === undefined && review.employerReview?.candidates.filter((candidate) => candidate.type === "ALIAS_SELECTION").map((candidate) => <section key={candidate.candidateId}>
       <h2>Same as a known employer?</h2><p>Current name: <strong>{candidate.name}</strong></p><p>{candidate.explanation}</p>
       <label>Previously confirmed employer <select value={candidate.options.some((o) => o.employerClusterId === selectedAliasCluster) ? selectedAliasCluster : ""} disabled={pending} onChange={(event) => setSelectedAliasCluster(event.target.value)}>
         <option value="">Select an employer</option>{candidate.options.map((option) => <option key={option.employerClusterId} value={option.employerClusterId}>{option.displayLabel}</option>)}
@@ -105,18 +106,18 @@ export function ReviewPage(): React.JSX.Element {
       <button type="button" disabled={pending || !candidate.options.some((o) => o.employerClusterId === selectedAliasCluster)} onClick={() => void reviewAlias(candidate.candidateId, "CONFIRM")}>Same employer</button>{" "}
       <button type="button" disabled={pending || !candidate.options.some((o) => o.employerClusterId === selectedAliasCluster)} onClick={() => void reviewAlias(candidate.candidateId, "REJECT")}>Keep separate</button>
     </section>)}
-    {review.employerReview?.candidates.filter((candidate) => candidate.type === "NAMED_CLIENT").map((candidate) => <section key={candidate.candidateId}>
+    {review.organizationRoleReview === undefined && review.employerReview?.candidates.filter((candidate) => candidate.type === "NAMED_CLIENT").map((candidate) => <section key={candidate.candidateId}>
       <h2>Possible employer</h2><h3>{candidate.name}</h3><p>Source relationship: Client named in vacancy</p><p>{candidate.explanation}</p>
       {candidate.priorConfirmationCount > 0 && <p>Previously confirmed in {candidate.priorConfirmationCount} observations</p>}
       <button type="button" disabled={pending} onClick={() => void reviewNamedClient(candidate.candidateId, "CONFIRM")}>Confirm employer</button>{" "}
       <button type="button" disabled={pending} onClick={() => void reviewNamedClient(candidate.candidateId, "REJECT")}>Not the employer</button>
     </section>)}
-    {review.employerMemoryReview?.required && <section><h2>Possible known employer</h2>{review.employerMemoryReview.candidates.map((candidate) => <article key={candidate.employerClusterId}>
+    {review.organizationRoleReview === undefined && review.employerMemoryReview?.required && <section><h2>Possible known employer</h2>{review.employerMemoryReview.candidates.map((candidate) => <article key={candidate.employerClusterId}>
       <h3>{candidate.displayLabel}</h3><p>Status: {candidate.status}</p><p>Previously confirmed in {candidate.priorConfirmationCount} observations</p><p>{candidate.explanation}</p>
       <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "CONFIRM")}>Confirm employer</button>{" "}
       <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "REJECT")}>Not this employer</button>
     </article>)}</section>}
-    <RecruitingAgencySection review={review} onConfirmed={setReview} disabled={pending} />
+    {review.organizationRoleReview !== undefined ? <OrganizationRoleSection review={review} onConfirmed={setReview} disabled={pending} /> : <RecruitingAgencySection review={review} onConfirmed={setReview} disabled={pending} />}
     <section><h2>Organization context</h2>{organizationGroups.map(([label, key]) => <Organizations key={key} label={label} values={review.organizations[key] ?? []} required={key === "employerRelationships"} />)}</section>
     <section><h2>Review signals</h2><ul className="signals">{signals(review).map((signal) => <li key={signal}>{signal}</li>)}</ul></section>
     <section><h2>Actions</h2><div className="actions">{actions.map((action) => <button key={action} type="button" disabled={pending} onClick={() => void submit(action)}>{action}</button>)}</div></section>

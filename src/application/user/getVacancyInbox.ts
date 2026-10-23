@@ -1,3 +1,5 @@
+import { projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
+import type { VacancyOrganizationRoleDecisionRepository } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import type { SourceObservationRepository } from "../../domain/capture/SourceObservationRepository.js";
@@ -23,6 +25,7 @@ export async function getVacancyInbox(
     readonly interactionRepository: UserVacancyInteractionRepository;
     readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
     readonly assignmentRepository?: ObservationClusterAssignmentRepository;
+    readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
     readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
   },
 ): Promise<readonly VacancyInboxItem[]> {
@@ -41,6 +44,7 @@ function validateLimit(limit: number | undefined): number {
 }
 
 async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeof getVacancyInbox>[1]): Promise<VacancyInboxItem> {
+  if (dependencies.organizationRoleDecisionRepository) vacancy = projectOrganizationRoleDecisions(vacancy, await dependencies.organizationRoleDecisionRepository.listForVacancy(vacancy.id));
   const observations = await Promise.all(vacancy.sourceObservationIds.map(async (id) => {
     const observation = await dependencies.sourceObservationRepository.findById(id);
     if (observation === null) throw new Error(`CanonicalVacancy "${vacancy.id}" references missing SourceObservation "${id}".`);

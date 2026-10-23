@@ -1,5 +1,5 @@
-import { AgencyMemoryVacancyEvidenceExtractor } from "../../application/evidence/AgencyMemoryVacancyEvidenceExtractor.js";
-import { SqliteConfirmedOrganizationRoleRepository } from "../persistence/SqliteConfirmedOrganizationRoleRepository.js";
+import { VacancyOrganizationRoleDecisionEvidenceExtractor } from "../../application/evidence/VacancyOrganizationRoleDecisionEvidenceExtractor.js";
+import { SqliteVacancyOrganizationRoleDecisionRepository } from "../persistence/SqliteVacancyOrganizationRoleDecisionRepository.js";
 import { SqliteEmployerAliasEvidenceRepository } from "../persistence/SqliteEmployerAliasEvidenceRepository.js";
 import type Database from "better-sqlite3";
 
@@ -48,7 +48,8 @@ export function createCaptureProcessingRuntime(
     new SqliteEmployerClusterRepository(database);
   const assignmentRepository =
     new SqliteObservationClusterAssignmentRepository(database);
-  const evidenceExtractor = new AgencyMemoryVacancyEvidenceExtractor(createVacancyEvidenceExtractor(), new SqliteConfirmedOrganizationRoleRepository(database));
+  const roleDecisions = new SqliteVacancyOrganizationRoleDecisionRepository(database);
+  const evidenceExtractor = new VacancyOrganizationRoleDecisionEvidenceExtractor(createVacancyEvidenceExtractor(), id => roleDecisions.forObservation(id));
   const matcher = new EvidenceBasedEmployerClusterMatcher({
     evidenceExtractor,
     observationProvider: new SqliteEmployerClusterObservationProvider(database),
