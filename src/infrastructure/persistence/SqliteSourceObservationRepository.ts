@@ -208,6 +208,18 @@ export class SqliteSourceObservationRepository
     observation: SourceObservation,
     occurrence: BrowserCaptureOccurrence,
   ): Promise<{ readonly sourceObservationId: string; readonly snapshotCreated: boolean }> {
+    if (observation.source.externalId === undefined && observation.contentFingerprint !== undefined && observation.source.sourceUrl !== undefined) {
+      // Unidentified captures have no unique index; reuse the earliest identical snapshot.
+      const identical = this.db.prepare(`
+        SELECT id FROM source_observations
+        WHERE source_type = ? AND source_name = ? AND source_url = ? AND external_id IS NULL AND content_fingerprint = ?
+        ORDER BY observed_at, id LIMIT 1
+      `).get(observation.source.sourceType, observation.source.sourceName, observation.source.sourceUrl, observation.contentFingerprint) as { id: string } | undefined;
+      if (identical !== undefined) {
+        this.insertOccurrence(identical.id, occurrence);
+        return { sourceObservationId: identical.id, snapshotCreated: false };
+      }
+    }
     if (observation.source.externalId === undefined || observation.contentFingerprint === undefined) {
       await this.save(observation);
       this.insertOccurrence(observation.id, occurrence);

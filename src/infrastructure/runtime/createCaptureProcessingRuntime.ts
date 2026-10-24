@@ -22,6 +22,7 @@ import { SqliteEmployerClusterRepository } from "../persistence/SqliteEmployerCl
 import { SqliteEmployerRecognitionPersistence } from "../persistence/SqliteEmployerRecognitionPersistence.js";
 import { SqliteObservationClusterAssignmentRepository } from "../persistence/SqliteObservationClusterAssignmentRepository.js";
 import { SqliteSourceObservationRepository } from "../persistence/SqliteSourceObservationRepository.js";
+import { sqliteCanonicalHumanState } from "../persistence/SqliteCanonicalHumanState.js";
 
 export interface CaptureProcessingRuntime {
   captureAndProcessBrowserVacancy(
@@ -58,6 +59,7 @@ export function createCaptureProcessingRuntime(
     sourceObservationRepository,
     canonicalVacancyRepository,
     evidenceExtractor,
+    humanStateLookup: sqliteCanonicalHumanState(database),
     canonicalVacancyAdapter: new ExistingPipelineCanonicalVacancyAdapter(
       new DeterministicCanonicalVacancyCanonicalizer(),
     ),

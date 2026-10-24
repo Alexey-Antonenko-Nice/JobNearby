@@ -45,11 +45,16 @@ export class InMemorySourceObservationRepository
   }
 
   async saveOrReuseBrowserSnapshot(observation: SourceObservation, occurrence: BrowserCaptureOccurrence) {
-    const existing = [...this.observations.values()].find((candidate) =>
-      candidate.source.sourceName === observation.source.sourceName &&
-      candidate.source.externalId === observation.source.externalId &&
-      candidate.contentFingerprint === observation.contentFingerprint &&
-      candidate.source.externalId !== undefined && candidate.contentFingerprint !== undefined);
+    const existing = [...this.observations.values()]
+      .sort((a, b) => a.observedAt.getTime() - b.observedAt.getTime() || a.id.localeCompare(b.id))
+      .find((candidate) =>
+        candidate.source.sourceName === observation.source.sourceName &&
+        candidate.source.externalId === observation.source.externalId &&
+        candidate.contentFingerprint === observation.contentFingerprint &&
+        candidate.contentFingerprint !== undefined &&
+        (candidate.source.externalId !== undefined || (
+          candidate.source.sourceType === observation.source.sourceType &&
+          candidate.source.sourceUrl !== undefined && candidate.source.sourceUrl === observation.source.sourceUrl)));
     const snapshot = existing ?? observation;
     if (existing === undefined) await this.save(observation);
     this.occurrences.push({ ...occurrence, capturedAt: new Date(occurrence.capturedAt) });

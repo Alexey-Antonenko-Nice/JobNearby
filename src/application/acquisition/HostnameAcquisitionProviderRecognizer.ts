@@ -1,3 +1,4 @@
+import { isRenaultWorkdaySource } from "./RenaultWorkdayVacancy.js";
 import { isKellyWorkdaySource } from "./KellyWorkdayVacancy.js";
 import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
 import { isPersonioSource } from "./PersonioVacancy.js";
@@ -15,6 +16,7 @@ const providersByHostname: Readonly<Record<string, ProviderKey>> = {
 
 export class HostnameAcquisitionProviderRecognizer implements AcquisitionProviderRecognizer {
   recognize(input: AcquisitionProviderRecognitionInput): ProviderKey | undefined {
+    if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return "RENAULT_WORKDAY";
     if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return "KELLY_WORKDAY";
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return "PERSONIO";
     try {

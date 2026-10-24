@@ -1,3 +1,4 @@
+import { resolveLegacyRenaultContinuity } from "./resolveLegacyRenaultContinuity.js";
 import { EMPLOYER_IDENTITY_ALGORITHM } from "../../domain/user/EmployerIdentityReview.js";
 import { resolveLegacyAlstomContinuity } from "./resolveLegacyAlstomContinuity.js";
 import { resolveLegacyDirectEmploiContinuity } from "./resolveLegacyDirectEmploiContinuity.js";
@@ -119,6 +120,7 @@ export interface ProcessVacancyObservationDependencies {
   readonly derivationAlgorithmVersion?: string;
   readonly processEmployerObservation?: typeof processObservation;
   readonly maximumProjectionAttempts?: number;
+  readonly humanStateLookup?: (canonicalVacancyIds: readonly string[]) => Promise<ReadonlySet<string>>;
 }
 
 export async function processVacancyObservation(
@@ -136,6 +138,7 @@ export async function processVacancyObservation(
     await resolveLegacyApecContinuity(requestedObservation, dependencies) ??
     await resolveLegacyDirectEmploiContinuity(requestedObservation, dependencies) ??
     await resolveLegacyAlstomContinuity(requestedObservation, dependencies) ??
+    await resolveLegacyRenaultContinuity(requestedObservation, dependencies) ??
     (dependencies.generateCanonicalVacancyId ?? randomUUID)();
   const claim = await dependencies.canonicalVacancyRepository.claimIdentity(
     sourceObservationId,
