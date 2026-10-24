@@ -49,7 +49,7 @@ describe("ingestBrowserCapture", () => {
     expect(stored).not.toHaveProperty("externalId");
   });
 
-  it("persists repeated captures without provider identity as independent observations", async () => {
+  it("reuses identical unidentified captures but keeps changed content independent", async () => {
     const repository = new InMemorySourceObservationRepository();
     let index = 0;
     const deps = {
@@ -61,10 +61,11 @@ describe("ingestBrowserCapture", () => {
     const unidentifiedPayload = { ...browserPayload, pageUrl: "https://employer.example/jobs/" };
     const first = await ingestBrowserCapture(unidentifiedPayload, deps);
     const second = await ingestBrowserCapture(unidentifiedPayload, deps);
+    const changed = await ingestBrowserCapture({ ...unidentifiedPayload, visibleText: `${unidentifiedPayload.visibleText} changed` }, deps);
     expect(first.sourceObservationId).toBe("observation-1");
-    expect(second.sourceObservationId).toBe("observation-2");
-    expect(await repository.findById("observation-1")).not.toBeNull();
-    expect(await repository.findById("observation-2")).not.toBeNull();
+    expect(second.sourceObservationId).toBe("observation-1");
+    expect(await repository.findById("observation-2")).toBeNull();
+    expect(changed.sourceObservationId).toBe("observation-3");
   });
 
   it("reuses identical direct Indeed jk captures now that the URL supplies provider identity", async () => {
