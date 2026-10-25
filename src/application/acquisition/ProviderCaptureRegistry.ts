@@ -1,3 +1,4 @@
+import { MichaelPageSelectedVacancyContextLocator, michaelPageFacts, michaelPagePublishedAt } from "./MichaelPageVacancy.js";
 import { RenaultSelectedVacancyContextLocator, renaultFacts, renaultPublishedAt } from "./RenaultWorkdayVacancy.js";
 import { AlstomSelectedVacancyContextLocator, alstomFacts } from "./AlstomVacancy.js";
 import { KellySelectedVacancyContextLocator, kellyFacts } from "./KellyWorkdayVacancy.js";
@@ -64,6 +65,7 @@ export class ProviderCaptureRegistry {
     LHH: new LhhSelectedVacancyContextLocator(),
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
     TALENT: new TalentSelectedVacancyContextLocator(),
+    MICHAEL_PAGE: new MichaelPageSelectedVacancyContextLocator(),
     RENAULT_WORKDAY: new RenaultSelectedVacancyContextLocator(),
     KELLY_WORKDAY: new KellySelectedVacancyContextLocator(),
     ALSTOM: new AlstomSelectedVacancyContextLocator(),
@@ -109,6 +111,8 @@ export class ProviderCaptureRegistry {
     const promanDate = context?.html && providerKey === "PROMAN" ? promanPublishedAt(context.html) : undefined;
     const giGroup = providerKey === "GI_GROUP" && context?.html ? giGroupFacts(context.html) : undefined;
     const giGroupDate = context?.html && providerKey === "GI_GROUP" ? giGroupPublishedAt(context.html) : undefined;
+    const michaelPage = providerKey === "MICHAEL_PAGE" && context?.html ? michaelPageFacts(context.html) : undefined;
+    const michaelPageDate = michaelPagePublishedAt(michaelPage?.publishedText);
     const renault = providerKey === "RENAULT_WORKDAY" && context?.html ? renaultFacts(context.html) : undefined;
     const renaultDate = providerKey === "RENAULT_WORKDAY" ? renaultPublishedAt(context?.metadata) : undefined;
     const kelly = providerKey === "KELLY_WORKDAY" && context?.html ? kellyFacts(context.html) : undefined;
@@ -123,7 +127,7 @@ export class ProviderCaptureRegistry {
     const directEmploiConflict = providerKey === "DIRECT_EMPLOI" && input.html !== undefined && externalId !== undefined
       && directEmploiIdentity({ sourceUrl: input.sourceUrl, html: input.html, externalId }).status === "CONFLICT";
     const alstom = providerKey === "ALSTOM" && context?.html ? alstomFacts(context.html) : undefined;
-    const structuredFields = renault ? { ...(renaultDate ? { publishedAt: renaultDate } : {}), title: renault.title, locationText: renault.values.locations!, ...(renault.company ? { displayedCompanyName: renault.company } : {}) } : alstom ? { title: alstom.title, displayedCompanyName: alstom.company, locationText: alstom.location, ...(alstom.publishedAt ? { publishedAt: alstom.publishedAt } : {}) } : apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
+    const structuredFields = michaelPage ? { title: michaelPage.title, locationText: michaelPage.location, ...(michaelPageDate ? { publishedAt: michaelPageDate } : {}) } : renault ? { ...(renaultDate ? { publishedAt: renaultDate } : {}), title: renault.title, locationText: renault.values.locations!, ...(renault.company ? { displayedCompanyName: renault.company } : {}) } : alstom ? { title: alstom.title, displayedCompanyName: alstom.company, locationText: alstom.location, ...(alstom.publishedAt ? { publishedAt: alstom.publishedAt } : {}) } : apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
         ...(apec.contract ? { contractText: apec.contract } : {}), ...(apec.salaryText ? { salaryText: apec.salaryText } : {}), ...(apecDate ? { publishedAt: apecDate } : {}) }
 : directEmploi ? { title: directEmploi.title, ...(directEmploi.company ? { displayedCompanyName: directEmploi.company } : {}), ...(directEmploi.location ? { locationText: directEmploi.location } : {}),
         ...(directEmploi.contract ? { contractText: directEmploi.contract } : {}), ...(directEmploiDate ? { publishedAt: directEmploiDate } : {}) }
@@ -153,7 +157,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),

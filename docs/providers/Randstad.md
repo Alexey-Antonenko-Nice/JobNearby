@@ -6,14 +6,14 @@
 | Direct vacancy | Supported for the validated `header--job-detail--alternative` / `job-details` layout |
 | Stable identity | Existing `/emploi/<slug>_<reference>/` URL parser; exact URL reference retained |
 | Reference validation | Summary reference and header favorite ID must agree with URL, ignoring letter case |
-| Salary | Bounded salary summary; EUR integer range with explicit `par année`, `par mois` or `par heure` |
+| Salary | Bounded salary summary; EUR integer amount or range with explicit `par année`, `par mois` or `par heure` |
 | Contract | Explicit CDI → INDEFINITE, CDD → FIXED_TERM, intérim → INTERIM |
 | Hours | FULL_TIME / PART_TIME only from a unique identity-matched JobPosting |
 | Location / title | Current summary location / current header title, preserving source spelling and casing |
 | Experience | Integer `année(s)` summary requirement → minimumYears, unit YEAR; no invented maximum |
 | Education | BAC+2 preserved in context; canonical UNKNOWN (no education evidence/parser pipeline) |
 | Publication | Existing source publishedAt from the matched posting's datePosted; visible date retained in context |
-| Agency identity | Matched posting's explicit Randstad France name plus current-client wording supports staffing role |
+| Agency identity | Matched posting's explicit Randstad name plus vacancy hiring-for-client wording supports recruitment role (0.98); name/activity/CDI alone do not |
 | Named client | Existing explicit client rules only; unnamed client remains unresolved |
 | Agency memory | Human confirmation and subsequent exact normalized name reuse tested |
 | Recapture | Exact observation reuse/occurrence increment and changed snapshot/canonical continuity tested |
@@ -90,3 +90,39 @@ Tests, fixture and documentation:
 - `tests/acquisition/ProviderCaptureRegistry.test.ts`
 - `tests/fixtures/randstadDirectVacancy.html`
 - `docs/providers/Randstad.md`
+
+## Saved single-amount salary repair
+
+Observation `63377f35-1da6-4204-9425-5927a0faf575` (canonical
+`4e7a6aa5-1003-4dbe-856e-440f593c113e`) was inspected from the original
+stored HTML using a read-only database connection. Its validated summary says
+`38 000 € par année`. The former parser required two EUR amounts separated by
+a dash, so it returned no compensation. The matched JSON-LD has minValue 38000
+and maxValue 0; it is not used to override the visible summary.
+
+The bounded parser now accepts a single integer amount as equal minimum and
+maximum, retaining EUR and the explicitly stated period. Gross/net remains
+unspecified. Existing ranges and rejection of missing/unknown periods, other
+currencies, malformed amounts and reversed ranges remain covered.
+
+The previous provider rule converted any `notre client` mention into
+STAFFING_AGENCY and reused the confidence-1 provenance of literal summary
+fields. This confused company-level staffing activity with the relationship to
+this vacancy. Here the description explicitly says “Nous recherchons pour le
+compte de notre client” and describes an unnamed industrial client. That supports
+RECRUITMENT_AGENCY with contextual confidence 0.98, independently of CDI.
+The agency name still comes only from the unique identity-matched posting;
+it does not establish employment or staffing. The client's identity stays
+unresolved. Client-site duties, generic client mentions and company staffing
+boilerplate do not establish a staffing assignment. The bounded extraction path
+strips the legacy displayed-company field before generic name-based rules run.
+
+`tests/fixtures/randstadSingleSalaryVacancy.html` preserves the actual saved DOM
+and JSON-LD with executable scripts, styles and image assets removed.
+`tests/acquisition/RandstadSingleSalaryVacancy.test.ts` covers the scalar salary,
+role distinction, outside-content exclusion, and nonempty human decisions across
+identical/changed recapture. Set `RANDSTAD_STORED_REPLAY=1` to additionally replay
+the actual original HTML in an in-memory serialization of the read-only live
+database, verifying repaired compensation, original canonical continuity,
+identical recapture, immutable source and preserved decision/interaction history.
+No live rows or schema are changed.

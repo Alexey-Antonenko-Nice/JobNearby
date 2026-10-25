@@ -76,9 +76,9 @@ describe("Randstad direct vacancy", () => {
     expect(canonical.engagement.value?.normalizedTerms).toEqual(["INDEFINITE"]);
     expect(evidence.engagements.flatMap(e => e.normalizedTerms)).toEqual(["INDEFINITE"]);
   });
-  it("keeps Randstad France as displayed staffing agency with an unnamed employer", async () => {
+  it("keeps vacancy recruitment separate from company staffing activity and leaves employer unnamed", async () => {
     const { canonical, evidence } = await project();
-    expect(evidence.organizations).toEqual([expect.objectContaining({ value: "Randstad France", role: "DISPLAYED_COMPANY" }), expect.objectContaining({ value: "Randstad France", role: "STAFFING_AGENCY" })]);
+    expect(evidence.organizations).toEqual([expect.objectContaining({ value: "Randstad France", role: "DISPLAYED_COMPANY" }), expect.objectContaining({ value: "Randstad France", role: "RECRUITMENT_AGENCY" })]);
     expect(canonical.organizationRelationships.some(r => r.role === "EMPLOYER" || r.role === "CLIENT")).toBe(false);
   });
   it("does not infer agency identity solely from hostname without matching structured organization", async () => {
