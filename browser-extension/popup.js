@@ -31,6 +31,39 @@ function identifiedEmployerMessage(value) {
   return `Employer identified: ${name}.`;
 }
 
+// Injected into the page, so it must stay self-contained. Open shadow roots are
+// not part of outerHTML; copy them under their host in a marked wrapper.
+export function captureDocumentSnapshot() {
+  const doc = document;
+  const inlineShadowRoots = (original, copy) => {
+    const originals = original.querySelectorAll("*");
+    const copies = copy.querySelectorAll("*");
+    for (let index = 0; index < originals.length; index += 1) {
+      const shadow = originals[index].shadowRoot;
+      if (!shadow || !copies[index]) continue;
+      const wrapper = doc.createElement("div");
+      wrapper.setAttribute("data-jn-shadow-root", "open");
+      for (const child of Array.from(shadow.childNodes)) wrapper.appendChild(child.cloneNode(true));
+      inlineShadowRoots(shadow, wrapper);
+      copies[index].appendChild(wrapper);
+    }
+  };
+  let html;
+  try {
+    const clone = doc.documentElement.cloneNode(true);
+    inlineShadowRoots(doc.documentElement, clone);
+    html = clone.outerHTML;
+  } catch {
+    html = doc.documentElement?.outerHTML;
+  }
+  return {
+    pageUrl: window.location.href,
+    pageTitle: doc.title,
+    visibleText: doc.body?.innerText ?? "",
+    html,
+  };
+}
+
 function initializePopup(button, status) {
   button.addEventListener("click", async () => {
   button.disabled = true;
@@ -40,12 +73,7 @@ function initializePopup(button, status) {
     if (tab.id === undefined) throw new Error("No active browser tab is available.");
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => ({
-        pageUrl: window.location.href,
-        pageTitle: document.title,
-        visibleText: document.body?.innerText ?? "",
-        html: document.documentElement?.outerHTML,
-      }),
+      func: captureDocumentSnapshot,
     });
     const payload = createBrowserCapturePayload(result.result, new Date().toISOString());
     const response = await fetch("http://127.0.0.1:4317/acquisition/browser", {
