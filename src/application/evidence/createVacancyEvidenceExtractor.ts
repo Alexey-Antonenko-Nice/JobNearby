@@ -24,6 +24,7 @@ import { JoobleSelectedVacancyEvidenceExtractor } from "./JoobleSelectedVacancyE
 import { LinkedInSelectedVacancyEvidenceExtractor } from "./LinkedInSelectedVacancyEvidenceExtractor.js";
 import { CadremploiSelectedVacancyEvidenceExtractor } from "./CadremploiSelectedVacancyEvidenceExtractor.js";
 import { LhhSelectedVacancyEvidenceExtractor } from "./LhhSelectedVacancyEvidenceExtractor.js";
+import { FranceTravailVacancyEvidenceExtractor } from "./FranceTravailVacancyEvidenceExtractor.js";
 
 import { AdeccoSelectedVacancyEvidenceExtractor } from "./AdeccoSelectedVacancyEvidenceExtractor.js";
 
@@ -50,6 +51,7 @@ export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtrac
     new CadremploiSelectedVacancyEvidenceExtractor(),
     new LhhSelectedVacancyEvidenceExtractor(),
     new IndeedSelectedVacancyEvidenceExtractor(),
+    new FranceTravailVacancyEvidenceExtractor(),
     new DirectFieldVacancyEvidenceExtractor(),
     new ExplicitTextVacancyEvidenceExtractor(),
     new ExplicitEmployerCharacteristicExtractor(),
