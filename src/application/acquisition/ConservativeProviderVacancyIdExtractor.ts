@@ -1,3 +1,4 @@
+import { michaelPageVacancyId } from "./MichaelPageVacancy.js";
 import { isRenaultWorkdaySource, renaultVacancyId } from "./RenaultWorkdayVacancy.js";
 import { alstomPostingId, ALSTOM_HOST } from "./AlstomVacancy.js";
 import { isKellyWorkdaySource, kellyVacancyId } from "./KellyWorkdayVacancy.js";
@@ -54,6 +55,7 @@ export class ConservativeProviderVacancyIdExtractor
 {
   extract(input: ProviderVacancyIdExtractionInput): string | undefined {
     if (input.sourceName === ALSTOM_HOST) return alstomPostingId(input.sourceUrl);
+    if (input.sourceName === "michaelpage.fr") return michaelPageVacancyId(input.sourceUrl);
     if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return renaultVacancyId(input.sourceUrl);
     if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return kellyVacancyId(input.sourceUrl);
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return extractPersonioVacancyId(input.sourceUrl);

@@ -1,3 +1,4 @@
+import { resolveLegacyMichaelPageContinuity } from "./resolveLegacyMichaelPageContinuity.js";
 import { resolveLegacyRenaultContinuity } from "./resolveLegacyRenaultContinuity.js";
 import { EMPLOYER_IDENTITY_ALGORITHM } from "../../domain/user/EmployerIdentityReview.js";
 import { resolveLegacyAlstomContinuity } from "./resolveLegacyAlstomContinuity.js";
@@ -139,6 +140,7 @@ export async function processVacancyObservation(
     await resolveLegacyDirectEmploiContinuity(requestedObservation, dependencies) ??
     await resolveLegacyAlstomContinuity(requestedObservation, dependencies) ??
     await resolveLegacyRenaultContinuity(requestedObservation, dependencies) ??
+    await resolveLegacyMichaelPageContinuity(requestedObservation, dependencies) ??
     (dependencies.generateCanonicalVacancyId ?? randomUUID)();
   const claim = await dependencies.canonicalVacancyRepository.claimIdentity(
     sourceObservationId,

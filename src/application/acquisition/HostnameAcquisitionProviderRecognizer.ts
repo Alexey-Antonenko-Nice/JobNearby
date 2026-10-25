@@ -16,6 +16,7 @@ const providersByHostname: Readonly<Record<string, ProviderKey>> = {
 
 export class HostnameAcquisitionProviderRecognizer implements AcquisitionProviderRecognizer {
   recognize(input: AcquisitionProviderRecognitionInput): ProviderKey | undefined {
+    if (input.sourceName === "michaelpage.fr") { try { if (/^(?:www\.)?michaelpage\.fr$/u.test(new URL(input.sourceUrl).hostname)) return "MICHAEL_PAGE"; } catch { return undefined; } }
     if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return "RENAULT_WORKDAY";
     if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return "KELLY_WORKDAY";
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return "PERSONIO";
