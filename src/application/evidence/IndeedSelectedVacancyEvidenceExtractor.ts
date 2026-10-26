@@ -32,6 +32,7 @@ export class IndeedSelectedVacancyEvidenceExtractor implements VacancyEvidenceEx
     const context = selectedIndeedContext(input)!;
     const selectedText = context.text ?? htmlToIndeedText(context.html ?? "");
     const compensation = companyJobsHeaderCompensation(context.html ?? "") ?? selectedCompensation(selectedText);
+    const workMode = headerWorkMode(selectedText);
     const terms = [
       ...(/\bCDI\b/iu.test(selectedText) ? [["CDI", "INDEFINITE"] as const] : []),
       ...(/\bCDD\b/iu.test(selectedText) ? [["CDD", "FIXED_TERM"] as const] : []),
@@ -41,8 +42,9 @@ export class IndeedSelectedVacancyEvidenceExtractor implements VacancyEvidenceEx
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
       ...(facts.title === undefined ? {} : { vacancyTitles: [{ value: facts.title, provenance }] }),
-      ...(facts.company === undefined ? {} : { organizations: [{ value: facts.company, role: "UNKNOWN", provenance }] }),
+      ...(facts.company === undefined ? {} : { organizations: [{ value: facts.company, role: selfIdentifiedEmployer(selectedText, facts.company) ? "EMPLOYER" : "UNKNOWN", provenance }] }),
       ...(facts.location === undefined ? {} : { locations: [{ value: facts.location, role: "WORKPLACE", provenance }] }),
+      ...(workMode === undefined ? {} : { workModes: [{ value: workMode, provenance }] }),
       ...(terms.length === 0 ? {} : { engagements: [{ rawTerms: terms.map(([raw]) => raw), normalizedTerms: terms.map(([, value]) => value), provenance }] }),
       ...(compensation === undefined ? {} : { compensations: [{ ...compensation, provenance }] }),
     });
@@ -68,7 +70,7 @@ export function extractIndeedSelectedVacancyFacts(
   ]) ?? companyJobsSubtitle?.company;
   const location = firstSemanticText(context.html, [
     /(?:data-testid|data-test-id)\s*=\s*["'][^"']*(?:inlineHeader-companyLocation|job-location)[^"']*["']/iu,
-  ]) ?? companyJobsSubtitle?.location ?? nativeHeaderLocation(context.html) ?? firstPostalLocation(context.text ?? htmlToText(context.html));
+  ]) ?? companyJobsSubtitle?.location ?? nativeHeaderLocation(context.html) ?? headerAddressLocation(context.text ?? htmlToText(context.html)) ?? firstPostalLocation(context.text ?? htmlToText(context.html));
   return {
     ...(title === undefined ? {} : { title: stripIndeedJobPostSuffix(title) }),
     ...(company === undefined ? {} : { company }),
@@ -153,6 +155,35 @@ function firstHeadingWithJobPostSuffix(html: string): string | undefined {
     if (/-\s*job\s+post$/iu.test(text)) return text;
   }
   return undefined;
+}
+
+function headerLines(text: string): string[] {
+  const lines = text.split(/\r?\n/u).map(normalizeText).filter((line) => line.length > 0);
+  const end = lines.findIndex((line) => /^(?:Continuer pour postuler|D[ée]tails du poste|Description du poste)$/iu.test(line));
+  return lines.slice(0, end < 0 ? 0 : end);
+}
+
+// Only the bounded header above "Détails du poste" is read, never the description.
+function headerAddressLocation(text: string): string | undefined {
+  return headerLines(text).find((line) =>
+    /^(?:[\p{L}\d][\p{L}\d\s'’.-]{0,60},\s*)?\d{5}\s+[\p{L}][\p{L}'’.-]*(?:[\s-]+[\p{L}'’.-]+){0,4}$/u.test(line)
+    && !/€/u.test(line));
+}
+
+// "Télétravail partiel" is qualified remote work: partly on site, so never REMOTE.
+function headerWorkMode(text: string): "HYBRID" | undefined {
+  return headerLines(text).some((line) => /^t[eé]l[eé]travail\s+(?:partiel|hybride|occasionnel)$/iu.test(line))
+    ? "HYBRID"
+    : undefined;
+}
+
+// The vacancy text itself must name the company in the first person and state it is
+// hiring for its own teams; recruiter wording keeps the role unclassified.
+function selfIdentifiedEmployer(text: string, company: string): boolean {
+  const escaped = company.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  if (!new RegExp(`(?:^|\\n)\\s*Nous\\s+sommes\\s+${escaped}\\b`, "iu").test(text)) return false;
+  if (/\b(?:pour\s+le\s+compte\s+de|notre\s+client|nos\s+clients?\s+recherchent|cabinet\s+de\s+recrutement|int[ée]rim)\b/iu.test(text)) return false;
+  return /\bnous\s+recherchons\b[^\n]*\b(?:pour\s+(?:rejoindre|renforcer)\s+)?(?:nos|notre)\s+(?:[ée]quipes?|agence|soci[ée]t[ée])\b/iu.test(text);
 }
 
 function firstPostalLocation(text: string): string | undefined {
