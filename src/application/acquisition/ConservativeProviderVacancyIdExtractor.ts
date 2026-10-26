@@ -1,3 +1,4 @@
+import { oranoVacancyId } from "./OranoVacancy.js";
 import { michaelPageVacancyId } from "./MichaelPageVacancy.js";
 import { isRenaultWorkdaySource, renaultVacancyId } from "./RenaultWorkdayVacancy.js";
 import { alstomPostingId, ALSTOM_HOST } from "./AlstomVacancy.js";
@@ -54,6 +55,7 @@ export class ConservativeProviderVacancyIdExtractor
   implements ProviderVacancyIdExtractor
 {
   extract(input: ProviderVacancyIdExtractionInput): string | undefined {
+    if (input.sourceName === "jobs.orano.group") return oranoVacancyId(input.sourceUrl);
     if (input.sourceName === ALSTOM_HOST) return alstomPostingId(input.sourceUrl);
     if (input.sourceName === "michaelpage.fr") return michaelPageVacancyId(input.sourceUrl);
     if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return renaultVacancyId(input.sourceUrl);

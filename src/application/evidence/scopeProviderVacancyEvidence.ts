@@ -1,3 +1,4 @@
+import { scopeOranoVacancyEvidence } from "./scopeOranoVacancyEvidence.js";
 import { scopeMichaelPageVacancyEvidence } from "./scopeMichaelPageVacancyEvidence.js";
 import { isRenaultWorkdaySource } from "../acquisition/RenaultWorkdayVacancy.js";
 import { scopeRenaultVacancyEvidence } from "./scopeRenaultVacancyEvidence.js";
@@ -28,6 +29,7 @@ const boundedHelloWorkInput = Symbol("boundedHelloWorkInput");
 
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
 export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
+  if (input.source.sourceName === "jobs.orano.group") return scopeOranoVacancyEvidence(input);
   if (input.source.sourceName === "michaelpage.fr") return scopeMichaelPageVacancyEvidence(input);
   if (isRenaultWorkdaySource(input.source.sourceName, input.source.sourceUrl ?? "")) return scopeRenaultVacancyEvidence(input);
   if (input.source.sourceName === KELLY_WORKDAY_HOST) return scopeKellyVacancyEvidence(input);
