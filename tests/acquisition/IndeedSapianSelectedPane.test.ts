@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -80,7 +81,7 @@ describe("Indeed selected pane: Sapian", () => {
 // Opt-in: reads the saved database once; everything runs on a private in-memory copy.
 it.skipIf(!process.env.INDEED_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays the stored Indeed capture into the same canonical and preserves human state", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observationId = "479143cf-a2e7-42ce-9cb7-1c328e13057a", canonicalId = "f35fbe4b-cb8f-440c-9de6-efdbbcbfa74c";
     const original = (await new SqliteSourceObservationRepository(db).findById(observationId))!;

@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -128,7 +129,7 @@ describe("Renault /details/ selected vacancy", () => {
 
 it.skipIf(!process.env.RENAULT_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays actual /details/ observation with original canonical and decisions only in memory", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observations = new SqliteSourceObservationRepository(db);
     const original = (await observations.findById("b4443e46-5a99-4ca5-a15e-020a702fac54"))!;

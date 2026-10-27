@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -116,7 +117,7 @@ describe("Orano saved vacancy", () => {
 
 it.skipIf(!process.env.ORANO_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays actual Orano observation in memory with original canonical and decisions", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observations = new SqliteSourceObservationRepository(db);
     const original = (await observations.findById("acd22422-5ca6-42de-a5d5-bbda53c96771"))!;

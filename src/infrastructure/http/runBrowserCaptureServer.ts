@@ -1,3 +1,4 @@
+import { SqliteVacancyCleanup } from "../persistence/SqliteVacancyCleanup.js";
 import { SqliteEmployerIdentityDecisionStore } from "../persistence/SqliteEmployerIdentityDecisionStore.js";
 import { SqliteVacancyOrganizationRoleDecisionRepository } from "../persistence/SqliteVacancyOrganizationRoleDecisionRepository.js";
 import { SqliteConfirmedOrganizationRoleRepository } from "../persistence/SqliteConfirmedOrganizationRoleRepository.js";
@@ -39,6 +40,7 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
 const server = createBrowserCaptureServer({
+  vacancyCleanup: new SqliteVacancyCleanup(database),
   decideEmployerIdentity: reviewWorkflow.decideEmployerIdentity,
   searchEmployerIdentities: reviewWorkflow.searchEmployerIdentities,
   decideVacancyOrganizationRole: reviewWorkflow.decideVacancyOrganizationRole,

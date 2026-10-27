@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -150,7 +151,7 @@ describe("LinkedIn B-Hive selected vacancy", () => {
 // Opt-in: reads the saved database once; everything runs on a private in-memory copy.
 it.skipIf(!process.env.LINKEDIN_BHIVE_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays both stored B-Hive captures into the same canonical with no role conflict", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const firstId = "2f32a550-3db4-4327-855e-258493de6c5a", latestId = "a103963f-909d-4d96-a32e-501e3e598d16", canonicalId = "60003e74-1ad4-4e66-9d29-e0e4be961792";
     const observations = new SqliteSourceObservationRepository(db);
@@ -191,7 +192,7 @@ it.skipIf(!process.env.LINKEDIN_BHIVE_STORED_REPLAY || !existsSync("job-nearby.s
 // Opt-in: reads the saved database once; everything runs on a private in-memory copy.
 it.skipIf(!process.env.LINKEDIN_BHIVE_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays the stored B-Hive capture into the same canonical and preserves human state", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observationId = "2f32a550-3db4-4327-855e-258493de6c5a", canonicalId = "60003e74-1ad4-4e66-9d29-e0e4be961792";
     const original = (await new SqliteSourceObservationRepository(db).findById(observationId))!;

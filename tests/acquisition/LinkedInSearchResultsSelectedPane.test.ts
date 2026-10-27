@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -99,7 +100,7 @@ describe("LinkedIn /jobs/search-results/ selected pane", () => {
 // Opt-in: reads the saved database once; everything runs on a private in-memory copy.
 it.skipIf(!process.env.LINKEDIN_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays the stored LinkedIn capture into the same canonical and preserves human state", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observationId = "da522925-321d-46b6-bb0e-a595c090b7d5", canonicalId = "a2743543-0b68-49cd-8cc9-485d2e947fad";
     const observations = new SqliteSourceObservationRepository(db);

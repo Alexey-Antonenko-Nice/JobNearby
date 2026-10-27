@@ -101,7 +101,7 @@ export function createVacancyReviewWorkflow(
       await decideEmployerMemoryReview(vacancy, input.employerClusterId, input.decision, reviewDependencies);
       return getVacancyReviewView(input.canonicalVacancyId, reviewDependencies);
     },
-    getVacancyInbox: (input?: { readonly limit?: number }) => getVacancyInbox(input, reviewDependencies),
+    getVacancyInbox: (input?: { readonly limit?: number; readonly archived?: boolean }) => getVacancyInbox(input, reviewDependencies),
     getVacancyReview: (canonicalVacancyId: CanonicalVacancyId) =>
       getVacancyReviewView(canonicalVacancyId, reviewDependencies),
     confirmVacancyEmployer: async (input: { readonly canonicalVacancyId: string; readonly candidateName: string }) => {

@@ -1,3 +1,4 @@
+import { VacancyCleanupSection } from "./VacancyCleanupSection";
 import { EmployerIdentitySection } from "./EmployerIdentitySection";
 import { OrganizationRoleSection } from "./OrganizationRoleSection";
 import { RecruitingAgencySection } from "./RecruitingAgencySection";
@@ -18,6 +19,7 @@ export function ReviewPage(): React.JSX.Element {
   const canonicalVacancyId = reviewIdFromPath(window.location.pathname);
   const [review, setReview] = useState<ReviewView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleted, setDeleted] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [selectedAliasCluster, setSelectedAliasCluster] = useState("");
   const [pending, setPending] = useState(false);
@@ -72,11 +74,13 @@ export function ReviewPage(): React.JSX.Element {
     finally { setPending(false); }
   }
 
+  if (deleted) return <main className="page"><p role="status">Vacancy permanently deleted.</p><a href="/">Back to inbox</a></main>;
   if (notFound) return <main className="page"><p>Vacancy not found.</p></main>;
   if (error !== null && review === null) return <main className="page"><p role="alert">{error}</p></main>;
   if (review === null) return <main className="page"><p>Loading...</p></main>;
 
   return <main className="page">
+    {canonicalVacancyId && <VacancyCleanupSection id={canonicalVacancyId} onChanged={async (wasDeleted) => { if (wasDeleted) { setDeleted(true); return; } try { setReview(await getReview(canonicalVacancyId)); } catch { setNotFound(true); } }} />}
     <a href="/">Back to inbox</a>
     <header><h1>{text(review.vacancy.title)}</h1><p>Current state: <strong>{review.user.currentState}</strong></p></header>
     {error !== null && <p className="error" role="alert">{error}</p>}

@@ -167,9 +167,9 @@ export interface VacancyInboxItem {
   readonly signals: { readonly sameCanonicalVacancySeenBefore: boolean; readonly hasMultipleSourceObservations: boolean; readonly alreadyAppliedToThisVacancy: boolean };
 }
 
-export async function getVacancyInbox(limit?: number): Promise<readonly VacancyInboxItem[]> {
+export async function getVacancyInbox(limit?: number, archived = false): Promise<readonly VacancyInboxItem[]> {
   const query = limit === undefined ? "" : `?limit=${encodeURIComponent(limit)}`;
-  const response = await fetch(`${API_ORIGIN}/vacancies${query}`);
+  const response = await fetch(`${API_ORIGIN}/vacancies${query}${archived ? (query ? "&archived=true" : "?archived=true") : ""}`);
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { vacancies: readonly VacancyInboxItem[] }).vacancies;
 }
@@ -237,4 +237,11 @@ export async function decideEmployerIdentity(canonicalVacancyId: string, input: 
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as {review:ReviewView}).review;
+}
+
+export type { VacancyCleanupState, VacancyDeletionPreview } from "../../src/domain/user/VacancyCleanup.js";
+export async function cleanupRequest<T>(id: string, action: string, body?: unknown): Promise<T> {
+  const response = await fetch(API_ORIGIN + "/vacancies/" + encodeURIComponent(id) + "/" + action, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!response.ok) throw await apiError(response);
+  return await response.json() as T;
 }

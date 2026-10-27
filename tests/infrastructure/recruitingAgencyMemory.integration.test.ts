@@ -1,3 +1,4 @@
+import { versionEightDatabase } from "./legacyDatabaseFixture.js";
 import Database from "better-sqlite3";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
@@ -376,20 +377,20 @@ describe("human-confirmed agency memory", () => {
       expect((await reopened.workflow.getVacancyReview("first")).agencyContext?.known[0]?.source).toBe("USER_CONFIRMED");
       expect(() => copy.prepare("UPDATE confirmed_organization_roles SET role='RECRUITER'").run()).toThrow("append-only");
       expect(() => copy.prepare("DELETE FROM confirmed_organization_roles").run()).toThrow("append-only");
-      expect(copy.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 10 });
+      expect(copy.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 11 });
     } finally { reopened?.db.close(); f.db.close(); }
   });
   it("upgrades a populated version 8 database additively and idempotently", async () => {
-    const f = fixture();
+    const f = fixture(versionEightDatabase());
     try {
       await f.add("existing");
-      f.db.exec("DROP TABLE vacancy_organization_role_decisions; DROP TABLE confirmed_organization_roles; DELETE FROM schema_migrations WHERE version>=9");
       const tables = (f.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> 'schema_migrations' ORDER BY name").all() as { name: string }[]).map((row) => row.name);
-      const snapshot = () => JSON.stringify(tables.map((table) => [table, f.db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all()]));
+      const columns = tables.map(table => (f.db.pragma(`table_info(${table})`) as {name:string}[]).map(c => c.name).join(","));
+      const snapshot = () => JSON.stringify(tables.map((table,i) => [table, f.db.prepare(`SELECT ${columns[i]} FROM "${table}" ORDER BY rowid`).all()]));
       const before = snapshot();
       migrateDatabase(f.db); migrateDatabase(f.db);
       expect(snapshot()).toBe(before);
-      expect(f.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 10 });
+      expect(f.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 11 });
       expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 0 });
     } finally { f.db.close(); }
   });

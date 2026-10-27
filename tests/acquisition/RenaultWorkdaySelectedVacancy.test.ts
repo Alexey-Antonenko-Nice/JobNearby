@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -113,7 +114,7 @@ describe("Renault validated Workday tenant", () => {
 // on a private in-memory copy. No source schema or data can be modified.
 it.skipIf(!process.env.RENAULT_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays actual stored observation and preserves its canonical and decisions", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observations = new SqliteSourceObservationRepository(db);
     const id = "9bdc9cd9-56f0-444a-9938-1afb39bb5907", canonicalId = "68a6d5cf-a4f4-4f4a-86c5-830726badbf6";

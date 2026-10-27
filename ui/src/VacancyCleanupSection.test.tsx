@@ -1,0 +1,54 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it, vi } from "vitest";
+import { VacancyCleanupSection } from "./VacancyCleanupSection";
+const fetchMock = vi.fn<typeof fetch>();
+vi.stubGlobal("fetch", fetchMock);
+afterEach(() => { cleanup(); fetchMock.mockReset(); });
+const state = {canonicalVacancyId:"v",title:"Engineer",archived:true,token:"a".repeat(64),captures:[{id:"one",title:"Engineer",url:"https://example.test/job",observedAt:"2026-10-27"},{id:"two",title:"Engineer update",url:"https://example.test/job",observedAt:"2026-10-28"}]};
+const preview = {...state,targetObservationId:null,requiresHistoryAcknowledgement:true,retainedSourceIds:[],affected:[{label:"Vacancy interactions removed",count:2}]};
+function respond(body: unknown, status=200) { fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(body),{status,headers:{"Content-Type":"application/json"}})); }
+it("requires preview, explicit confirmation and history acknowledgement before deletion", async () => {
+  const changed=vi.fn().mockResolvedValue(undefined);
+  respond({cleanup:state}); respond({preview}); respond({deletedVacancy:true});
+  render(<VacancyCleanupSection id="v" onChanged={changed} />);
+  expect(fetchMock).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByText("Load cleanup options"));
+  expect(await screen.findByText(/Archived —/)).toBeInTheDocument();
+  expect(screen.queryByText("Permanently delete")).not.toBeInTheDocument();
+  await userEvent.click(screen.getByText("Preview permanent deletion"));
+  const button=await screen.findByText("Permanently delete");
+  expect(button).toBeDisabled();
+  expect(screen.getByText("Vacancy interactions removed: 2")).toBeInTheDocument();
+  await userEvent.type(screen.getByLabelText("Type DELETE to confirm"),"DELETE");
+  expect(button).toBeDisabled();
+  await userEvent.click(screen.getByRole("checkbox"));
+  await userEvent.click(button);
+  expect(await screen.findByText(/Vacancy permanently deleted/)).toBeInTheDocument();
+  expect(JSON.parse(String(fetchMock.mock.calls[2]![1]!.body))).toEqual({token:state.token,confirmation:"DELETE",acknowledgeApplicationHistory:true});
+  expect(changed).toHaveBeenCalledOnce();
+});
+it("clears stale previews and requires loading fresh options", async () => {
+  respond({cleanup:state}); respond({preview:{...preview,requiresHistoryAcknowledgement:false}}); respond({error:"This vacancy changed. Reload the review and preview again."},409);
+  render(<VacancyCleanupSection id="v" onChanged={async () => {}} />);
+  await userEvent.click(screen.getByText("Load cleanup options"));
+  await userEvent.click(await screen.findByText("Preview permanent deletion"));
+  await userEvent.type(await screen.findByLabelText("Type DELETE to confirm"),"DELETE");
+  await userEvent.click(screen.getByText("Permanently delete"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("changed");
+  expect(screen.queryByText("Permanently delete")).not.toBeInTheDocument();
+  expect(screen.getByText("Load cleanup options")).toBeInTheDocument();
+});
+it("allows restore and one-capture preview without automatic deletion", async () => {
+  respond({cleanup:state}); respond({preview:{...preview,targetObservationId:"two"}}); respond({cleanup:{...state,archived:false}});
+  render(<VacancyCleanupSection id="v" onChanged={async () => {}} />);
+  await userEvent.click(screen.getByText("Load cleanup options"));
+  await userEvent.selectOptions(await screen.findByRole("combobox"),"two");
+  await userEvent.click(screen.getByText("Preview permanent deletion"));
+  expect(await screen.findByText(/Facts will be recomputed/)).toBeInTheDocument();
+  expect(fetchMock.mock.calls[1]![0]).toContain("?observationId=two");
+  await userEvent.click(screen.getByText("Restore vacancy"));
+  expect(await screen.findByText("Active vacancy")).toBeInTheDocument();
+  expect(screen.queryByText("Permanently delete")).not.toBeInTheDocument();
+  expect(JSON.parse(String(fetchMock.mock.calls[2]![1]!.body))).toEqual({token:state.token,archived:false});
+});

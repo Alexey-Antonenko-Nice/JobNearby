@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -83,7 +84,7 @@ describe("identical unidentified recapture", () => {
 // Opt-in: reads the saved database once; everything runs on a private in-memory copy.
 it.skipIf(!process.env.RENAULT_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("recaptures the actual stored duplicate pair into one existing canonical without touching either", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observations = new SqliteSourceObservationRepository(db);
     const [oldId, newId] = ["9bdc9cd9-56f0-444a-9938-1afb39bb5907", "445d0013-361e-4189-a477-a32ddaa683e9"];

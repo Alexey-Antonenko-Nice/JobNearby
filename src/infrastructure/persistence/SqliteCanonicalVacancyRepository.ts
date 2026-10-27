@@ -97,7 +97,10 @@ export class SqliteCanonicalVacancyRepository
 {
   constructor(private readonly db: Database.Database) {}
 
-  async save(vacancy: CanonicalVacancy) {
+  async save(vacancy: CanonicalVacancy) { return this.saveSync(vacancy); }
+
+  /** Synchronous projection persistence for composition inside a cleanup transaction. */
+  saveSync(vacancy: CanonicalVacancy) {
     const validated = validateCanonicalVacancy(vacancy);
     const replaceProjection = this.db.transaction(() => {
       for (const observationId of validated.sourceObservationIds) {
@@ -270,10 +273,11 @@ export class SqliteCanonicalVacancyRepository
     });
   }
 
-  async findAll(): Promise<readonly CanonicalVacancy[]> {
+  async findAll(options: { readonly archived?: boolean } = {}): Promise<readonly CanonicalVacancy[]> {
     const ids = (this.db.prepare(`
-      SELECT id FROM canonical_vacancies ORDER BY id
-    `).all() as Array<{ id: string }>).map(({ id }) => id);
+      SELECT v.id FROM canonical_vacancies v LEFT JOIN vacancy_cleanup_state s ON s.canonical_vacancy_id=v.id
+      WHERE (s.archived_at IS NOT NULL) = ? ORDER BY v.id
+    `).all(options.archived ? 1 : 0) as Array<{ id: string }>).map(({ id }) => id);
     return Promise.all(ids.map(async (id) => {
       const vacancy = await this.findById(id);
       if (vacancy === null) throw new Error(`CanonicalVacancy "${id}" does not exist.`);

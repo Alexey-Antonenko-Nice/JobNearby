@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -116,7 +117,7 @@ describe("Michael Page bounded vacancy", () => {
 
 it.skipIf(!process.env.MICHAEL_PAGE_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays actual Michael Page capture on an in-memory copy", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observations = new SqliteSourceObservationRepository(db);
     const original = (await observations.findById("49e72d11-361b-4682-82d1-bf3100cb67ee"))!;

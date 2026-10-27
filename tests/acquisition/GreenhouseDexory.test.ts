@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -54,7 +55,7 @@ describe("Dexory saved requirements and company", () => {
 });
 it.skipIf(!process.env.DEXORY_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("reuses actual Dexory observation/canonical and preserves decisions and unresolved assignments", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const id = "de66bfac-b42a-4f4a-b785-aaf0f2ded9bf", canonical = "ee30d9a8-b024-4d6c-9865-0714deb3c3cb";
     const repo = new SqliteSourceObservationRepository(db), original = (await repo.findById(id))!;
