@@ -12,6 +12,15 @@ The validated header reads: company, title link, `location · posting age · app
 - **Displayed company** is emitted only as `DISPLAYED_COMPANY`.
 - Work mode, engagement and travel come from the header chips and description as before.
 
+## Requirements
+- Language: a direct profile statement ("Vous maîtrisez l'anglais professionnel") under a profile heading ("Votre profil ?", "Profil recherché", …) is `REQUIRED`. Hedged wording ("souhaité", "serait un plus") or other sections stay `UNKNOWN`. Shown in the review page under "Languages".
+- Experience needs an explicit number of years. "expérimenté" or "de l'expérience en…" yields nothing.
+- Unsupported by the evidence model (reported, not extracted): education level and skills (e.g. CAO/NX, ISO 8015, project management); the canonical fields exist but there is no evidence type to feed them.
+- Fixture: `tests/fixtures/linkedinBHiveSelectedPane.*` (4483547375). The page has no education or years of experience, and "chez l'un de nos clients du secteur de l'énergie" names no client, so B-Hive stays displayed company with role unknown.
+
+## Scrolled panes
+A capture scrolled to the description starts at "À propos de l'offre d'emploi" and has no header. Then no title, company or header facts are taken from the context: the first line must not be a section label, and a fallback title/company must be a short header line, never a sentence. The earlier observation's header facts keep the canonical role resolved. Fixture: `tests/fixtures/linkedinBHiveScrolledAbout.*` (observation a103963f…). A canonical's existing unresolved employer cluster is untouched; B-Hive stays displayed company only.
+
 ## Deliberate limits
 - "À distance"/Remote sets work mode only. It does not imply worldwide, or any, eligible countries.
 - Displayed branding and canonical continuity never confirm the employer. The employer cluster stays unresolved until a human decision.

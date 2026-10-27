@@ -5,7 +5,7 @@ import { PublicationCampaignContextSection } from "./PublicationCampaignContextS
 import { useEffect, useState } from "react";
 
 import { decideEmployerAlias, decideNamedClientEmployer, decideEmployerMemory, confirmEmployer, getReview, recordInteraction, type OrganizationRelationship, type ReviewView } from "./api";
-import { formatCompensation, formatEngagement, formatLocation, formatWorkMode } from "./formatVacancyFacts";
+import { formatCompensation, formatEngagement, formatLanguageRequirement, formatLocation, formatWorkMode } from "./formatVacancyFacts";
 
 const actions = ["REVIEWED", "INTERESTED", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN", "CLOSED"];
 const organizationGroups = [
@@ -82,7 +82,10 @@ export function ReviewPage(): React.JSX.Element {
     {error !== null && <p className="error" role="alert">{error}</p>}
     <section><h2>Vacancy</h2><Details values={[
       ["Location", review.vacancy.locationAlternatives.length > 1 ? `Multiple locations (${review.vacancy.locationAlternatives.map(formatLocation).join("; ")})` : formatLocation(review.vacancy.location)], ["Engagement", formatEngagement(review.vacancy.engagement)], ["Work mode", formatWorkMode(review.vacancy.workMode)], ["Compensation", formatCompensation(review.vacancy.compensation)],
-      ["Canonicalization status", review.vacancy.canonicalizationStatus], ["Latest observed date", date(review.vacancy.latestObservedAt)], ["Source observation count", review.vacancy.sourceObservationCount],
+            ...(review.vacancy.educationRequirements?.length ? [["Qualifications", review.vacancy.educationRequirements.map(e => e.rawText).join("; ")] as [string, unknown]] : []),
+            ...(review.vacancy.skillRequirements?.length ? [["Technical requirements and responsibilities", review.vacancy.skillRequirements.map(e => e.rawText ?? e.skill).join("; ")] as [string, unknown]] : []),
+            ...(review.vacancy.languageRequirements?.length ? [["Languages", review.vacancy.languageRequirements.map(formatLanguageRequirement).join("; ")] as [string, unknown]] : []),
+            ["Canonicalization status", review.vacancy.canonicalizationStatus], ["Latest observed date", date(review.vacancy.latestObservedAt)], ["Source observation count", review.vacancy.sourceObservationCount],
     ]} /></section>
     {Boolean(review.vacancy.compensationHistory?.length) && <section aria-label="Compensation history"><h2>Previously observed compensation</h2>
       <ul>{review.vacancy.compensationHistory!.map((entry) => <li key={entry.sourceObservationId}>
@@ -202,8 +205,8 @@ function VacancyContextSection({ context }: { readonly context: NonNullable<Revi
         [context.reviewedBefore, "Reviewed"], [context.interestedBefore, "Interested"], [context.appliedBefore, "Applied"],
         [context.contactedBefore, "Contacted"], [context.interviewedBefore, "Interviewed"], [context.offeredBefore, "Offered"],
         [context.rejectedBefore, "Rejected"], [context.withdrawnBefore, "Withdrawn"], [context.closedBefore, "Closed"],
-      ] as const).filter(([present]) => present).map(([, label]) => label).join(" · ")],
-      ["Latest action", `${interactionLabel(context.latestInteractionType)} · ${date(context.latestInteractionAt)}`],
+      ] as const).filter(([present]) => present).map(([, label]) => label).join(" ï¿½ ")],
+      ["Latest action", `${interactionLabel(context.latestInteractionType)} ï¿½ ${date(context.latestInteractionAt)}`],
     ]} />}
     {context.appliedViaProvider !== null && <p>Latest application via: {context.appliedViaProvider}</p>}
   </section>;

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +12,20 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("shows saved Dexory qualifications without losing alternatives or optionality", async () => {
+    const doc = new DOMParser().parseFromString(readFileSync("tests/fixtures/greenhouseDexory.html", "utf8"), "text/html");
+    const lines = [...doc.querySelectorAll(".job__description li")].map(e => e.textContent!.trim());
+    const qualification = lines.find(s => s.startsWith("A technical degree"))!;
+    const technical = lines.find(s => s.startsWith("Linux and command-line"))!;
+    const initial = review({ status: "UNRESOLVED" });
+    respond({ review: { ...initial, vacancy: { ...initial.vacancy, title: "Robot Performance Engineer", educationRequirements: [{ rawText: qualification }], skillRequirements: [{ skill: technical, rawText: technical }] }, employer: { ...initial.employer, confirmationCandidate: "Dexory" } } });
+    render(<ReviewPage />);
+    expect(await screen.findByText(qualification)).toBeInTheDocument();
+    expect(screen.getByText(technical)).toBeInTheDocument();
+    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(screen.getByText("Dexory")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeInTheDocument();
+  });
   it("confirms an agency through its dedicated action while leaving the employer unresolved", async () => {
     const initial = { ...review({ status: "UNRESOLVED" }), agencyContext: { candidates: [{ candidateId: "agency-candidate", name: "Crit", role: "STAFFING_AGENCY" }], known: [], ambiguousNames: [] } };
     respond({ review: initial });
@@ -261,6 +276,12 @@ describe("ReviewPage", () => {
   it("renders unknown vacancy fields safely", async () => {
     respond({ review: review({ title: null, location: null, engagement: null, workMode: null, compensation: null }) }); render(<ReviewPage />);
     expect((await screen.findAllByText("Unknown")).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("displays language requirements from the vacancy", async () => {
+    respond({ review: { ...review(), vacancy: { ...review().vacancy, languageRequirements: [{ language: "English", requirement: "REQUIRED", rawText: "Vous maîtrisez l'anglais professionnel" }, { language: "German", requirement: "UNKNOWN" }] } } });
+    render(<ReviewPage />);
+    expect(await screen.findByText("English — Required; German — Requirement not stated")).toBeInTheDocument();
   });
 
   it("renders structured facts readably without exposing JSON", async () => {

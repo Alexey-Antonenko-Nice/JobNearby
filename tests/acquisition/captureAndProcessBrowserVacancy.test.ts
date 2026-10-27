@@ -12,6 +12,18 @@ const payload = {
 };
 
 describe("captureAndProcessBrowserVacancy", () => {
+  it.each([
+    ["UNRESOLVED", "UNRESOLVED_EXISTING_RECORD"],
+    ["CONFLICTED", "REVIEW_REQUIRED"],
+    ["PROBABLY_RESOLVED", "MATCHED_EXISTING_RECORD"],
+    ["RESOLVED", "MATCHED_EXISTING_RECORD"],
+  ])("reports existing cluster state %s honestly", async (state, expected) => {
+    const result = await captureAndProcessBrowserVacancy(payload, {
+      ingestion: { repository: new InMemorySourceObservationRepository(), acquisitionMapper: new DeterministicAcquisitionCaptureMapper() },
+      processVacancyObservation: vi.fn().mockResolvedValue({ canonicalVacancyId: "c", canonicalVacancyOutcome: "UPDATED_EXISTING", observationAdded: false, canonicalizationStatus: "USABLE", employer: { outcome: "MATCHED_EXISTING_CLUSTER", employerClusterStatus: state } }),
+    });
+    expect(result.processing).toMatchObject({ employerStatus: expected });
+  });
   it("persists the capture before invoking vacancy processing", async () => {
     const repository = new InMemorySourceObservationRepository();
     const processVacancyObservation = vi.fn().mockResolvedValue({

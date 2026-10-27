@@ -13,6 +13,7 @@ export type CaptureEmployerStatus =
   | "MATCHED_EXISTING_RECORD"
   | "IDENTIFIED_NEW_RECORD"
   | "UNRESOLVED_RECORD_CREATED"
+  | "UNRESOLVED_EXISTING_RECORD"
   | "REVIEW_REQUIRED";
 
 interface CaptureSummary {
@@ -93,7 +94,10 @@ function mapEmployerFeedback(
   employer: EmployerProcessingSummary,
 ): { readonly employerStatus: CaptureEmployerStatus; readonly employerDisplayName?: string } {
   if (employer.outcome === "MATCHED_EXISTING_CLUSTER") {
-    return { employerStatus: "MATCHED_EXISTING_RECORD" };
+    if (employer.employerClusterStatus === "CONFLICTED") return { employerStatus: "REVIEW_REQUIRED" };
+    return employer.employerClusterStatus === "UNRESOLVED"
+      ? { employerStatus: "UNRESOLVED_EXISTING_RECORD" }
+      : { employerStatus: "MATCHED_EXISTING_RECORD" };
   }
   if (employer.outcome === "REVIEW_REQUIRED") {
     return { employerStatus: "REVIEW_REQUIRED" };

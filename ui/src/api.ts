@@ -110,6 +110,9 @@ export interface ReviewView {
     readonly engagement: unknown | null;
     readonly workMode: unknown | null;
     readonly compensation: unknown | null;
+    readonly educationRequirements?: readonly { readonly rawText: string; readonly normalizedLevel?: string }[];
+    readonly skillRequirements?: readonly { readonly skill: string; readonly rawText?: string }[];
+    readonly languageRequirements?: readonly { readonly language: string; readonly requirement: string; readonly level?: string; readonly rawText?: string }[];
     readonly compensationHistory?: readonly { readonly sourceObservationId: string; readonly observedAt: string; readonly status: string; readonly values: readonly unknown[] }[];
     readonly latestObservedAt: string | null;
     readonly sourceObservationCount: number;

@@ -30,6 +30,11 @@ describe("browser capture popup feedback", () => {
     );
   });
 
+  it("does not call a reused unresolved record a linked employer", () => {
+    const text = captureFeedback({ processing: { ...processed.processing, employerStatus: "UNRESOLVED_EXISTING_RECORD", observationAdded: false } });
+    expect(text).toContain("Employer not identified yet.");
+    expect(text).not.toContain("Linked to an existing employer record.");
+  });
   it("does not identify a missing or placeholder employer name", () => {
     expect(captureFeedback({ processing: { ...processed.processing, employerStatus: "IDENTIFIED_NEW_RECORD" } })).toContain(
       "Employer not identified yet.",
