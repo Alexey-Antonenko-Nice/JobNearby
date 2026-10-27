@@ -46,6 +46,8 @@ export class CompositeVacancyEvidenceExtractor
 
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
+      ...(results.some(r => r.educationRequirements !== undefined) ? { educationRequirements: unique(results.flatMap(r => r.educationRequirements ?? []), e => JSON.stringify(e)) } : {}),
+      ...(results.some(r => r.skillRequirements !== undefined) ? { skillRequirements: unique(results.flatMap(r => r.skillRequirements ?? []), e => JSON.stringify(e)) } : {}),
       ...(results.some((r) => r.positionCounts !== undefined) ? { positionCounts: unique(results.flatMap((r) => r.positionCounts ?? []), (item) => `${item.value}\u0000${item.rawText}\u0000${provenanceKey(item.provenance)}`) } : {}),
       organizations: unique(
         results.flatMap(({ organizations }) => organizations),

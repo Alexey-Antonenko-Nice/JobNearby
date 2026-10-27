@@ -33,6 +33,13 @@ export function formatWorkMode(value: unknown): string {
   return text(value.rawText);
 }
 
+export function formatLanguageRequirement(value: unknown): string {
+  if (!isRecord(value)) return unknown(value);
+  const strength = typeof value.requirement === "string" && value.requirement !== "UNKNOWN" ? readableTerm(value.requirement) : "Requirement not stated";
+  const level = typeof value.level === "string" && value.level.trim().length > 0 ? ` (${value.level})` : "";
+  return `${text(value.language)}${level} — ${strength}`;
+}
+
 function formatRawCompensation(value: string): string {
   const match = /^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+([A-Z]+)\s*\/\s*([A-Z]+)$/u.exec(value);
   if (match === null) return value;

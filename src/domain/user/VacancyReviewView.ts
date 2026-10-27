@@ -4,6 +4,7 @@ import type {
   CanonicalizationStatus,
   VacancyCompensation,
   VacancyEngagement,
+  VacancyLanguageRequirement,
   VacancyLocation,
   VacancyOrganizationRole,
   VacancyWorkMode,
@@ -36,6 +37,9 @@ export interface VacancyReviewView {
     readonly engagement: VacancyEngagement | null;
     readonly workMode: VacancyWorkMode | null;
     readonly compensation: VacancyCompensation | null;
+    readonly educationRequirements?: readonly { readonly rawText: string; readonly normalizedLevel?: string }[];
+    readonly skillRequirements?: readonly { readonly skill: string; readonly rawText?: string }[];
+    readonly languageRequirements?: readonly VacancyLanguageRequirement[];
     readonly compensationHistory?: readonly import("../vacancies/CompensationHistoryEntry.js").CompensationHistoryEntry[];
     readonly latestObservedAt: Date | null;
     readonly sourceObservationCount: number;

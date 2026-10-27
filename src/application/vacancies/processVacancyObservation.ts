@@ -1,3 +1,4 @@
+import { resolveLegacyStellantisContinuity } from "./resolveLegacyStellantisContinuity.js";
 import { resolveLegacyOranoContinuity } from "./resolveLegacyOranoContinuity.js";
 import { resolveLegacyMichaelPageContinuity } from "./resolveLegacyMichaelPageContinuity.js";
 import { resolveLegacyRenaultContinuity } from "./resolveLegacyRenaultContinuity.js";
@@ -141,6 +142,7 @@ export async function processVacancyObservation(
     await resolveLegacyDirectEmploiContinuity(requestedObservation, dependencies) ??
     await resolveLegacyAlstomContinuity(requestedObservation, dependencies) ??
     await resolveLegacyRenaultContinuity(requestedObservation, dependencies) ??
+    await resolveLegacyStellantisContinuity(requestedObservation, dependencies) ??
     await resolveLegacyOranoContinuity(requestedObservation, dependencies) ??
     await resolveLegacyMichaelPageContinuity(requestedObservation, dependencies) ??
     (dependencies.generateCanonicalVacancyId ?? randomUUID)();

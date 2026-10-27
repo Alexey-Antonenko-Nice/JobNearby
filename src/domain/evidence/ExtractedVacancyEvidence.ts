@@ -37,6 +37,10 @@ import {
   type VacancyCompensationEvidence,
 } from "./VacancyCompensationEvidence.js";
 import {
+  createEducationRequirementEvidence,
+  createSkillRequirementEvidence,
+  type EducationRequirementEvidence,
+  type SkillRequirementEvidence,
   createExperienceRequirementEvidence,
   createLanguageRequirementEvidence,
   createTravelRequirementEvidence,
@@ -48,6 +52,8 @@ import {
 import { createVacancyPositionCountEvidence, type VacancyPositionCountEvidence } from "./VacancyPositionCountEvidence.js";
 
 export interface ExtractedVacancyEvidence {
+  readonly educationRequirements?: readonly EducationRequirementEvidence[];
+  readonly skillRequirements?: readonly SkillRequirementEvidence[];
   readonly positionCounts?: readonly VacancyPositionCountEvidence[];
   readonly sourceObservationId: SourceObservationId;
   readonly organizations: readonly OrganizationEvidence[];
@@ -65,6 +71,8 @@ export interface ExtractedVacancyEvidence {
 }
 
 export interface CreateExtractedVacancyEvidenceInput {
+  readonly educationRequirements?: readonly EducationRequirementEvidence[];
+  readonly skillRequirements?: readonly SkillRequirementEvidence[];
   readonly positionCounts?: readonly VacancyPositionCountEvidence[];
   readonly sourceObservationId: SourceObservationId;
   readonly organizations?: readonly OrganizationEvidence[];
@@ -91,6 +99,8 @@ export function createExtractedVacancyEvidence(
   const result: ExtractedVacancyEvidence = {
     sourceObservationId,
     ...(input.positionCounts === undefined ? {} : { positionCounts: input.positionCounts.map(createVacancyPositionCountEvidence) }),
+    ...(input.educationRequirements === undefined ? {} : { educationRequirements: input.educationRequirements.map(createEducationRequirementEvidence) }),
+    ...(input.skillRequirements === undefined ? {} : { skillRequirements: input.skillRequirements.map(createSkillRequirementEvidence) }),
     organizations: (input.organizations ?? []).map(createOrganizationEvidence),
     locations: (input.locations ?? []).map(createLocationEvidence),
     people: (input.people ?? []).map(createPersonEvidence),
@@ -112,6 +122,8 @@ export function createExtractedVacancyEvidence(
   };
 
   const allEvidence = [
+    ...(result.educationRequirements ?? []),
+    ...(result.skillRequirements ?? []),
     ...(result.positionCounts ?? []),
     ...result.organizations,
     ...result.locations,

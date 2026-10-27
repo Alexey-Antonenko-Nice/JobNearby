@@ -7,11 +7,14 @@ export class LinkedInSelectedVacancyEvidenceExtractor implements VacancyEvidence
     const observation = normalizeVacancyEvidenceInput(input);
     if (observation.evidenceContent.kind !== "SELECTED_VACANCY_CONTEXT" || observation.evidenceContent.context.providerKey !== "LINKEDIN") return createExtractedVacancyEvidence({ sourceObservationId: observation.id });
     const text = observation.evidenceContent.context.text ?? "";
-    const header = text.split(/\n[ \t]*À propos de l['’]offre d['’]emploi[ \t]*\n/iu)[0] ?? text;
+    // A pane scrolled to the description starts at the section heading and has no header at all.
+    const header = /^\s*À propos de l['’]offre d['’]emploi\s*(?:\n|$)/iu.test(text) || SECTION_LABEL.test(text.split("\n", 1)[0]!.trim())
+      ? ""
+      : text.split(/\n[ \t]*À propos de l['’]offre d['’]emploi[ \t]*\n/iu)[0] ?? text;
     const lines = header.split(/\n/u).map((line) => line.trim()).filter(Boolean);
     const structural = selectedHeaderFacts(lines, observation.evidenceContent.context.html, observation.evidenceContent.context.providerExternalId);
-    const title = structural?.title ?? lines.slice(1).find((line) => /\b(?:h\s*\/\s*f|f\s*\/\s*h|m\s*\/\s*f|f\s*\/\s*m)\b|maintenance|ing[eé]nieur|technicien/iu.test(line));
-    const company = lines[0];
+    const title = structural?.title ?? lines.slice(1).find((line) => isTitleLine(line));
+    const company = lines[0] !== undefined && isCompanyLine(lines[0]) ? lines[0] : undefined;
     const provenance = { sourceObservationId: observation.id, extractionMethod: "TEXT_EXTRACTION" as const, confidence: 1, contentOrigin: "SELECTED_VACANCY_CONTEXT" as const };
     const intermediaryRole = company === undefined
       ? undefined
@@ -30,6 +33,19 @@ export class LinkedInSelectedVacancyEvidenceExtractor implements VacancyEvidence
           ],
     });
   }
+}
+
+const SECTION_LABEL = /^(?:à\s+propos\b.*|about\s+(?:the\s+)?(?:job|company|us)\b.*|description(?:\s+du\s+poste)?|d[ée]tails?\s+de\s+l['’]offre.*|job\s+description|company\s+description|en\s+savoir\s+plus|plus\s+d['’]informations)$/iu;
+const PROSE = /[.!?…:;]\s*$|\b(?:nous|vous|notre|nos|votre|vos|we|you|our|your)\b/iu;
+
+function isCompanyLine(line: string): boolean {
+  return line.length <= 120 && !SECTION_LABEL.test(line) && !/[!?…:;]\s*$/u.test(line) && line.split(/\s+/u).length <= 12;
+}
+
+// A fallback title is a short header line, never a sentence or a section label.
+function isTitleLine(line: string): boolean {
+  return line.length <= 150 && !SECTION_LABEL.test(line) && !PROSE.test(line) &&
+    /\b(?:h\s*\/\s*f|f\s*\/\s*h|m\s*\/\s*f|f\s*\/\s*m)\b|maintenance|ing[eé]nieur|technicien/iu.test(line);
 }
 
 const HEADER_METADATA = /\b(?:postuler|candidat\w*|enregistrer|republication|republi[eé]e?|il\s+y\s+a|personnes?|promu|applicants?|reposted|clicked|ago)\b/iu;

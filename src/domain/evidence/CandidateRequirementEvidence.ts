@@ -1,4 +1,6 @@
 import type {
+  EducationRequirement,
+  SkillRequirement,
   ExperienceRequirement,
   VacancyLanguageRequirement,
   VacancyTravel,
@@ -69,4 +71,13 @@ export function createTravelRequirementEvidence(
     ...(evidence.scopeText === undefined ? {} : { scopeText: evidence.scopeText }),
     provenance: createEvidenceProvenance(evidence.provenance),
   };
+}
+
+export interface EducationRequirementEvidence extends EducationRequirement { readonly provenance: EvidenceProvenance; }
+export interface SkillRequirementEvidence extends SkillRequirement { readonly provenance: EvidenceProvenance; }
+export function createEducationRequirementEvidence(e: EducationRequirementEvidence): EducationRequirementEvidence {
+  return { rawText: requireEvidenceText(e.rawText, "Education requirement"), ...(e.normalizedLevel ? { normalizedLevel: requireEvidenceText(e.normalizedLevel, "Education level") } : {}), provenance: createEvidenceProvenance(e.provenance) };
+}
+export function createSkillRequirementEvidence(e: SkillRequirementEvidence): SkillRequirementEvidence {
+  return { skill: requireEvidenceText(e.skill, "Skill"), ...(e.rawText ? { rawText: requireEvidenceText(e.rawText, "Skill source text") } : {}), provenance: createEvidenceProvenance(e.provenance) };
 }

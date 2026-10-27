@@ -1,3 +1,5 @@
+import { stellantisVacancyId } from "./StellantisVacancy.js";
+import { greenhouseVacancyId } from "./GreenhouseVacancy.js";
 import { oranoVacancyId } from "./OranoVacancy.js";
 import { michaelPageVacancyId } from "./MichaelPageVacancy.js";
 import { isRenaultWorkdaySource, renaultVacancyId } from "./RenaultWorkdayVacancy.js";
@@ -55,6 +57,8 @@ export class ConservativeProviderVacancyIdExtractor
   implements ProviderVacancyIdExtractor
 {
   extract(input: ProviderVacancyIdExtractionInput): string | undefined {
+    if (input.sourceName === "job-boards.eu.greenhouse.io") return greenhouseVacancyId(input.sourceUrl);
+    if (input.sourceName === "jobs.groupe-psa.com") return stellantisVacancyId(input.sourceUrl);
     if (input.sourceName === "jobs.orano.group") return oranoVacancyId(input.sourceUrl);
     if (input.sourceName === ALSTOM_HOST) return alstomPostingId(input.sourceUrl);
     if (input.sourceName === "michaelpage.fr") return michaelPageVacancyId(input.sourceUrl);

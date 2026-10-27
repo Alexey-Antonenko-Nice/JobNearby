@@ -54,10 +54,11 @@ function extractLanguages(text: string): LanguageWithoutProvenance[] {
       const levelCapture = patternIndex === 2 ? match[1] : match[2];
       if (languageCapture === undefined) continue;
       const rawText = match[0].trim();
+      const strength = languageStrength(rawText);
       results.push({
         rawText,
         language: normalizeLanguage(languageCapture),
-        requirement: languageStrength(rawText),
+        requirement: strength === "UNKNOWN" && isProfileStatement(text, match.index ?? 0) ? "REQUIRED" : strength,
         ...(levelCapture === undefined ? {} : { level: levelCapture.toUpperCase() }),
       });
     }
@@ -77,6 +78,26 @@ function languageStrength(rawText: string): LanguageWithoutProvenance["requireme
   if (/\b(?:preferred|souhait[ée]|appr[ée]ci[ée])\b/iu.test(rawText)) return "PREFERRED";
   if (/\b(?:plus)\b/iu.test(rawText)) return "PLUS";
   return "UNKNOWN";
+}
+
+const PROFILE_HEADING = /^(?:votre\s+profil|profil\s+recherch[ée]|profil\s+souhait[ée]|vous\s+[êe]tes|your\s+profile|requirements|qualifications|pr[ée]requis|comp[ée]tences\s+requises)\b/iu;
+const OTHER_HEADING = /^(?:pourquoi|nous\s+offrons|ce\s+que\s+nous|avantages|vos\s+missions|vos\s+principales|poste\s*\/|missions?\b|description|why\b|what\s+we\s+offer|responsibilities)/iu;
+const FIRST_PERSON_PROFILE = /^(?:vous\s+(?:ma[iî]trisez|parlez)|you\s+(?:speak|are\s+fluent))\b/iu;
+const SOFT_WORDING = /\b(?:souhait[ée]|serait|appr[ée]ci[ée]|un\s+plus|atout|preferred|nice\s+to\s+have|bonus)\b/iu;
+
+// "Vous maîtrisez l'anglais …" is a requirement only as a direct statement of the
+// profile section; hedged wording or other sections keep the strength unknown.
+function isProfileStatement(text: string, index: number): boolean {
+  const lineStart = text.lastIndexOf("\n", index - 1) + 1;
+  const lineEnd = text.indexOf("\n", index);
+  const line = text.slice(lineStart, lineEnd < 0 ? text.length : lineEnd).trim();
+  if (!FIRST_PERSON_PROFILE.test(line) || SOFT_WORDING.test(line)) return false;
+  const previous = text.slice(0, lineStart).split("\n").reverse().slice(0, 20).map((value) => value.trim());
+  for (const value of previous) {
+    if (PROFILE_HEADING.test(value)) return true;
+    if (OTHER_HEADING.test(value)) return false;
+  }
+  return false;
 }
 
 function extractExperience(text: string): ExperienceWithoutProvenance[] {

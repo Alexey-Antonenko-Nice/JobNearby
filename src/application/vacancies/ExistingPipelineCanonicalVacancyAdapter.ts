@@ -17,6 +17,8 @@ import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEng
 import type { VacancyWorkModeEvidence } from "../../domain/evidence/VacancyWorkModeEvidence.js";
 import type { VacancyCompensationEvidence } from "../../domain/evidence/VacancyCompensationEvidence.js";
 import type {
+  EducationRequirementEvidence,
+  SkillRequirementEvidence,
   ExperienceRequirementEvidence,
   LanguageRequirementEvidence,
   TravelRequirementEvidence,
@@ -28,6 +30,8 @@ import type {
   CanonicalVacancy,
   CanonicalVacancyId,
   VacancyOrganizationRelationship,
+  EducationRequirement,
+  SkillRequirement,
   ExperienceRequirement,
   VacancyLanguageRequirement,
   VacancyTravel,
@@ -108,6 +112,8 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       "ON_SITE" | "HYBRID" | "REMOTE"
     >[] = [];
     const languageRequirementCandidates: CanonicalCandidate<readonly VacancyLanguageRequirement[]>[] = [];
+    const educationCandidates: CanonicalCandidate<readonly EducationRequirement[]>[] = [];
+    const skillCandidates: CanonicalCandidate<readonly SkillRequirement[]>[] = [];
     const experienceCandidates: CanonicalCandidate<readonly ExperienceRequirement[]>[] = [];
     const positionCountCandidates: CanonicalCandidate<{ readonly type: "EXACT"; readonly value: number }>[] = [];
     const travelCandidates: CanonicalCandidate<VacancyTravel>[] = [];
@@ -217,6 +223,20 @@ export class ExistingPipelineCanonicalVacancyAdapter {
           value: aggregate.languageRequirements.map(({ provenance: _provenance, ...value }) => value),
           supportingEvidenceIds: ids,
           confidence: Math.min(...aggregate.languageRequirements.map(({ provenance }) => provenance.confidence)),
+        });
+      }
+      if (aggregate.educationRequirements?.length) {
+        educationCandidates.push({
+          value: aggregate.educationRequirements.map(({ provenance: _provenance, ...value }) => value),
+          supportingEvidenceIds: aggregate.educationRequirements.map(e => evidenceItemReference(references, "EDUCATION_REQUIREMENT_EVIDENCE", e).id),
+          confidence: Math.min(...aggregate.educationRequirements.map(e => e.provenance.confidence)),
+        });
+      }
+      if (aggregate.skillRequirements?.length) {
+        skillCandidates.push({
+          value: aggregate.skillRequirements.map(({ provenance: _provenance, ...value }) => value),
+          supportingEvidenceIds: aggregate.skillRequirements.map(e => evidenceItemReference(references, "SKILL_REQUIREMENT_EVIDENCE", e).id),
+          confidence: Math.min(...aggregate.skillRequirements.map(e => e.provenance.confidence)),
         });
       }
       if (aggregate.experienceRequirements.length > 0) {
@@ -356,6 +376,8 @@ export class ExistingPipelineCanonicalVacancyAdapter {
       workModeCandidates,
       industryContextCandidates,
       languageRequirementCandidates,
+      educationCandidates,
+      skillCandidates,
       experienceCandidates: reconcileExperienceCandidates(experienceCandidates),
       travelCandidates,
       positionCountCandidates,
@@ -406,6 +428,8 @@ function evidenceItemReference(
     | VacancyCompensationEvidence
     | LanguageRequirementEvidence
     | ExperienceRequirementEvidence
+    | EducationRequirementEvidence
+    | SkillRequirementEvidence
     | TravelRequirementEvidence,
   qualifier = "",
 ): CollectedReference {
@@ -430,8 +454,11 @@ function evidenceValue(
     | PersonEvidence
     | LanguageRequirementEvidence
     | ExperienceRequirementEvidence
+    | EducationRequirementEvidence
+    | SkillRequirementEvidence
     | TravelRequirementEvidence,
 ): string {
+  if ("skill" in evidence) return evidence.rawText ?? evidence.skill;
   if ("rawTerms" in evidence) return evidence.rawTerms.join("|");
   if ("rawText" in evidence) return evidence.rawText;
   return evidence.value;
