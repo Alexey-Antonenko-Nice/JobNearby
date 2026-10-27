@@ -93,7 +93,8 @@ export class InMemoryCanonicalVacancyRepository
     return vacancy === undefined ? null : clone(vacancy);
   }
 
-  async findAll(): Promise<readonly CanonicalVacancy[]> {
+  async findAll(options: { readonly archived?: boolean } = {}): Promise<readonly CanonicalVacancy[]> {
+    if (options.archived) return [];
     return [...this.vacancies.values()]
       .sort((left, right) => left.id.localeCompare(right.id))
       .map(clone);

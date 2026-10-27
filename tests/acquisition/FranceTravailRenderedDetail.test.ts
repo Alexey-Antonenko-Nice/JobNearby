@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -100,7 +101,7 @@ describe("France Travail selected vacancy from the real shadow-DOM capture", () 
 // Opt-in: reads the saved database once; everything runs on a private in-memory copy.
 it.skipIf(!process.env.FRANCETRAVAIL_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays the real France Travail capture into the same canonical and preserves human state", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observationId = "7b7d204f-b2f0-4456-a842-3c843499127e", canonicalId = "3659bdb1-88b7-4140-9b66-a72d84485bfc";
     const original = (await new SqliteSourceObservationRepository(db).findById(observationId))!;

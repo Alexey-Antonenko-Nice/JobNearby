@@ -69,11 +69,12 @@ describe("M12.8 additive migration", () => {
     await seed(db);
     const canonical = new SqliteCanonicalVacancyRepository(db); const vacancy = heuftVacancy(); await canonical.save(vacancy);
     const oldTables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name <> 'schema_migrations' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
-    const snapshots = () => oldTables.map((name) => db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all());
+    const columns = oldTables.map(name => (db.pragma(`table_info(${name})`) as {name:string}[]).map(c => c.name).join(","));
+    const snapshots = () => oldTables.map((name, i) => db.prepare(`SELECT ${columns[i]} FROM ${name} ORDER BY rowid`).all());
     const before = snapshots(); migrateDatabase(db); migrateDatabase(db);
     expect(snapshots()).toEqual(before);
     expect(await canonical.findById(vacancy.id)).toEqual(vacancy);
-    expect(db.prepare("SELECT count(*) AS n FROM schema_migrations").get()).toEqual({ n: 10 });
+    expect(db.prepare("SELECT count(*) AS n FROM schema_migrations").get()).toEqual({ n: 11 });
     expect(db.prepare("SELECT * FROM recruitment_campaign_memberships").all()).toEqual([]);
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   });
@@ -114,7 +115,7 @@ describe("M12.8 additive migration", () => {
   it("preserves history against deletion, edits and supersession reversal", async () => {
     const db = await fixture(); addFamily(db); addCampaign(db, "family", "c1", "f1", null);
     for (const table of ["publication_family_memberships", "recruitment_campaign_memberships"]) {
-      expect(() => db.prepare(`DELETE FROM ${table}`).run()).toThrow(/cannot be deleted/);
+      expect(() => db.prepare(`DELETE FROM ${table}`).run()).toThrow(/append-only/);
       expect(() => db.prepare(`UPDATE ${table} SET explanation = 'rewritten'`).run()).toThrow(/immutable/);
       db.prepare(`UPDATE ${table} SET superseded_at = ?`).run(at);
       expect(() => db.prepare(`UPDATE ${table} SET superseded_at = NULL`).run()).toThrow(/immutable/);

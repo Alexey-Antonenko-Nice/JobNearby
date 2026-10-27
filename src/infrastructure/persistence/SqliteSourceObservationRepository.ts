@@ -149,7 +149,7 @@ export class SqliteSourceObservationRepository
   async findUnidentifiedBySourceUrlFragment(sourceName: string, fragment: string): Promise<readonly SourceObservation[]> {
     const rows = this.db.prepare(`
       SELECT * FROM source_observations
-      WHERE source_name = ? AND external_id IS NULL AND instr(source_url, ?) > 0 ORDER BY id
+      WHERE retired_at IS NULL AND source_name = ? AND external_id IS NULL AND instr(source_url, ?) > 0 ORDER BY id
     `).all(sourceName, fragment) as SourceObservationRow[];
     return rows.map(mapRowToObservation);
   }
@@ -212,7 +212,7 @@ export class SqliteSourceObservationRepository
       // Unidentified captures have no unique index; reuse the earliest identical snapshot.
       const identical = this.db.prepare(`
         SELECT id FROM source_observations
-        WHERE source_type = ? AND source_name = ? AND source_url = ? AND external_id IS NULL AND content_fingerprint = ?
+        WHERE retired_at IS NULL AND source_type = ? AND source_name = ? AND source_url = ? AND external_id IS NULL AND content_fingerprint = ?
         ORDER BY observed_at, id LIMIT 1
       `).get(observation.source.sourceType, observation.source.sourceName, observation.source.sourceUrl, observation.contentFingerprint) as { id: string } | undefined;
       if (identical !== undefined) {
@@ -249,7 +249,7 @@ export class SqliteSourceObservationRepository
   private findByIdentityAndFingerprint(sourceName: string, externalId: string, fingerprint: string): string | undefined {
     const row = this.db.prepare(`
       SELECT id FROM source_observations
-      WHERE source_name = ? AND external_id = ? AND content_fingerprint = ?
+      WHERE retired_at IS NULL AND source_name = ? AND external_id = ? AND content_fingerprint = ?
     `).get(sourceName, externalId, fingerprint) as { id: string } | undefined;
     return row?.id;
   }

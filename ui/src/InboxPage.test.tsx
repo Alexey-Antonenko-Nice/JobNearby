@@ -1,3 +1,4 @@
+import userEvent from "@testing-library/user-event";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,3 +38,28 @@ describe("InboxPage", () => {
 function response(body: unknown, status = 200): Response { return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }); }
 function item(overrides: Record<string, unknown> = {}) { return { canonicalVacancyId: "canonical-1", canonicalizationStatus: "PARTIAL", title: "Developer", location: "Paris", locationAlternatives: [], engagement: null, workMode: null, latestObservedAt: "2026-09-01T00:00:00.000Z", sourceObservationCount: 2, sourceLinks: [], userState: "NEW", employer: { status: "RESOLVED", unresolvedEmployer: false }, organizations: { employerName: "Actual employer", displayedCompanyNames: [], recruiterNames: ["Recruiter"], consultancyNames: ["Consultancy"] }, signals: { sameCanonicalVacancySeenBefore: true, hasMultipleSourceObservations: true, alreadyAppliedToThisVacancy: false }, ...overrides }; }
 function review() { return { vacancy: { canonicalVacancyId: "canonical-1", canonicalizationStatus: "PARTIAL", title: "Developer", location: null, locationAlternatives: [], engagement: null, workMode: null, compensation: null, latestObservedAt: null, sourceObservationCount: 1, sourceLinks: [] }, user: { currentState: "NEW", lastInteractionAt: null, everApplied: false, everInterviewed: false, everRejected: false }, employer: { employerClusterId: null, status: null, resolvedEmployerId: null, knownBefore: false, previousVacancyCount: 0, previousInteractedVacancyCount: 0, everAppliedToEmployer: false, everInterviewedWithEmployer: false, everRejectedByEmployer: false, confirmationCandidate: null }, organizations: {}, recognition: { sameCanonicalVacancySeenBefore: false, employerSeenBefore: false, unresolvedEmployer: true }, reviewSignals: { isNewVacancy: true, isKnownEmployer: false, alreadyAppliedToThisVacancy: false, previouslyAppliedToEmployer: false, previouslyInterviewedWithEmployer: false, previouslyRejectedByEmployer: false, hasMultipleSourceObservations: false } }; }
+it("keeps archived vacancies recoverable from an empty active inbox", async () => {
+ fetchMock.mockResolvedValueOnce(response({vacancies:[]}));
+ fetchMock.mockResolvedValueOnce(response({vacancies:[item()]}));
+ fetchMock.mockResolvedValueOnce(response({vacancies:[]}));
+ render(<InboxPage />);
+ await userEvent.click(await screen.findByText("Show archived vacancies"));
+ expect(await screen.findByText("Developer")).toBeInTheDocument();
+ expect(fetchMock.mock.calls[1]![0]).toContain("archived=true");
+ await userEvent.click(screen.getByText("Show active vacancies"));
+ expect(await screen.findByText("No captured vacancies yet.")).toBeInTheDocument();
+ expect(fetchMock.mock.calls[2]![0]).not.toContain("archived=true");
+});
+
+it("shows an empty archive and allows returning to the active inbox", async () => {
+ fetchMock.mockResolvedValueOnce(response({vacancies:[item()]}));
+ fetchMock.mockResolvedValueOnce(response({vacancies:[]}));
+ fetchMock.mockResolvedValueOnce(response({vacancies:[item()]}));
+ render(<InboxPage />);
+ await userEvent.click(await screen.findByText("Show archived vacancies"));
+ expect(await screen.findByText("No archived vacancies.")).toBeInTheDocument();
+ expect(screen.queryByText("Developer")).not.toBeInTheDocument();
+ expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+ await userEvent.click(screen.getByText("Show active vacancies"));
+ expect(await screen.findByText("Developer")).toBeInTheDocument();
+});

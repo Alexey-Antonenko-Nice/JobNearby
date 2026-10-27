@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import Database from "better-sqlite3";
@@ -77,7 +78,7 @@ describe("Randstad saved single annual salary and recruitment relationship", () 
 
 it.skipIf(!process.env.RANDSTAD_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("replays actual Randstad observation in memory with original canonical and decisions", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const observations = new SqliteSourceObservationRepository(db);
     const original = (await observations.findById("63377f35-1da6-4204-9425-5927a0faf575"))!;

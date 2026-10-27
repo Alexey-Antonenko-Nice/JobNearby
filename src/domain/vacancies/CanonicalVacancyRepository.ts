@@ -15,7 +15,8 @@ export interface CanonicalVacancySaveResult {
 
 export interface CanonicalVacancyRepository {
   save(vacancy: CanonicalVacancy): Promise<CanonicalVacancySaveResult>;
-  findAll(): Promise<readonly CanonicalVacancy[]>;
+  /** Defaults to active vacancies, including for future fit-review candidate selection. */
+  findAll(options?: { readonly archived?: boolean }): Promise<readonly CanonicalVacancy[]>;
   findById(id: CanonicalVacancyId): Promise<CanonicalVacancy | null>;
   findBySourceObservationId(
     sourceObservationId: SourceObservationId,

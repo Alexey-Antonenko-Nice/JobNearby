@@ -1,3 +1,4 @@
+import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { resolveLegacyStellantisContinuity } from "../../src/application/vacancies/resolveLegacyStellantisContinuity.js";
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
@@ -111,7 +112,7 @@ describe("Stellantis selected saved vacancy", () => {
 });
 it.skipIf(!process.env.STELLANTIS_STORED_REPLAY || !existsSync("job-nearby.sqlite"))("repairs original Stellantis canonical in memory, preserving decisions and old assignments", async () => {
   const disk = new Database("job-nearby.sqlite", { readonly: true, fileMustExist: true });
-  const db = new Database(disk.serialize()); disk.close();
+  const db = new Database(disk.serialize()); disk.close(); migrateDatabase(db);
   try {
     const repo = new SqliteSourceObservationRepository(db);
     const original = (await repo.findById("7d4cfe85-24ed-41a4-a29f-e3a4b7e00aad"))!;

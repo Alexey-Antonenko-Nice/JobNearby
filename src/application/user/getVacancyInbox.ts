@@ -18,7 +18,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
 export async function getVacancyInbox(
-  input: { readonly limit?: number } = {},
+  input: { readonly limit?: number; readonly archived?: boolean } = {},
   dependencies: {
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll">;
     readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
@@ -30,7 +30,7 @@ export async function getVacancyInbox(
   },
 ): Promise<readonly VacancyInboxItem[]> {
   const limit = validateLimit(input.limit);
-  const vacancies = await dependencies.canonicalVacancyRepository.findAll();
+  const vacancies = await dependencies.canonicalVacancyRepository.findAll({ archived: input.archived ?? false });
   const items = await Promise.all(vacancies.map((vacancy) => itemFor(vacancy, dependencies)));
   return items.sort(compareItems).slice(0, limit);
 }

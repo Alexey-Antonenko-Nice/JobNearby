@@ -1,3 +1,4 @@
+import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
 import { humanOrganizationRoles, type HumanOrganizationRole } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
@@ -10,6 +11,7 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly vacancyCleanup?: VacancyCleanup;
   readonly decideEmployerIdentity?: VacancyReviewWorkflow["decideEmployerIdentity"];
   readonly searchEmployerIdentities?: VacancyReviewWorkflow["searchEmployerIdentities"];
   readonly decideVacancyOrganizationRole?: VacancyReviewWorkflow["decideVacancyOrganizationRole"];
@@ -40,7 +42,9 @@ export function createBrowserCaptureServer(
       if (request.method === "GET" && path === "/vacancies" && dependencies.getVacancyInbox !== undefined) {
         operation = "review";
         const limit = parseInboxLimit(request);
-        sendJson(response, 200, { vacancies: await dependencies.getVacancyInbox(limit === undefined ? {} : { limit }) });
+        const archived = new URL(request.url ?? "/", "http://localhost").searchParams.get("archived");
+        if (archived !== null && archived !== "true" && archived !== "false") throw new InvalidRequestError("Invalid archive filter.");
+        sendJson(response, 200, { vacancies: await dependencies.getVacancyInbox({ ...(limit === undefined ? {} : { limit }), ...(archived === null ? {} : { archived: archived === "true" }) }) });
         return;
       }
       if (request.method === "POST" && path === BROWSER_CAPTURE_PATH) {
@@ -49,6 +53,28 @@ export function createBrowserCaptureServer(
         const result = await dependencies.captureAndProcessBrowserVacancy(payload);
         sendJson(response, 201, captureResponseDto(result));
         return;
+      }
+      const cleanupMatch = /^\/vacancies\/([^/]+)\/(cleanup|archive|deletion-preview|deletion)$/u.exec(path);
+      if (cleanupMatch && dependencies.vacancyCleanup) {
+        operation = "review";
+        const id = decodePathId(cleanupMatch[1]!);
+        const service = dependencies.vacancyCleanup;
+        const action = cleanupMatch[2];
+        if (request.method === "GET" && action === "cleanup") { sendJson(response, 200, { cleanup: service.state(id) }); return; }
+        if (request.method === "GET" && action === "deletion-preview") {
+          const source = new URL(request.url ?? "/", "http://localhost").searchParams.get("observationId");
+          sendJson(response, 200, { preview: service.preview(id, source ?? undefined) }); return;
+        }
+        if (request.method === "POST" && (action === "archive" || action === "deletion")) {
+          const body = await readJsonBody(request, "Vacancy cleanup");
+          if (!isRecord(body) || typeof body.token !== "string" || !/^[a-f0-9]{64}$/u.test(body.token)) throw new InvalidRequestError("A current cleanup token is required.");
+          if (action === "archive") {
+            if (typeof body.archived !== "boolean" || Object.keys(body).some(k => !["token", "archived"].includes(k))) throw new InvalidRequestError("Invalid archive request.");
+            sendJson(response, 200, { cleanup: service.setArchived(id, body.archived, body.token) }); return;
+          }
+          if (typeof body.confirmation !== "string" || typeof body.acknowledgeApplicationHistory !== "boolean" || (body.observationId !== undefined && (typeof body.observationId !== "string" || !body.observationId.trim())) || Object.keys(body).some(k => !["token", "confirmation", "acknowledgeApplicationHistory", "observationId"].includes(k))) throw new InvalidRequestError("Invalid deletion request.");
+          sendJson(response, 200, await service.delete({ canonicalVacancyId: id, token: body.token, confirmation: body.confirmation, acknowledgeApplicationHistory: body.acknowledgeApplicationHistory, ...(typeof body.observationId === "string" ? { observationId: body.observationId } : {}) })); return;
+        }
       }
       const reviewMatch = /^\/vacancies\/([^/]+)\/review$/u.exec(path);
       if (request.method === "GET" && reviewMatch !== null && dependencies.getVacancyReview !== undefined) {
@@ -134,7 +160,7 @@ export function createBrowserCaptureServer(
       sendJson(response, 404, { success: false, error: "Not found." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Browser capture failed.";
-      const status = errorStatus(message, operation, error);
+      const status = error instanceof VacancyCleanupError ? error.status : errorStatus(message, operation, error);
       sendJson(response, status, { success: false, error: message });
     }
   });
@@ -215,7 +241,7 @@ function requestPath(request: IncomingMessage): string {
 
 function parseInboxLimit(request: IncomingMessage): number | undefined {
   const query = new URL(request.url ?? "/", "http://127.0.0.1").searchParams;
-  for (const key of query.keys()) if (key !== "limit") throw new InvalidRequestError(`Unsupported query parameter "${key}".`);
+  for (const key of query.keys()) if (key !== "limit" && key !== "archived") throw new InvalidRequestError(`Unsupported query parameter "${key}".`);
   const value = query.get("limit");
   if (value === null) return undefined;
   if (!/^\d+$/u.test(value)) throw new InvalidRequestError("Inbox limit must be an integer.");

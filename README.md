@@ -68,6 +68,11 @@ direct review URL. Browsing the inbox and opening a review are read-only; only a
 explicit action button creates a private interaction event. The API allows this fixed
 local UI origin in addition to supported browser-extension origins.
 
+Vacancy reviews also offer reversible archive/restore and previewed permanent deletion.
+See [Vacancy cleanup](docs/VACANCY_CLEANUP.md) for safeguards, shared evidence retention,
+and migration 011. Starting the server applies pending migrations; implementation
+verification used isolated databases and did not start it against the live database.
+
 ## License
 
 To be decided before public release.
