@@ -4,6 +4,7 @@ import { scopeOranoVacancyEvidence } from "./scopeOranoVacancyEvidence.js";
 import { scopeMichaelPageVacancyEvidence } from "./scopeMichaelPageVacancyEvidence.js";
 import { isRenaultWorkdaySource } from "../acquisition/RenaultWorkdayVacancy.js";
 import { scopeRenaultVacancyEvidence } from "./scopeRenaultVacancyEvidence.js";
+import { scopeHaysVacancyEvidence } from "./scopeHaysVacancyEvidence.js";
 import { scopeAlstomVacancyEvidence } from "./scopeAlstomVacancyEvidence.js";
 import { KELLY_WORKDAY_HOST } from "../acquisition/KellyWorkdayVacancy.js";
 import { scopeKellyVacancyEvidence } from "./scopeKellyVacancyEvidence.js";
@@ -37,6 +38,7 @@ export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInp
   if (input.source.sourceName === "michaelpage.fr") return scopeMichaelPageVacancyEvidence(input);
   if (isRenaultWorkdaySource(input.source.sourceName, input.source.sourceUrl ?? "")) return scopeRenaultVacancyEvidence(input);
   if (input.source.sourceName === KELLY_WORKDAY_HOST) return scopeKellyVacancyEvidence(input);
+  if (input.source.sourceName === "m.hays.fr") return scopeHaysVacancyEvidence(input);
   if (input.source.sourceName === "jobsearch.alstom.com") return scopeAlstomVacancyEvidence(input);
   if (input.source.sourceName === "apec.fr") return scopeApecVacancyEvidence(input);
   if (input.source.sourceName === "directemploi.com") return scopeDirectEmploiVacancyEvidence(input);

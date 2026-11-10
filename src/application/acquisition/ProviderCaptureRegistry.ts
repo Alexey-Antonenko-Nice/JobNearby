@@ -3,6 +3,7 @@ import { GreenhouseSelectedVacancyContextLocator, greenhouseFacts } from "./Gree
 import { OranoSelectedVacancyContextLocator, oranoFacts, oranoPublishedAt } from "./OranoVacancy.js";
 import { MichaelPageSelectedVacancyContextLocator, michaelPageFacts, michaelPagePublishedAt } from "./MichaelPageVacancy.js";
 import { RenaultSelectedVacancyContextLocator, renaultFacts, renaultPublishedAt } from "./RenaultWorkdayVacancy.js";
+import { HaysSelectedVacancyContextLocator, haysFacts } from "./HaysVacancy.js";
 import { AlstomSelectedVacancyContextLocator, alstomFacts } from "./AlstomVacancy.js";
 import { KellySelectedVacancyContextLocator, kellyFacts } from "./KellyWorkdayVacancy.js";
 import { DirectEmploiSelectedVacancyContextLocator, directEmploiFacts, directEmploiIdentity, directEmploiPublishedAt } from "./DirectEmploiVacancy.js";
@@ -75,6 +76,7 @@ export class ProviderCaptureRegistry {
     RENAULT_WORKDAY: new RenaultSelectedVacancyContextLocator(),
     KELLY_WORKDAY: new KellySelectedVacancyContextLocator(),
     ALSTOM: new AlstomSelectedVacancyContextLocator(),
+    HAYS: new HaysSelectedVacancyContextLocator(),
     APEC: new ApecSelectedVacancyContextLocator(),
     DIRECT_EMPLOI: new DirectEmploiSelectedVacancyContextLocator(),
     GI_GROUP: new GiGroupSelectedVacancyContextLocator(),
@@ -133,11 +135,12 @@ export class ProviderCaptureRegistry {
     const directEmploiConflict = providerKey === "DIRECT_EMPLOI" && input.html !== undefined && externalId !== undefined
       && directEmploiIdentity({ sourceUrl: input.sourceUrl, html: input.html, externalId }).status === "CONFLICT";
     const alstom = providerKey === "ALSTOM" && context?.html ? alstomFacts(context.html) : undefined;
+    const hays = providerKey === "HAYS" && context?.html ? haysFacts(context.html) : undefined;
     const orano = providerKey === "ORANO" && context?.html ? oranoFacts(context.html) : undefined;
     const oranoDate = oranoPublishedAt(orano?.publicationText);
     const greenhouse = providerKey === "GREENHOUSE" && context?.html ? greenhouseFacts(context.html) : undefined;
     const stellantis = providerKey === "STELLANTIS" && context?.html ? stellantisFacts(context.html) : undefined;
-    const structuredFields = stellantis ? { title: stellantis.title, ...(stellantis.city ? { locationText: stellantis.city } : {}) } : greenhouse ? { title: greenhouse.title, locationText: greenhouse.location } : orano ? { title: orano.title, locationText: orano.location, ...(oranoDate ? { publishedAt: oranoDate } : {}) } : michaelPage ? { title: michaelPage.title, locationText: michaelPage.location, ...(michaelPageDate ? { publishedAt: michaelPageDate } : {}) } : renault ? { ...(renaultDate ? { publishedAt: renaultDate } : {}), title: renault.title, locationText: renault.values.locations!, ...(renault.company ? { displayedCompanyName: renault.company } : {}) } : alstom ? { title: alstom.title, displayedCompanyName: alstom.company, locationText: alstom.location, ...(alstom.publishedAt ? { publishedAt: alstom.publishedAt } : {}) } : apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
+    const structuredFields = hays ? { title: hays.title, displayedCompanyName: hays.company, ...(hays.values.location ? { locationText: hays.values.location } : {}), ...(hays.values.salary ? { salaryText: hays.values.salary } : {}), ...(hays.values.type ? { contractText: hays.values.type } : {}) } : stellantis ? { title: stellantis.title, ...(stellantis.city ? { locationText: stellantis.city } : {}) } : greenhouse ? { title: greenhouse.title, locationText: greenhouse.location } : orano ? { title: orano.title, locationText: orano.location, ...(oranoDate ? { publishedAt: oranoDate } : {}) } : michaelPage ? { title: michaelPage.title, locationText: michaelPage.location, ...(michaelPageDate ? { publishedAt: michaelPageDate } : {}) } : renault ? { ...(renaultDate ? { publishedAt: renaultDate } : {}), title: renault.title, locationText: renault.values.locations!, ...(renault.company ? { displayedCompanyName: renault.company } : {}) } : alstom ? { title: alstom.title, displayedCompanyName: alstom.company, locationText: alstom.location, ...(alstom.publishedAt ? { publishedAt: alstom.publishedAt } : {}) } : apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
         ...(apec.contract ? { contractText: apec.contract } : {}), ...(apec.salaryText ? { salaryText: apec.salaryText } : {}), ...(apecDate ? { publishedAt: apecDate } : {}) }
 : directEmploi ? { title: directEmploi.title, ...(directEmploi.company ? { displayedCompanyName: directEmploi.company } : {}), ...(directEmploi.location ? { locationText: directEmploi.location } : {}),
         ...(directEmploi.contract ? { contractText: directEmploi.contract } : {}), ...(directEmploiDate ? { publishedAt: directEmploiDate } : {}) }
@@ -167,7 +170,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" || providerKey === "HAYS" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(context === undefined ? {} : { context }),
       ...(structuredFields === undefined ? {} : { structuredFields }),

@@ -3,6 +3,7 @@ import { greenhouseVacancyId } from "./GreenhouseVacancy.js";
 import { oranoVacancyId } from "./OranoVacancy.js";
 import { michaelPageVacancyId } from "./MichaelPageVacancy.js";
 import { isRenaultWorkdaySource, renaultVacancyId } from "./RenaultWorkdayVacancy.js";
+import { haysVacancyId, isHaysSource } from "./HaysVacancy.js";
 import { alstomPostingId, ALSTOM_HOST } from "./AlstomVacancy.js";
 import { isKellyWorkdaySource, kellyVacancyId } from "./KellyWorkdayVacancy.js";
 import { giGroupVacancyId } from "./GiGroupVacancy.js";
@@ -60,6 +61,7 @@ export class ConservativeProviderVacancyIdExtractor
     if (input.sourceName === "job-boards.eu.greenhouse.io") return greenhouseVacancyId(input.sourceUrl);
     if (input.sourceName === "jobs.groupe-psa.com") return stellantisVacancyId(input.sourceUrl);
     if (input.sourceName === "jobs.orano.group") return oranoVacancyId(input.sourceUrl);
+    if (isHaysSource(input.sourceName, input.sourceUrl)) return haysVacancyId(input.sourceUrl);
     if (input.sourceName === ALSTOM_HOST) return alstomPostingId(input.sourceUrl);
     if (input.sourceName === "michaelpage.fr") return michaelPageVacancyId(input.sourceUrl);
     if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return renaultVacancyId(input.sourceUrl);
