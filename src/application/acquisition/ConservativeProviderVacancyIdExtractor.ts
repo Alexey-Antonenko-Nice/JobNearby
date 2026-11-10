@@ -4,6 +4,7 @@ import { oranoVacancyId } from "./OranoVacancy.js";
 import { michaelPageVacancyId } from "./MichaelPageVacancy.js";
 import { isRenaultWorkdaySource, renaultVacancyId } from "./RenaultWorkdayVacancy.js";
 import { haysVacancyId, isHaysSource } from "./HaysVacancy.js";
+import { lhhVacancyId } from "./LhhVacancy.js";
 import { alstomPostingId, ALSTOM_HOST } from "./AlstomVacancy.js";
 import { isKellyWorkdaySource, kellyVacancyId } from "./KellyWorkdayVacancy.js";
 import { giGroupVacancyId } from "./GiGroupVacancy.js";
@@ -87,7 +88,7 @@ export class ConservativeProviderVacancyIdExtractor
       } catch { return undefined; }
     }
     if (input.sourceName === "lhh.com") {
-      try { return /^\/fr-fr\/offres-emploi\/detail\/(\d+)\/?$/iu.exec(new URL(input.sourceUrl).pathname)?.[1]; } catch { return undefined; }
+      return lhhVacancyId(input.sourceUrl);
     }
     const rule = rules[input.sourceName];
     if (rule === undefined) return undefined;
