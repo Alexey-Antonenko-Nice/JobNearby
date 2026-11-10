@@ -4,7 +4,7 @@ import type { SourceObservation } from "../../src/domain/capture/SourceObservati
 import type { OrganizationEvidenceRole } from "../../src/domain/evidence/OrganizationEvidence.js";
 import type { EmployerClusterStatus } from "../../src/domain/recognition/EmployerCluster.js";
 import type { CanonicalEvidenceReference } from "../../src/domain/vacancies/CanonicalEvidenceReference.js";
-import type { VacancyOrganizationRelationship } from "../../src/domain/vacancies/CanonicalVacancy.js";
+import type { VacancyOrganizationRelationship, VacancyTravel } from "../../src/domain/vacancies/CanonicalVacancy.js";
 import type { CanonicalCandidate, CanonicalizeVacancyInput } from "../../src/application/vacancies/CanonicalVacancyCanonicalizer.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 
@@ -52,6 +52,63 @@ function input(
 }
 
 describe("DeterministicCanonicalVacancyCanonicalizer validation scenarios", () => {
+  it("combines recurring required travel without rewriting the source candidates", () => {
+    const travelCandidates: CanonicalCandidate<VacancyTravel>[] = [
+      candidate({ requirement: "REQUIRED", rawText: "déplacements réguliers", frequency: "REGULAR" }, "regular"),
+      candidate({ requirement: "REQUIRED", rawText: "Déplacements fréquents", frequency: "FREQUENT" }, "frequent"),
+    ];
+    const before = structuredClone(travelCandidates);
+    for (const ordered of [travelCandidates, [...travelCandidates].reverse()]) {
+      const vacancy = canonicalizer.canonicalize(input({
+        evidenceReferences: ["role", "regular", "frequent"].map(id => reference(id)), travelCandidates: ordered,
+      }));
+      expect(vacancy.travel).toMatchObject({ status: "RESOLVED", value: { requirement: "REQUIRED", frequency: "FREQUENT", rawText: "Déplacements fréquents" },
+        supportingEvidenceIds: expect.arrayContaining(["regular", "frequent"]), conflictingEvidenceIds: [] });
+      expect(vacancy.travel.supportingEvidenceIds).toHaveLength(2);
+      expect(vacancy.canonicalizationStatus).toBe("USABLE");
+    }
+    expect(travelCandidates).toEqual(before);
+  });
+
+  it("combines consistent missing, unknown, and equal details while keeping their evidence", () => {
+    const vacancy = canonicalizer.canonicalize(input({
+      evidenceReferences: ["role", "a", "b", "c"].map(id => reference(id)),
+      travelCandidates: [
+        candidate({ requirement: "REQUIRED", frequency: "UNKNOWN", scope: "UNKNOWN", rawText: "travel required" }, "a"),
+        candidate({ requirement: "REQUIRED", frequency: "REGULAR", scope: "DOMESTIC", percentage: 50 }, "b"),
+        candidate({ requirement: "REQUIRED", frequency: "FREQUENT", scope: "DOMESTIC", percentage: 50 }, "c"),
+      ],
+    }));
+    expect(vacancy.travel).toMatchObject({ status: "RESOLVED", value: { requirement: "REQUIRED", frequency: "FREQUENT", scope: "DOMESTIC", percentage: 50 },
+      supportingEvidenceIds: ["a", "b", "c"], conflictingEvidenceIds: [] });
+  });
+
+  it.each([
+    [{ requirement: "REQUIRED" }, { requirement: "NOT_REQUIRED" }],
+    [{ requirement: "REQUIRED", frequency: "OCCASIONAL" }, { requirement: "REQUIRED", frequency: "FREQUENT" }],
+    [{ requirement: "REQUIRED", percentage: 20 }, { requirement: "REQUIRED", percentage: 50 }],
+    [{ requirement: "REQUIRED", scope: "DOMESTIC" }, { requirement: "REQUIRED", scope: "INTERNATIONAL" }],
+    [{ requirement: "REQUIRED", frequencyText: "once a month" }, { requirement: "REQUIRED", frequencyText: "weekly" }],
+    [{ requirement: "REQUIRED", scopeText: "Europe" }, { requirement: "REQUIRED", scopeText: "Asia" }],
+  ] satisfies [VacancyTravel, VacancyTravel][])("preserves incompatible travel facts %# as conflicts", (left, right) => {
+    const vacancy = canonicalizer.canonicalize(input({
+      evidenceReferences: ["role", "a", "b"].map(id => reference(id)),
+      travelCandidates: [candidate(left, "a"), candidate(right, "b")],
+    }));
+    expect(vacancy.travel).toMatchObject({ status: "CONFLICTED", conflictingEvidenceIds: ["a", "b"] });
+    expect(vacancy.travel.alternatives).toHaveLength(2);
+    expect(vacancy.canonicalizationStatus).toBe("CONFLICTED");
+  });
+
+  it("validates every merged travel candidate's provenance and confidence", () => {
+    const base = input({ evidenceReferences: ["role", "a"].map(id => reference(id)),
+      travelCandidates: [candidate({ requirement: "REQUIRED", frequency: "REGULAR" }, "a"),
+        candidate({ requirement: "REQUIRED", frequency: "FREQUENT" }, "missing")] });
+    expect(() => canonicalizer.canonicalize(base)).toThrow(/reference supplied evidence/u);
+    expect(() => canonicalizer.canonicalize({ ...base, travelCandidates: [base.travelCandidates![0]!,
+      { value: { requirement: "REQUIRED", frequency: "FREQUENT" }, supportingEvidenceIds: ["a"], confidence: 2 }] })).toThrow(/confidence/u);
+  });
+
   it("represents HEUFT employer, CDI, base location, and extensive travel independently", () => {
     const evidenceReferences = ["role", "employer", "engagement", "travel", "location", "work-mode"].map((id) => reference(id));
     const vacancy = canonicalizer.canonicalize(input({

@@ -8,6 +8,7 @@ import {
 import type {
   CanonicalVacancy,
   VacancyOrganizationRelationship,
+  VacancyTravel,
 } from "../../domain/vacancies/CanonicalVacancy.js";
 import type {
   CanonicalCandidate,
@@ -45,7 +46,7 @@ export class DeterministicCanonicalVacancyCanonicalizer
       location: resolve(input.locationCandidates),
       workMode: resolve(input.workModeCandidates),
       remoteEligibleCountries: resolve(input.remoteEligibleCountryCandidates),
-      travel: resolve(input.travelCandidates),
+      travel: resolveTravelField(input.travelCandidates ?? [], evidenceIds, derivation),
       engagement: resolve(input.engagementCandidates),
       compensation: resolve(input.compensationCandidates),
       experienceRequirements: resolve(input.experienceCandidates),
@@ -76,6 +77,43 @@ export class DeterministicCanonicalVacancyCanonicalizer
       derivation,
     };
   }
+}
+
+function resolveTravelField(
+  candidates: readonly CanonicalCandidate<VacancyTravel>[],
+  validEvidenceIds: ReadonlySet<string>,
+  derivation: CanonicalDerivationMetadata,
+): CanonicalField<VacancyTravel> {
+  // Validate every original candidate, including candidates that are later merged.
+  const original = resolveCanonicalField(candidates, validEvidenceIds, derivation);
+  if (candidates.length < 2 || candidates.some(({ value }) => value.requirement !== "REQUIRED")) return original;
+
+  const values = candidates.map(({ value }) => value);
+  const frequencies = new Set(values.map(value => value.frequency).filter(value => value !== undefined && value !== "UNKNOWN"));
+  const scopes = new Set(values.map(value => value.scope).filter(value => value !== undefined && value !== "UNKNOWN"));
+  const percentages = new Set(values.map(value => value.percentage).filter(value => value !== undefined));
+  const scopeTexts = new Set(values.map(value => value.scopeText).filter(value => value !== undefined));
+  const frequencyTexts = new Set(values.map(value => value.frequencyText).filter(value => value !== undefined));
+  if ((frequencies.has("OCCASIONAL") && frequencies.size > 1) || scopes.size > 1 ||
+    percentages.size > 1 || scopeTexts.size > 1 || frequencyTexts.size > 1) return original;
+
+  const frequency = frequencies.has("FREQUENT") ? "FREQUENT" : frequencies.has("REGULAR") ? "REGULAR"
+    : frequencies.has("OCCASIONAL") ? "OCCASIONAL" : values.some(value => value.frequency === "UNKNOWN") ? "UNKNOWN" : undefined;
+  const scope = [...scopes][0] ?? (values.some(value => value.scope === "UNKNOWN") ? "UNKNOWN" : undefined);
+  const representative = [...values].sort((a, b) =>
+    Number(b.frequency === frequency) - Number(a.frequency === frequency) || stableValue(a).localeCompare(stableValue(b)),
+  )[0]!;
+  const percentage = [...percentages][0], scopeText = [...scopeTexts][0], frequencyText = [...frequencyTexts][0];
+  const merged: VacancyTravel = {
+    requirement: "REQUIRED",
+    ...(representative.rawText === undefined ? {} : { rawText: representative.rawText }),
+    ...(frequency === undefined ? {} : { frequency }),
+    ...(scope === undefined ? {} : { scope }),
+    ...(percentage === undefined ? {} : { percentage }),
+    ...(scopeText === undefined ? {} : { scopeText }),
+    ...(frequencyText === undefined ? {} : { frequencyText }),
+  };
+  return resolveCanonicalField(candidates.map(candidate => ({ ...candidate, value: merged })), validEvidenceIds, derivation);
 }
 
 export function resolveCanonicalField<T>(
