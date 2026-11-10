@@ -23,5 +23,6 @@ describe("Daimler Truck repeated capture convergence", () => {
 });
 
 async function capture(runtime: ReturnType<typeof createCaptureProcessingRuntime>, pageUrl: string, capturedAt: string) {
-  return runtime.captureAndProcessBrowserVacancy({ pageUrl, pageTitle: "Daimler Truck", visibleText: "same evidence", capturedAt });
+  return runtime.captureAndProcessBrowserVacancy({ pageUrl, pageTitle: "Daimler Truck", visibleText: "same evidence", capturedAt,
+    html: '<script type="application/ld+json">{"@type":"JobPosting","title":"Software Engineer"}</script>' });
 }

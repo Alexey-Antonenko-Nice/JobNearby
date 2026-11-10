@@ -34,6 +34,7 @@ describe("local browser capture HTTP boundary", () => {
       },
       processing: {
         status: "PROCESSED",
+        captureAcceptedAsVacancy: true,
         canonicalVacancyId: "canonical-1",
         vacancyOutcome: "CREATED",
         observationAdded: true,
@@ -67,6 +68,7 @@ describe("local browser capture HTTP boundary", () => {
       },
       processing: {
         status: "PROCESSED",
+        captureAcceptedAsVacancy: true,
         canonicalVacancyId: "canonical-1",
         vacancyOutcome: "CREATED",
         observationAdded: true,

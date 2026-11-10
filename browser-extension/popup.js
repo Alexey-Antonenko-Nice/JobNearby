@@ -4,6 +4,9 @@ export function captureFeedback(body) {
   if (body.processing.status === "FAILED") {
     return "Captured, but processing did not finish.";
   }
+  if (body.processing.status === "VACANCY_NOT_DETECTED") {
+    return "Vacancy not detected. This page was not added.";
+  }
   const messages = [
     body.processing.vacancyOutcome === "CREATED"
       ? "Captured into a new vacancy record."

@@ -123,7 +123,7 @@ describe("Indeed standalone direct vacancy isolation", () => {
     expect((await extractor.extract(old)).vacancyTitles).toContainEqual(expect.objectContaining({ value: title }));
     expect(old).toEqual(before);
   });
-  it("preserves fallback semantics, exact recaptures, changed snapshots, and employer continuity", async () => {
+  it("retains rejected captures separately and preserves accepted recapture continuity", async () => {
     const db = createDatabase(":memory:");
     try {
       const runtime = createCaptureProcessingRuntime(db);
@@ -131,13 +131,14 @@ describe("Indeed standalone direct vacancy isolation", () => {
       const canonicals = new SqliteCanonicalVacancyRepository(db);
       const payload = { pageUrl: url, pageTitle: "Indeed", visibleText: title, capturedAt: "2026-10-22T06:00:00Z" };
       const failed = await runtime.captureAndProcessBrowserVacancy({ ...payload, html: outside });
-      if (failed.processing.status !== "PROCESSED") throw Error("Processing failed");
-      const canonicalId = failed.processing.canonicalVacancyId;
-      expect((await canonicals.findById(canonicalId))?.role.status).toBe("UNKNOWN");
-      expect(db.prepare("SELECT status, algorithm FROM observation_cluster_assignments").all()).toEqual([{ status: "ACCEPTED", algorithm: "new-employer-cluster" }]);
+      expect(failed.processing).toMatchObject({ status: "VACANCY_NOT_DETECTED", captureAcceptedAsVacancy: false });
+      expect(db.prepare("SELECT * FROM canonical_vacancies").all()).toEqual([]);
+      expect(db.prepare("SELECT * FROM observation_cluster_assignments").all()).toEqual([]);
       const original = await sources.findById(failed.capture.observationId);
       const clean = await runtime.captureAndProcessBrowserVacancy({ ...payload, html: page(), capturedAt: "2026-10-22T06:01:00Z" });
-      expect(clean.processing).toMatchObject({ canonicalVacancyId: canonicalId, observationAdded: true });
+      if (clean.processing.status !== "PROCESSED") throw Error("Processing failed");
+      const canonicalId = clean.processing.canonicalVacancyId;
+      expect(clean.processing.observationAdded).toBe(true);
       const assignments = db.prepare("SELECT * FROM observation_cluster_assignments ORDER BY id").all();
       const firstProjection = (await canonicals.findById(canonicalId))!;
       for (const capturedAt of ["2026-10-22T06:02:00Z", "2026-10-22T06:03:00Z"]) {

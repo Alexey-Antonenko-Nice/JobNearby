@@ -252,9 +252,9 @@ describe("human-confirmed agency memory", () => {
     try {
       await f.add("first", "Agency", "RECRUITER"); await f.confirm("first");
       const runtime = createCaptureProcessingRuntime(f.db);
-      const captured = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://example.test/jobs/later", pageTitle: "Technicien H/F",
+      const captured = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://example.jobs.personio.de/job/101", pageTitle: "Technicien H/F",
         visibleText: "Technicien H/F\nAgency\n67 - Strasbourg\nCDI", capturedAt: date,
-        html: '<script type="application/ld+json">{"@type":"JobPosting","title":"Technicien H/F","hiringOrganization":{"name":"Agency"}}</script>' });
+        html: '<div class="job-header"><h1 class="job-position-title">Technicien H/F</h1></div><script type="application/ld+json">{"@type":"JobPosting","title":"Technicien H/F","hiringOrganization":{"name":"Agency"}}</script>' });
       if (captured.processing.status !== "PROCESSED") throw Error("Processing failed");
       const current = (await f.deps.canonicalVacancyRepository.findById(captured.processing.canonicalVacancyId))!;
       expect(current.organizationRelationships.some(r => r.role === "RECRUITER" && r.rawName === "Agency")).toBe(false);
@@ -270,9 +270,9 @@ describe("human-confirmed agency memory", () => {
     try {
       await f.add("first", "Agency", "RECRUITER"); await f.confirm("first");
       const runtime = createCaptureProcessingRuntime(f.db);
-      const result = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://example.test/internal", pageTitle: "Technicien H/F",
+      const result = await runtime.captureAndProcessBrowserVacancy({ pageUrl: "https://example.jobs.personio.de/job/102", pageTitle: "Technicien H/F",
         visibleText: "Technicien H/F\nAgency\nEmployeur: Agency\n67 - Strasbourg\nCDI", capturedAt: date,
-        html: '<script type="application/ld+json">{"@type":"JobPosting","title":"Technicien H/F","hiringOrganization":{"name":"Agency"}}</script>' });
+        html: '<div class="job-header"><h1 class="job-position-title">Technicien H/F</h1></div><script type="application/ld+json">{"@type":"JobPosting","title":"Technicien H/F","hiringOrganization":{"name":"Agency"}}</script>' });
       if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
       const vacancy = (await f.deps.canonicalVacancyRepository.findById(result.processing.canonicalVacancyId))!;
       expect(vacancy.organizationRelationships).toContainEqual(expect.objectContaining({ role: "EMPLOYER", rawName: "Agency" }));

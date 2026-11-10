@@ -9,6 +9,7 @@ import { SqliteSourceObservationRepository } from "../../src/infrastructure/pers
 import { SqliteUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/SqliteUserVacancyInteractionRepository.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
 import { SqliteObservationClusterAssignmentRepository } from "../../src/infrastructure/persistence/SqliteObservationClusterAssignmentRepository.js";
+import { helloWorkPanel } from "../fixtures/helloWorkVacancy.js";
 
 describe("createCaptureProcessingRuntime", () => {
   it("canonicalizes the selected Indeed vacancy facts without UI headings", async () => {
@@ -108,7 +109,7 @@ describe("createCaptureProcessingRuntime", () => {
         pageTitle: "Daimler Truck vacancy",
         visibleText: "Technicien de maintenance",
         capturedAt: "2026-09-05T10:00:00Z",
-        html: `<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", hiringOrganization: { "@type": "Organization", name: company } })}</script>`,
+        html: `<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", title: "Technicien de maintenance", hiringOrganization: { "@type": "Organization", name: company } })}</script>`,
       });
       expect(result.processing).toMatchObject({
         status: "PROCESSED",
@@ -150,6 +151,7 @@ describe("createCaptureProcessingRuntime", () => {
         pageUrl: "https://www.hellowork.com/fr-fr/emplois/123",
         pageTitle: "Maintenance role",
         visibleText: "Technicien Maintenance\nExample employer\nStrasbourg",
+        html: helloWorkPanel,
         capturedAt: "2026-08-30T10:00:00Z",
       };
       const first = await runtime.captureAndProcessBrowserVacancy(payload);
@@ -186,8 +188,13 @@ describe("createCaptureProcessingRuntime", () => {
     try {
       const runtime = createCaptureProcessingRuntime(database);
       const id = "4449077982";
-      const searchHtml = `<div componentkey="job-card-component-ref-${id}">Selected vacancy</div>
-        <div id="JobDetails_AboutTheJob_${id}" componentkey="JobDetails_AboutTheJob_${id}">Description</div>`;
+      const searchHtml = `<main id="workspace">
+        <div componentkey="job-card-component-ref-${id}">Selected vacancy</div>
+        <div class="detail-pane"><div class="selected-job-detail"><div class="job-header">
+          <p>Akkodis</p><a href="/jobs/view/${id}/">Ingénieur conception mécanique H/F</a>
+        </div><div class="job-sections"><div id="JobDetails_AboutTheJob_${id}">
+          <h2>À propos de l’offre d’emploi</h2><p>Description</p>
+        </div><div id="JobDetails_AboutTheCompany_${id}">Akkodis</div></div></div></div></main>`;
       const directHtml = `<div data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.JobDetails">
         <main id="workspace"><div data-testid="lazy-column" data-component-type="LazyColumn">
           <div id="JobDetails_ManageJobBanner_${id}"></div>

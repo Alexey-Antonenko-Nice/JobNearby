@@ -173,7 +173,7 @@ describe("Randstad direct vacancy", () => {
       }
       expect(await deps.sourceObservationRepository.countCaptureOccurrences([first.capture.observationId])).toBe(3);
       expect(db.prepare("SELECT * FROM observation_cluster_assignments ORDER BY id").all()).toEqual(assignments);
-      const changed = await runtime.captureAndProcessBrowserVacancy({ ...payload, html: page(pane.replace("polyvalence", "polyvalence professionnelle")), capturedAt: "2026-10-22T12:03:00Z" });
+      const changed = await runtime.captureAndProcessBrowserVacancy({ ...payload, html: page(pane.replaceAll("polyvalence", "polyvalence professionnelle")), capturedAt: "2026-10-22T12:03:00Z" });
       expect(changed.capture.observationId).not.toBe(first.capture.observationId);
       expect(changed.processing).toMatchObject({ canonicalVacancyId: canonicalId, observationAdded: true });
       expect(db.prepare("SELECT COUNT(*) AS count FROM source_observations").get()).toEqual({ count: 2 });

@@ -170,13 +170,13 @@ describe("Indeed company-jobs selected pane", () => {
     } finally { db.close(); }
   });
 
-  it("documents the existing unresolved-cluster fallback for a safely empty capture", async () => {
+  it("retains a safely empty capture without creating an unresolved cluster", async () => {
     const db = createDatabase(":memory:");
     try {
       const result = await createCaptureProcessingRuntime(db).captureAndProcessBrowserVacancy(payload(page("")));
-      expect(result.processing.status).toBe("PROCESSED");
-      expect(db.prepare("SELECT status, display_label FROM employer_clusters").all()).toEqual([{ status: "UNRESOLVED", display_label: "Unknown employer" }]);
-      expect(db.prepare("SELECT status, algorithm FROM observation_cluster_assignments").all()).toEqual([{ status: "ACCEPTED", algorithm: "new-employer-cluster" }]);
+      expect(result.processing).toMatchObject({ status: "VACANCY_NOT_DETECTED", captureAcceptedAsVacancy: false });
+      expect(db.prepare("SELECT * FROM employer_clusters").all()).toEqual([]);
+      expect(db.prepare("SELECT * FROM observation_cluster_assignments").all()).toEqual([]);
     } finally { db.close(); }
   });
 });

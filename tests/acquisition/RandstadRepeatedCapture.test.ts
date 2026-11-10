@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 
 const url = "https://www.randstad.fr/emploi/monteur-assembleur-fh_molsheim_001-mmo-0000054_10l/";
+const fixture = readFileSync("tests/fixtures/randstadDirectVacancy.html", "utf8");
 
 describe("Randstad repeated capture convergence", () => {
   it("reuses an unchanged snapshot while preserving each capture occurrence", async () => {
@@ -68,5 +70,7 @@ describe("Randstad repeated capture convergence", () => {
 });
 
 async function capture(runtime: ReturnType<typeof createCaptureProcessingRuntime>, pageUrl: string, visibleText: string, capturedAt: string) {
-  return runtime.captureAndProcessBrowserVacancy({ pageUrl, pageTitle: "Randstad", visibleText, capturedAt });
+  const id = pageUrl.includes("benfeld") ? "001-sel-1743760_01c" : "001-mmo-0000054_10l";
+  const html = fixture.replaceAll("307-ust-r001990_01r", id).replaceAll("307-UST-R001990_01R", id.toUpperCase());
+  return runtime.captureAndProcessBrowserVacancy({ pageUrl, pageTitle: "Randstad", visibleText, capturedAt, html });
 }
