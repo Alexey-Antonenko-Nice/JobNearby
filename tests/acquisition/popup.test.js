@@ -56,4 +56,9 @@ describe("browser capture popup feedback", () => {
       "Captured, but processing did not finish.",
     );
   });
+
+  it("reports a rejected vacancy without claiming a record or backend error", () => {
+    expect(captureFeedback({ processing: { status: "VACANCY_NOT_DETECTED", captureAcceptedAsVacancy: false } }))
+      .toBe("Vacancy not detected. This page was not added.");
+  });
 });

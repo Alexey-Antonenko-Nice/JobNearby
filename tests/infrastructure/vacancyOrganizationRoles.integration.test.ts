@@ -184,7 +184,7 @@ describe("vacancy-specific human organization roles", () => {
     try {
       const first = await f.capture();
       await f.choose(first.id, "STAFFING_AGENCY");
-      const plain = await f.capture('<script type="application/ld+json">{"@type":"JobPosting","title":"Engineer","hiringOrganization":{"name":"Kelly"}}</script>', "https://example.test/jobs/unknown");
+      const plain = await f.capture('<div class="job-header"><h1 class="job-position-title">Engineer</h1></div><script type="application/ld+json">{"@type":"JobPosting","title":"Engineer","hiringOrganization":{"name":"Kelly"}}</script>', "https://example.jobs.personio.de/job/123");
       const card = (await f.workflow.getVacancyReview(plain.id)).organizationRoleReview![0]!;
       expect(card).toMatchObject({
         recommendedRole: "STAFFING_AGENCY",

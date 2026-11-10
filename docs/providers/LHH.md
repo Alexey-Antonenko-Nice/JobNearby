@@ -6,7 +6,7 @@ vacancy**; there is no global `LHH → STAFFING_AGENCY` rule.
 | Topic | Status |
 |---|---|
 | Split search layout `https://www.lhh.com/fr-fr/offres-emploi?jobId=<id>` | Supported |
-| Legacy detail route `/fr-fr/offres-emploi/detail/<id>` | Supported (bounded `<main>`) |
+| Legacy detail route `/fr-fr/offres-emploi/detail/<id>` | ID extraction retained; legacy unbounded locator is not accepted for new browser vacancies |
 | Stable ID | `jobId` query (or detail route) + the pane's `.job-id` reference + pane share/detail links; all must agree |
 | Contract | Selected pane's contract field only: `CDI` → `INDEFINITE`, `CDD` → `FIXED_TERM` |
 | Salary | `€ 40000 - € 45000 / Annuel`, `€40000 - €45000 / Annuel`, `40 000 € - 45 000 € / Annuel`, `€ 40000 à € 45000 / Annuel` → EUR / YEAR, raw text preserved |
@@ -46,4 +46,5 @@ outranks any role history.
 ## Unsupported
 
 Other LHH layouts (other locales, several panes, list-only pages) are not
-captured.
+accepted as vacancies. The legacy detail locator may fall back to whole-page
+content, so its captures are retained for diagnostics without promotion.

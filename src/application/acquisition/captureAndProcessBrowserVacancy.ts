@@ -8,6 +8,8 @@ import type {
   EmployerProcessingSummary,
   ProcessVacancyObservationResult,
 } from "../vacancies/processVacancyObservation.js";
+import { assessBrowserVacancyCapture, type VacancyCaptureAcceptance } from "./assessBrowserVacancyCapture.js";
+import { createVacancyEvidenceExtractor } from "../evidence/createVacancyEvidenceExtractor.js";
 
 export type CaptureEmployerStatus =
   | "MATCHED_EXISTING_RECORD"
@@ -27,6 +29,7 @@ export type CaptureAndProcessBrowserVacancyResult =
       readonly capture: CaptureSummary;
       readonly processing: {
         readonly status: "PROCESSED";
+        readonly captureAcceptedAsVacancy: true;
         readonly canonicalVacancyId: string;
         readonly vacancyOutcome: "CREATED" | "UPDATED_EXISTING";
         readonly observationAdded: boolean;
@@ -34,6 +37,12 @@ export type CaptureAndProcessBrowserVacancyResult =
         readonly employerStatus: CaptureEmployerStatus;
         readonly employerDisplayName?: string;
       };
+    }
+  | {
+      readonly capture: CaptureSummary;
+      readonly processing: {
+        readonly status: "VACANCY_NOT_DETECTED";
+      } & Extract<VacancyCaptureAcceptance, { captureAcceptedAsVacancy: false }>;
     }
   | {
       readonly capture: CaptureSummary;
@@ -60,6 +69,12 @@ export async function captureAndProcessBrowserVacancy(
   const ingestion = await ingestBrowserCapture(payload, dependencies.ingestion);
   const capture = captureSummary(ingestion);
   try {
+    const observation = await dependencies.ingestion.repository.findById(ingestion.sourceObservationId);
+    if (observation === null) throw new Error("Persisted browser capture was not found.");
+    const acceptance = await assessBrowserVacancyCapture(observation, createVacancyEvidenceExtractor());
+    if (!acceptance.captureAcceptedAsVacancy) {
+      return { capture, processing: { status: "VACANCY_NOT_DETECTED", ...acceptance } };
+    }
     // Snapshot reuse only deduplicates immutable source content. Always reproject
     // the returned observation with current extractors, including exact recaptures.
     const processing = await dependencies.processVacancyObservation(
@@ -69,6 +84,7 @@ export async function captureAndProcessBrowserVacancy(
       capture,
       processing: {
         status: "PROCESSED",
+        captureAcceptedAsVacancy: true,
         canonicalVacancyId: processing.canonicalVacancyId,
         vacancyOutcome: processing.canonicalVacancyOutcome,
         observationAdded: processing.observationAdded,

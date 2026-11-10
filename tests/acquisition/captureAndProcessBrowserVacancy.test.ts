@@ -5,9 +5,10 @@ import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acq
 import { InMemorySourceObservationRepository } from "../../src/infrastructure/persistence/InMemorySourceObservationRepository.js";
 
 const payload = {
-  pageUrl: "https://example.test/jobs/1",
+  pageUrl: "https://example.jobs.personio.de/job/1",
   pageTitle: "Example vacancy",
   visibleText: "Visible vacancy text",
+  html: '<div class="job-header"><h1 class="job-position-title">Software Engineer</h1></div>',
   capturedAt: "2026-08-30T10:00:00Z",
 };
 

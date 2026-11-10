@@ -95,8 +95,29 @@ The extension reads `window.location.href`, `document.title`, and generic visibl
 text from `document.body.innerText`. It optionally includes the current
 `document.documentElement.outerHTML`. Visible text receives only line-ending
 normalization and surrounding-whitespace trimming. Page title remains acquisition
-metadata; no title, employer, company, location, publication time, contract, or
-external vacancy ID is inferred.
+metadata and is not sufficient to establish a vacancy. Provider-specific
+acquisition can identify a posting and extract fields from a validated context.
+
+### Vacancy acceptance
+
+Browser captures are persisted as source observations before vacancy acceptance.
+The acceptance gate revalidates the provider's selected or direct vacancy context
+and requires a meaningful title from that context. A URL ID, hostname, page title,
+company mention, or unrelated structured metadata alone is not enough. For
+Personio, generic Workday, Bürkert and Daimler Truck, the gate also accepts their
+validated direct-page header or single provider-specific posting record. Other
+layouts without a safely bounded context are not promoted; in particular, legacy
+Jooble, Cadremploi and LHH detail-page locators can return unbounded content and
+are not accepted by this gate. LHH's bounded selected-pane layout remains supported.
+
+An unaccepted observation and its capture occurrences remain available for
+diagnostics, but the observation receives no vacancy claim, canonical membership,
+employer cluster or employer assignment. A later valid capture can be promoted
+normally. The capture API returns `processing.status: "VACANCY_NOT_DETECTED"`,
+`captureAcceptedAsVacancy: false` and a `rejectionReason`, without a
+`canonicalVacancyId`. This is not a processing error. Accepted captures retain
+`processing.status: "PROCESSED"`, with `captureAcceptedAsVacancy: true`, and
+continue to support exact and changed recaptures.
 
 The adapter derives a conservative source name from the lower-case hostname,
 removing a leading `www.` or generic two-letter locale subdomain. A URL without a
