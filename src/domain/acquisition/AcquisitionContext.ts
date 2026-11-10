@@ -71,6 +71,7 @@ export function createAcquisitionContext(input: AcquisitionContext): Acquisition
     && input.providerKey !== "DIRECT_EMPLOI"
     && input.providerKey !== "ALSTOM"
     && input.providerKey !== "HAYS"
+    && input.providerKey !== "EXPECTRA_MONACO"
   ) {
     throw new Error("Acquisition context provider key is invalid.");
   }

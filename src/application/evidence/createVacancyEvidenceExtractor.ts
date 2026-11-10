@@ -1,4 +1,5 @@
 import { StellantisVacancyEvidenceExtractor } from "./StellantisVacancyEvidenceExtractor.js";
+import { ExpectraVacancyEvidenceExtractor } from "./ExpectraVacancyEvidenceExtractor.js";
 import { GreenhouseVacancyEvidenceExtractor } from "./GreenhouseVacancyEvidenceExtractor.js";
 import { OranoVacancyEvidenceExtractor } from "./OranoVacancyEvidenceExtractor.js";
 import { MichaelPageVacancyEvidenceExtractor } from "./MichaelPageVacancyEvidenceExtractor.js";
@@ -35,6 +36,7 @@ import { AdeccoSelectedVacancyEvidenceExtractor } from "./AdeccoSelectedVacancyE
 
 export function createVacancyEvidenceExtractor(): CompositeVacancyEvidenceExtractor {
   return new CompositeVacancyEvidenceExtractor([
+    new ExpectraVacancyEvidenceExtractor(),
     new AlstomVacancyEvidenceExtractor(),
     new HaysVacancyEvidenceExtractor(),
     new StellantisVacancyEvidenceExtractor(),

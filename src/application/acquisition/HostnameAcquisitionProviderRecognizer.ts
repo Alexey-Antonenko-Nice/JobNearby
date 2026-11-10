@@ -23,6 +23,7 @@ export class HostnameAcquisitionProviderRecognizer implements AcquisitionProvide
     try {
       const hostname = new URL(input.sourceUrl).hostname.toLocaleLowerCase();
       const sourceName = input.sourceName.toLocaleLowerCase();
+      if (/^(?:www\.)?expectra\.mc$/u.test(hostname)) return sourceName === "expectra.mc" ? "EXPECTRA_MONACO" : undefined;
       if (hostname === "job-boards.eu.greenhouse.io") return sourceName === hostname ? "GREENHOUSE" : undefined;
       if (hostname === "jobs.groupe-psa.com") return sourceName === hostname ? "STELLANTIS" : undefined;
       if (hostname === "jobs.orano.group") return sourceName === hostname ? "ORANO" : undefined;
