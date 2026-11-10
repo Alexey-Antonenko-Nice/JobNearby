@@ -10,6 +10,17 @@ import type { CanonicalVacancy } from "../../domain/vacancies/CanonicalVacancy.j
 import type { ObservationClusterAssignmentRepository } from "../../domain/recognition/ObservationClusterAssignmentRepository.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import { createVacancyEvidenceExtractor } from "../evidence/createVacancyEvidenceExtractor.js";
+import { MichaelPageSelectedVacancyContextLocator } from "../acquisition/MichaelPageVacancy.js";
+
+function michaelPageClientWording(observation: SourceObservation): string | undefined {
+  const acquisition = observation.metadata.acquisition;
+  if (!acquisition || typeof acquisition !== "object" || !("html" in acquisition) || typeof acquisition.html !== "string") return undefined;
+  const context = new MichaelPageSelectedVacancyContextLocator().locate({
+    providerKey: "MICHAEL_PAGE", sourceUrl: observation.source.sourceUrl ?? "", html: acquisition.html,
+    ...(observation.source.externalId === undefined ? {} : { externalId: observation.source.externalId }),
+  });
+  return typeof context?.metadata?.clientWording === "string" ? context.metadata.clientWording : undefined;
+}
 export function effectiveRoleDecisions(decisions: readonly VacancyOrganizationRoleDecision[]) {
   const latest = new Map<string, VacancyOrganizationRoleDecision>();
   let employer: string | null = null;
@@ -106,6 +117,10 @@ export async function buildOrganizationRoleReview(vacancy: CanonicalVacancy, obs
     if (recommendedRole !== "UNKNOWN") {
       if (recommendedRole === "EMPLOYER" && strongest?.observation.source.sourceUrl?.includes("/corporatecareers-kellyservices-com/")) reasons.push("Corporate-careers tenant", "First-person Kelly employer wording", "No recruiting-for-client or staffing-assignment evidence");else if (recommendedRole === "EMPLOYER" && strongest?.observation.source.sourceUrl?.includes("m.hays.fr/careers/")) reasons.push("Hays internal careers route", "First-person Hays employer wording", "No recruiting-for-client assignment evidence");else reasons.push(`${evidenceStrength === "EXPLICIT" ? "Current vacancy evidence" : "Provider or vacancy context"} supports ${recommendedRole.toLowerCase().replaceAll("_", " ")}.`);
       if (recommendedRole === "STAFFING_AGENCY" || recommendedRole === "RECRUITER") reasons.push("The vacancy identifies a recruiting/intermediary relationship or agency context.");
+      if (recommendedRole === "STAFFING_AGENCY" && strongest && key === "michael page") {
+        const wording = michaelPageClientWording(strongest.observation);
+        if (wording) reasons.push(`The selected vacancy says "${wording}".`);
+      }
     } else if (tiedRoles.size > 1) {
       evidenceStrength = strongest!.confidence === 1 ? "EXPLICIT" : "CONTEXTUAL";
       reasons.push("Current source evidence contains conflicting organization roles.");

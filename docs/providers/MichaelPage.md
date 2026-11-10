@@ -1,10 +1,10 @@
 # Michael Page France selected vacancy
 
-Validated from saved observation `49e72d11-361b-4682-82d1-bf3100cb67ee`, canonical `d9286dca-4ead-4478-a136-e4132aa8d68d`. The original stored HTML was opened through a read-only SQLite connection before implementation. No live request, live database write, schema change or commit is involved.
+Validated against saved direct-detail observations, including `jn-102026-7118382`. Stored HTML was opened through a read-only SQLite connection. No live database write or schema change is involved.
 
 ## Diagnosis and supported scope
 
-There was no Michael Page provider rule. The observation had no external reference or mapped title, location or contract. Its saved JobPosting JSON-LD also contains literal control characters in its description string and fails JSON parsing. Whole-page extraction could instead consume navigation and the **Offres similaires** aside, including its salaries, locations and CDI contracts.
+The original direct-detail locator required a publication date of the form `Ajoutée le ...`; it rejected the otherwise matching updated vacancy whose visible date is `Mise à jour le ...`. Whole-page extraction could instead consume navigation and the **Offres similaires** aside, including its salaries, locations and contracts.
 
 `MICHAEL_PAGE` supports `michaelpage.fr` / `www.michaelpage.fr`, route `/job-detail/<slug>/ref/jn-<six digits>-<digits>`. References are normalized to lowercase. Query parameters do not define identity; the original source URL remains unchanged. No other PageGroup domains or providers are broadened.
 
@@ -26,14 +26,18 @@ Legacy stored observations are transiently rescoped from original HTML, discardi
 - **Télétravail possible** is retained in selected text and `teleworkText` metadata. The full description additionally preserves “Possibilité de télétravail 1 jour / semaine une fois formé(e) et autonome.” Normalized work mode remains **UNKNOWN**: neither the optional label nor the JSON-LD `TELECOMMUTE` supplies fully remote status. No schedule beyond the displayed wording is invented.
 - Salary remains **UNKNOWN**. The selected article has no salary, and the JSON-LD salary object is empty. Neighboring Toulouse/Cergy Pontoise/Massy/Lisses salary ranges are excluded.
 
-Michael Page branding identifies the publisher. The selected company paragraph says **mon client**, and the selected summary names a consultant. Together these support **Michael Page / RECRUITMENT_AGENCY** evidence (canonical role RECRUITER). The JSON-LD `hiringOrganization: Michael Page France` is not treated as the legal employer. No client name is present: “un groupe français…” is descriptive, not a named organization, and the employer remains unresolved. Human decisions are not created or overwritten. Removing the vacancy-level client wording removes this provider's intermediary assertion.
+For the newer supported vacancy **jn-102026-7118382**, the bounded header provides **Technicien(ne) SAV France (F/H)** and **Cosse-le-Vivien** (the description also spells it Cossé-le-Vivien). **CDI → INDEFINITE**, without inferring full-time employment or work mode. A selected annual EUR range such as `30 000€ - 40 000€ par an`, including spaced and `K€` variants, yields EUR 30000–40000/YEAR while retaining the raw text. The visible **Mise à jour le 06/11/2026** remains in the selected context as an update, not a publication date. Travel wording remains in the bounded description; it does not imply a work mode.
+
+Compatible required-travel evidence is combined at canonicalization, preserving both source wordings and evidence references. `REGULAR` plus `FREQUENT` resolves to `FREQUENT`; incompatible requirements, frequencies, scopes or quantitative values remain conflicts.
+
+Michael Page branding provides **DISPLAYED_COMPANY** evidence. The selected company paragraph says **mon client** or **notre client**, and the selected summary names a consultant. Together these support **STAFFING_AGENCY** and lower-confidence **RECRUITMENT_AGENCY** evidence, recommending STAFFING_AGENCY. The JSON-LD `hiringOrganization: Michael Page France` is not treated as the legal employer. No client name is present: business descriptions are not named organizations, and the employer remains unresolved. Human role alternatives remain available, with confirmation required for contradictory decisions. Removing the vacancy-level client wording removes this provider's intermediary assertion.
 
 ## Continuity and verification
 
-A new identified capture can reuse the unidentified observation's canonical only when exactly one existing canonical matches and both old/new saved HTML, plus all existing canonical members, independently validate the same reference. No automatic canonical merge is performed.
+A valid direct context and meaningful title pass the vacancy acceptance gate. An unsupported, incomplete, ambiguous or identity-conflicting layout remains a diagnostic observation and does not create a vacancy or employer assignment. Exact recaptures reuse the observation and increment its occurrence count; changed snapshots with the same identity retain the canonical vacancy and human decisions. No automatic canonical merge is performed.
 
 `tests/fixtures/michaelPageSelectedVacancy.html` preserves the saved page's structural classes, selected article, description and related offers. Executable scripts, styles, SVGs, iframe content and resource-source attributes are stripped; the original malformed JSON-LD is retained as a regression input. Tests cover complete-description retention, related salary/location/contract contamination, telework uncertainty, corrected JSON-LD role/mode safety, genuine ID conflicts, missing/ambiguous selection, an unnamed client and preserved human role/interaction decisions across identical and changed recapture.
 
 Set `MICHAEL_PAGE_STORED_REPLAY=1` when running `tests/acquisition/MichaelPageSelectedVacancy.test.ts` to replay the actual stored observation. The test opens the source database with `readonly: true`, serializes it to a private in-memory database and performs all processing writes there. It verifies the original canonical above, repaired facts, identical recapture, preserved decision/assignment histories and unchanged original observation.
 
-Validation: **15 focused tests passed**, including the actual stored replay. Full backend verification passed **2,104 tests in 136 files**, with 2 existing opt-in tests skipped; Michael Page and Renault stored replays were enabled. Typecheck, backend build and diff checks passed.
+The additional `michaelPageTechnicienVacancy.html` fixture covers the updated-date layout, client wording, visible compensation, and contaminated similar jobs. Set `MICHAEL_PAGE_TECHNICIEN_STORED_REPLAY=1` to replay the original captured page into a fresh in-memory database.

@@ -49,6 +49,7 @@ describe("browser capture popup feedback", () => {
       "Some captured vacancy details conflict.",
     );
     expect(captureFeedback({ processing: { ...processed.processing, canonicalizationStatus: "PARTIAL" } })).not.toContain("conflict");
+    expect(captureFeedback(processed)).not.toContain("conflict");
   });
 
   it("reports post-capture processing failure without calling capture a failure", () => {

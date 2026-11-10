@@ -27,11 +27,25 @@ export function michaelPagePublishedAt(value: unknown): Date | undefined {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === iso ? date : undefined;
 }
 
+function validDateText(value: string | undefined): boolean {
+  if (!value) return false;
+  return michaelPagePublishedAt(value.replace(/^Mise à jour le /u, "Ajoutée le ")) !== undefined;
+}
+
+export function michaelPageSalary(value: string | undefined) {
+  const match = /^(\d+(?:[ \u00a0\u202f]\d{3})*|\d+K)\s*€\s*[-–]\s*(\d+(?:[ \u00a0\u202f]\d{3})*|\d+K)\s*€\s+par an$/iu.exec(value ?? "");
+  if (!match || !value) return undefined;
+  const amount = (part: string) => /k$/iu.test(part) ? Number(part.slice(0, -1)) * 1000 : Number(part.replace(/[ \u00a0\u202f]/gu, ""));
+  const minimum = amount(match[1]!), maximum = amount(match[2]!);
+  if (!Number.isSafeInteger(minimum) || !Number.isSafeInteger(maximum) || minimum > maximum) return undefined;
+  return { rawText: value, currency: "EUR", minimum, maximum, period: "YEAR" as const };
+}
+
 export function michaelPageFacts(html: string) {
   const header = one(elements(html, "job-apply-block-container")), article = one(elements(html, "job-advert"));
   if (!header || !article || !/^<article\b/iu.test(article)) return undefined;
   const descriptionHtml = one(byId(article, "job-description")), summary = one(byId(article, "summary"));
-  const title = field(header, "job-apply-job-title"), location = field(header, "job-location"), contract = field(header, "job-contract-type"), telework = field(header, "job-nature");
+  const title = field(header, "job-apply-job-title"), location = field(header, "job-location"), contract = field(header, "job-contract-type"), telework = field(header, "job-nature"), salary = field(header, "job-salary");
   if (!descriptionHtml || !summary || !title || !location || !contract) return undefined;
   const values: Record<string, string> = {};
   for (const dl of summary.matchAll(/<dl\b[^>]*>([\s\S]*?)<\/dl>/giu)) {
@@ -48,8 +62,8 @@ export function michaelPageFacts(html: string) {
   // All three body sections must survive; a header/summary alone is not a vacancy.
   if (["job_advert__job-desc-company", "job_advert__job-desc-role", "job_advert__job-desc-candidate", "job_advert__job-desc-deal"].some(name => !field(descriptionHtml, name))) return undefined;
   const publishedText = field(descriptionHtml, "job-posted-date");
-  if (!michaelPagePublishedAt(publishedText)) return undefined;
-  return { header, article, descriptionHtml, summary, title, location, contract, telework, reference, publishedText: publishedText!,
+  if (!validDateText(publishedText)) return undefined;
+  return { header, article, descriptionHtml, summary, title, location, contract, telework, salary, reference, publishedText: publishedText!,
     description: text(descriptionHtml), clientText: field(descriptionHtml, "job_advert__job-desc-company")!, consultant: values["Nom du consultant"] };
 }
 
@@ -86,13 +100,16 @@ export class MichaelPageSelectedVacancyContextLocator implements SelectedVacancy
     }
     const brand = /\balt=["']Michael Page - Cabinet de recrutement en France["']/u.test(clean)
       || /\bproperty=["']og:site_name["'][^>]*\bcontent=["']Michael Page France["']/u.test(clean);
-    const intermediary = brand && /\b(?:mon|notre) client\b/iu.test(facts.clientText) && Boolean(facts.consultant);
+    const clientWording = /\b(?:mon|notre) client\b/iu.exec(facts.clientText)?.[0];
+    const intermediary = brand && Boolean(clientWording) && Boolean(facts.consultant);
     // Exclude navigation, the related-jobs aside and all generic JSON-LD
     // projections (publisher-as-employer and TELECOMMUTE are misleading here).
     const selected = `${facts.header}<article class="job-advert" about="${about(facts.article)}">${facts.descriptionHtml}${facts.summary}${actions[0]}</article>`;
     return createAcquisitionContext({ kind: "SELECTED_VACANCY", associationMethod: "PROVIDER_LOCATOR", providerKey: "MICHAEL_PAGE", providerExternalId: id,
-      html: selected, text: [facts.title, facts.location, facts.contract, facts.telework, facts.description].filter(Boolean).join("\n"),
-      metadata: { publicationText: facts.publishedText, teleworkText: facts.telework, intermediaryName: intermediary ? "Michael Page" : undefined },
+      html: selected, text: [facts.title, facts.location, facts.contract, facts.salary, facts.telework, facts.description].filter(Boolean).join("\n"),
+      metadata: { ...(michaelPagePublishedAt(facts.publishedText) ? { publicationText: facts.publishedText } : { updateText: facts.publishedText }), teleworkText: facts.telework,
+        displayedCompanyName: brand ? "Michael Page" : undefined, intermediaryName: intermediary ? "Michael Page" : undefined,
+        clientWording: intermediary ? clientWording : undefined },
       associationEvidence: ["BOUNDED_JOB_ADVERT", "HEADER_AND_ARTICLE_URL", "DISPLAYED_REFERENCE", "SELECTED_APPLY_ACTION"] });
   }
 }
