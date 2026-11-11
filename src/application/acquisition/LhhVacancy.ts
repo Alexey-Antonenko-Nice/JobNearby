@@ -2,6 +2,7 @@ import { createAcquisitionContext } from "../../domain/acquisition/AcquisitionCo
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 import { randstadText } from "./RandstadVacancy.js";
 import { alstomElements as elements } from "./AlstomVacancy.js";
+import { reconcileExplicitIdentity } from "./reconcileExplicitIdentity.js";
 
 export const LHH_HOST = "lhh.com";
 
@@ -73,10 +74,8 @@ export function lhhFacts(html: string) {
   };
 }
 
-/** Pane links that carry an explicit vacancy id must all agree with the route id. */
-function paneLinkIdsAgree(pane: string, routeId: string) {
-  const ids = [...pane.matchAll(/offres-emploi(?:\/|%2F)[^"'\s<>]*?(?:\/|%2F)(\d{6,})(?=["'\s<>?#])/giu)].map(match => match[1]!);
-  return ids.every(id => id === routeId);
+function paneLinkIds(pane: string) {
+  return [...pane.matchAll(/offres-emploi(?:\/|%2F)[^"'\s<>]*?(?:\/|%2F)(\d{6,})(?=["'\s<>?#])/giu)].map(match => match[1]!);
 }
 
 export class LhhSelectedVacancyContextLocator implements SelectedVacancyContextLocator {
@@ -86,9 +85,9 @@ export class LhhSelectedVacancyContextLocator implements SelectedVacancyContextL
     const html = clean(input.html);
     if (/\bjob_Details\b/u.test(html)) {
       const facts = lhhFacts(html);
-      if (!facts || facts.reference !== routeId) return undefined;
+      if (!facts) return undefined;
       const pane = elements(html, open => hasClass(open, "job_Details"))[0]!;
-      if (!paneLinkIdsAgree(pane, routeId)) return undefined;
+      if (reconcileExplicitIdentity(routeId, [facts.reference, ...paneLinkIds(pane)], { requireExplicitMatch: true }).status !== "MATCH") return undefined;
       return createAcquisitionContext({
         kind: "SELECTED_VACANCY",
         associationMethod: "PROVIDER_LOCATOR",

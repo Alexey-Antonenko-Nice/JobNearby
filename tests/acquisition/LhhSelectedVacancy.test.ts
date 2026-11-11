@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisition/BrowserCaptureAcquisitionAdapter.js";
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { LhhSelectedVacancyContextLocator, lhhSalary, lhhVacancyId } from "../../src/application/acquisition/LhhVacancy.js";
+import * as identity from "../../src/application/acquisition/reconcileExplicitIdentity.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
@@ -120,6 +121,36 @@ describe("LHH selected vacancy", () => {
     expect(acquisition.externalId).toBe("2106003901");
     expect(acquisition.contexts).toBeUndefined();
     for (const items of [evidence.vacancyTitles, evidence.locations, evidence.organizations, evidence.engagements, evidence.compensations]) expect(items).toEqual([]);
+  });
+  it("reconciles multiple matching selected links without considering neighboring vacancy IDs", () => {
+    const link = '<a href="/fr-fr/offres-emploi/duplicate/2106003901">Duplicate link</a>';
+    const withLinks = html.replace('<b class="job-id">2106003901</b>', `<b class="job-id">2106003901</b>${link}${link}`);
+    expect(withLinks).not.toBe(html);
+    const reconcile = vi.spyOn(identity, "reconcileExplicitIdentity");
+    try {
+      expect(capture(withLinks).acquisition.contexts?.[0]?.providerExternalId).toBe("2106003901");
+      expect(reconcile).toHaveBeenCalledOnce();
+      const [primary, associated, options] = reconcile.mock.calls[0]!;
+      expect(primary).toBe("2106003901");
+      expect(associated.length).toBeGreaterThanOrEqual(3);
+      expect(associated.every(id => id === primary)).toBe(true);
+      expect(options).toEqual({ requireExplicitMatch: true });
+    } finally { reconcile.mockRestore(); }
+    const conflicting = withLinks.replace(link, '<a href="/fr-fr/offres-emploi/duplicate/2106003902">Other link</a>');
+    expect(capture(conflicting).acquisition.contexts).toBeUndefined();
+    const neighboring = html.replace('<section class="JobSearch_line-break__923PP job_Details">', '<a href="/fr-fr/offres-emploi/other/2106003902">Other vacancy</a><section class="JobSearch_line-break__923PP job_Details">');
+    expect(neighboring).not.toBe(html);
+    expect(capture(neighboring).acquisition.contexts).toEqual(capture().acquisition.contexts);
+  });
+  it("allows a selected reference without an associated pane link", () => {
+    const withoutLink = html.replace(/<a\b[^>]*class="static_jobdetailpage_url"[^>]*>[\s\S]*?<\/a>/u, "");
+    expect(withoutLink).not.toBe(html);
+    expect(capture(withoutLink).acquisition.contexts?.[0]?.providerExternalId).toBe("2106003901");
+  });
+  it.each(["", "abc", "02106003901"])("rejects missing or malformed selected reference '%s' even with a matching pane link", reference => {
+    const changed = html.replace('<b class="job-id">2106003901</b>', `<b class="job-id">${reference}</b>`);
+    expect(changed).not.toBe(html);
+    expect(capture(changed).acquisition.contexts).toBeUndefined();
   });
   it.each([
     html.replace(/job_Details/gu, "other_pane"),
