@@ -18,6 +18,8 @@ import { readFileSync } from "node:fs";
 import { employerConfirmationCandidate } from "../../src/application/user/employerConfirmation.js";
 import { getRecruitingAgencyProjection } from "../../src/application/user/recruitingAgencyReview.js";
 import { KellySelectedVacancyContextLocator, kellyVacancyId } from "../../src/application/acquisition/KellyWorkdayVacancy.js";
+import { scopeKellyVacancyEvidence } from "../../src/application/evidence/scopeKellyVacancyEvidence.js";
+import { normalizeVacancyEvidenceInput } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 const offerId = "JR100451";
 const kellyUrl = "https://kellyservices.wd503.myworkdayjobs.com/en-US/corporatecareers-kellyservices-com/details/Supervisor-Site_JR100451?jobFamilyGroup=2d970158a7eb1000bfa197af03f80000";
 const pane = readFileSync("tests/fixtures/kellyWorkdaySelectedVacancy.html", "utf8");
@@ -140,6 +142,58 @@ describe("Kelly Workday corporate selected vacancy", () => {
     expect(context.html).not.toMatch(/jobSearchPage|headerTitle|Talent Supply Chain Consultant|TSC Consultant/);
     expect(context.text).not.toMatch(/Corporate|Texas|Arizona|New Jersey|Remote|Other Company/);
     expect(context.text).toContain("Posted Today"); expect(context.text).toContain("JR100451");
+  });
+  it("uses the validated Workday context without restoring page fields or structured payload", () => {
+    const observation = capture(page() + '<script type="application/ld+json">{"@type":"JobPosting","identifier":"JR999999","title":"POISON STRUCTURED TITLE"}</script>').observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      displayedCompanyName: "POISON PAGE COMPANY",
+      locationText: "POISON PAGE LOCATION",
+      salaryText: "POISON PAGE SALARY",
+      contractText: "POISON PAGE CONTRACT",
+      description: "POISON PAGE DESCRIPTION",
+      contactText: "POISON PAGE CONTACT",
+      rawContent: "POISON PAGE CONTENT",
+      metadata: {
+        ...observation.metadata,
+        acquisition: {
+          ...(observation.metadata.acquisition as Record<string, unknown>),
+          structuredPayload: { title: "POISON STRUCTURED TITLE", identifier: "JR999999" },
+        },
+      },
+    };
+    const before = structuredClone(input);
+
+    const scoped = normalizeVacancyEvidenceInput(scopeKellyVacancyEvidence(input));
+
+    expect(scoped.evidenceContent).toMatchObject({ kind: "SELECTED_VACANCY_CONTEXT", context: { providerKey: "KELLY_WORKDAY", providerExternalId: offerId } });
+    expect(scoped.rawContent).toBe(scoped.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT" ? scoped.evidenceContent.context.text : undefined);
+    for (const field of ["title", "displayedCompanyName", "locationText", "salaryText", "contractText", "description", "contactText"] as const) {
+      expect(scoped[field]).toBeUndefined();
+    }
+    expect(JSON.stringify(scoped)).not.toMatch(/POISON|JR999999/);
+    expect((scoped.metadata.acquisition as Record<string, unknown>).structuredPayload).toBeUndefined();
+    expect(input).toEqual(before);
+  });
+  it("returns no page fallback or contact projection when Workday context validation fails", () => {
+    const observation = capture(page(pane + pane)).observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      locationText: "POISON PAGE LOCATION",
+      contactText: "POISON PAGE CONTACT",
+      rawContent: "POISON PAGE CONTENT",
+    };
+
+    const scoped = normalizeVacancyEvidenceInput(scopeKellyVacancyEvidence(input));
+
+    expect(scoped.evidenceContent).toEqual({ kind: "SOURCE_OBSERVATION" });
+    expect(scoped.rawContent).toBeUndefined();
+    expect(scoped.title).toBeUndefined();
+    expect(scoped.locationText).toBeUndefined();
+    expect(scoped.contactText).toBeUndefined();
+    expect(scoped.metadata.acquisition).toBeUndefined();
   });
   it("projects the selected title and labeled workplace, never a requisition as location", async () => {
     const { canonical, evidence } = await project();
