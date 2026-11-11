@@ -5,6 +5,7 @@ import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisit
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { michaelPageSalary, michaelPageVacancyId } from "../../src/application/acquisition/MichaelPageVacancy.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { scopeMichaelPageVacancyEvidence } from "../../src/application/evidence/scopeMichaelPageVacancyEvidence.js";
 import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
@@ -63,6 +64,50 @@ describe("Michael Page updated direct vacancy", () => {
     ]));
     expect(evidence.organizations.some(x => ["EMPLOYER", "CLIENT"].includes(x.role))).toBe(false);
     expect(JSON.stringify(evidence)).not.toMatch(neighbours);
+  });
+  it("does not turn update-only or neighboring dates into publishedAt and ignores page-level date poison", () => {
+    const observation = new DeterministicAcquisitionCaptureMapper().toSourceObservation(
+      new BrowserCaptureAcquisitionAdapter().toAcquisitionPackage(payload, "acquisition"),
+      "observation",
+    );
+    const input = {
+      ...observation,
+      publishedAt: new Date("2099-12-31T00:00:00.000Z"),
+      metadata: {
+        ...observation.metadata,
+        acquisition: {
+          ...(observation.metadata.acquisition as Record<string, unknown>),
+          publishedAt: "2099-12-31",
+          similarJobDate: "31/12/2099",
+        },
+      },
+    };
+    const before = structuredClone(input);
+
+    const scoped = scopeMichaelPageVacancyEvidence(input);
+
+    expect(scoped.publishedAt).toBeUndefined();
+    expect(scoped.rawContent).not.toMatch(neighbours);
+    expect(scoped.metadata.acquisition).not.toHaveProperty("similarJobDate");
+    expect(input).toEqual(before);
+  });
+  it("does not project a publication date when selected-context validation fails", () => {
+    const observation = new DeterministicAcquisitionCaptureMapper().toSourceObservation(
+      new BrowserCaptureAcquisitionAdapter().toAcquisitionPackage(payload, "acquisition"),
+      "observation",
+    );
+    const input = {
+      ...observation,
+      source: { ...observation.source, externalId: "jn-102026-9999999" },
+      publishedAt: new Date("2099-12-31T00:00:00.000Z"),
+    };
+
+    const scoped = scopeMichaelPageVacancyEvidence(input);
+
+    expect(scoped.publishedAt).toBeUndefined();
+    expect(scoped.rawContent).toBeUndefined();
+    expect(scoped.metadata.acquisition).toBeUndefined();
+    expect(scoped.source.externalId).toBe("jn-102026-9999999");
   });
   it.each(["30 000 € - 40 000 € par an", "30 000€ - 40 000€ par an", "30K€ - 40K€ par an"])("parses salary %s", value => {
     expect(michaelPageSalary(value)).toEqual({ rawText: value, currency: "EUR", minimum: 30000, maximum: 40000, period: "YEAR" });

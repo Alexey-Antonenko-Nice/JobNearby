@@ -7,6 +7,7 @@ import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acq
 import { MichaelPageSelectedVacancyContextLocator, michaelPageFacts, michaelPageVacancyId } from "../../src/application/acquisition/MichaelPageVacancy.js";
 import { adeccoElementsWithClass as elements } from "../../src/application/acquisition/AdeccoSelectedVacancyContextLocator.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { scopeMichaelPageVacancyEvidence } from "../../src/application/evidence/scopeMichaelPageVacancyEvidence.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
@@ -43,6 +44,38 @@ describe("Michael Page bounded vacancy", () => {
     expect(evidence.compensations).toEqual([]); expect(evidence.workModes).toEqual([]);
     expect(evidence.organizations).toContainEqual(expect.objectContaining({ value: "Michael Page", role: "RECRUITMENT_AGENCY" }));
     expect(evidence.organizations.filter(o => o.role === "EMPLOYER" || o.role === "CLIENT")).toEqual([]);
+  });
+  it("projects only the validated selected publication date and leaves the input unchanged", () => {
+    const observation = capture().observation;
+    const input = {
+      ...observation,
+      publishedAt: new Date("2099-12-31T00:00:00.000Z"),
+    };
+    const before = structuredClone(input);
+
+    const scoped = scopeMichaelPageVacancyEvidence(input);
+
+    expect(scoped.publishedAt?.toISOString()).toBe("2026-08-25T00:00:00.000Z");
+    expect(scoped.metadata.acquisition).not.toHaveProperty("publicationText");
+    expect(input).toEqual(before);
+  });
+  it("does not use a similar posting date as the selected vacancy publication date", () => {
+    const selected = `<script type="application/ld+json">${JSON.stringify({
+      "@type": "JobPosting",
+      url,
+      identifier: "jn-082026-7089819",
+    })}</script>`;
+    const unrelated = `<script type="application/ld+json">${JSON.stringify({
+      "@type": "JobPosting",
+      url: "https://www.michaelpage.fr/job-detail/other/ref/jn-082026-9999999",
+      identifier: "jn-082026-9999999",
+      datePosted: "2099-12-31",
+    })}</script>`;
+    const observation = capture(html + selected + unrelated).observation;
+
+    const scoped = scopeMichaelPageVacancyEvidence(observation);
+
+    expect(scoped.publishedAt?.toISOString()).toBe("2026-08-25T00:00:00.000Z");
   });
   it("ignores poisoned related salaries/contracts/locations", () => {
     const related = elements(html, "similar-jobs-wrapper")[0]!;
