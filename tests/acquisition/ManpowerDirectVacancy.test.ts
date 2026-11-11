@@ -15,6 +15,7 @@ import { SqliteUserVacancyInteractionRepository } from "../../src/infrastructure
 import { SqliteEmployerMemoryPublicDataSource } from "../../src/infrastructure/persistence/SqliteEmployerMemoryPublicDataSource.js";
 import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
 import { readFileSync } from "node:fs";
+import { scopeManpowerVacancyEvidence } from "../../src/application/evidence/scopeManpowerVacancyEvidence.js";
 const manpowerId = "412687";
 const manpowerUrl = "https://www.manpower.com/en/job/architecture-and-engineering/failure-analysis-engineer-/412687";
 const pane = readFileSync("tests/fixtures/manpowerDirectVacancy.html", "utf8");
@@ -47,6 +48,43 @@ describe("Manpower direct vacancy", () => {
     const { canonical } = await project();
     expect(canonical.role).toMatchObject({ status: "RESOLVED", value: { title: "Failure Analysis Engineer" } });
     expect(canonical.location).toMatchObject({ status: "RESOLVED", value: { rawText: "Los Angeles, CA" } });
+  });
+  it("restores selected title and location projections without retaining page-level poison", () => {
+    const input = {
+      ...capture().observation,
+      title: "POISON PAGE TITLE",
+      locationText: "POISON PAGE LOCATION",
+    };
+    const before = structuredClone(input);
+
+    const scoped = scopeManpowerVacancyEvidence(input);
+
+    expect(scoped.title).toBe("Failure Analysis Engineer");
+    expect(scoped.locationText).toBe("Los Angeles, CA");
+    expect(scoped.title).not.toContain("POISON");
+    expect(scoped.locationText).not.toContain("POISON");
+    expect(scoped.rawContent).not.toMatch(/Other title|100000|Footer Company/);
+    expect(scoped.metadata.acquisition).toMatchObject({
+      html: expect.not.stringContaining("POISON"),
+      contexts: [expect.objectContaining({ providerKey: "MANPOWER", providerExternalId: manpowerId })],
+    });
+    expect(input).toEqual(before);
+  });
+  it("does not restore projections or fall back to page fields when context validation fails", () => {
+    const input = {
+      ...capture().observation,
+      source: { ...capture().observation.source, externalId: "999999" },
+      title: "POISON PAGE TITLE",
+      locationText: "POISON PAGE LOCATION",
+    };
+
+    const scoped = scopeManpowerVacancyEvidence(input);
+
+    expect(scoped.title).toBeUndefined();
+    expect(scoped.locationText).toBeUndefined();
+    expect(scoped.rawContent).toBeUndefined();
+    expect("evidenceContent" in scoped ? scoped.evidenceContent : undefined).toEqual({ kind: "SOURCE_OBSERVATION" });
+    expect(scoped.metadata.acquisition).toBeUndefined();
   });
   it("maps Temporary and Full Time independently", async () => {
     expect((await project()).canonical.engagement.value?.normalizedTerms).toEqual(["INTERIM", "FULL_TIME"]);
