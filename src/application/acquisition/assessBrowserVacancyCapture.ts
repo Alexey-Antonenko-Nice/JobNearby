@@ -1,4 +1,4 @@
-import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
+import type { SourceObservation, SourceObservationId } from "../../domain/capture/SourceObservation.js";
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
 import { ProviderCaptureRegistry } from "./ProviderCaptureRegistry.js";
@@ -8,27 +8,52 @@ import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js"
 import { alstomElements } from "./AlstomVacancy.js";
 import { extractWorkdayStructuredFields, extractWorkdayVacancyId, isWorkdaySource } from "./WorkdayVacancy.js";
 
-export type VacancyCaptureAcceptance =
-  | { readonly captureAcceptedAsVacancy: true }
-  | { readonly captureAcceptedAsVacancy: false; readonly rejectionReason: "NO_TRUSTED_VACANCY_CONTEXT" | "NO_MEANINGFUL_VACANCY_EVIDENCE" };
+export type VacancyCaptureRejectionReason =
+  | "NO_TRUSTED_VACANCY_CONTEXT"
+  | "NO_MEANINGFUL_VACANCY_EVIDENCE";
+
+export interface AcceptedVacancyCapture {
+  readonly captureAcceptedAsVacancy: true;
+  readonly sourceObservationId: SourceObservationId;
+}
+
+export interface RejectedVacancyCapture {
+  readonly captureAcceptedAsVacancy: false;
+  readonly rejectionReason: VacancyCaptureRejectionReason;
+  readonly sourceObservationId: SourceObservationId;
+  // Diagnostic identity already retained by acquisition; rejection does not validate it anew.
+  readonly retainedExternalId?: string;
+}
+
+export type VacancyCaptureAcceptance = AcceptedVacancyCapture | RejectedVacancyCapture;
 
 /** Revalidate the persisted capture, rather than trusting page metadata or an ID alone. */
 export async function assessBrowserVacancyCapture(
   observation: SourceObservation,
   extractor: VacancyEvidenceExtractor,
 ): Promise<VacancyCaptureAcceptance> {
+  const reject = (reason: VacancyCaptureRejectionReason): RejectedVacancyCapture => ({
+    captureAcceptedAsVacancy: false,
+    rejectionReason: reason,
+    sourceObservationId: observation.id,
+    ...(observation.source.externalId === undefined ? {} : { retainedExternalId: observation.source.externalId }),
+  });
+  const accept = (): AcceptedVacancyCapture => ({
+    captureAcceptedAsVacancy: true,
+    sourceObservationId: observation.id,
+  });
   const sourceUrl = observation.source.sourceUrl;
   const acquisition = record(observation.metadata.acquisition);
   const html = typeof acquisition?.html === "string" ? acquisition.html : "";
-  if (!sourceUrl || !html) return rejected("NO_TRUSTED_VACANCY_CONTEXT");
+  if (!sourceUrl || !html) return reject("NO_TRUSTED_VACANCY_CONTEXT");
   const parsedUrl = new URL(sourceUrl);
-  if (!["http:", "https:"].includes(parsedUrl.protocol)) return rejected("NO_TRUSTED_VACANCY_CONTEXT");
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) return reject("NO_TRUSTED_VACANCY_CONTEXT");
   const provider = new ProviderCaptureRegistry().capture({ sourceName: observation.source.sourceName, sourceUrl, html });
   const context = provider.context;
   // These legacy locators can return an entire page or an unbounded suffix.
   if (provider.providerKey === "CADREMPLOI" || provider.providerKey === "JOOBLE"
     || context?.providerKey === "LHH" && context.associationEvidence?.includes("LHH_DETAIL_PAGE")) {
-    return rejected("NO_TRUSTED_VACANCY_CONTEXT");
+    return reject("NO_TRUSTED_VACANCY_CONTEXT");
   }
   if (context && provider.providerKey && context.providerKey === provider.providerKey
     && context.associationMethod === "PROVIDER_LOCATOR"
@@ -41,8 +66,8 @@ export async function assessBrowserVacancyCapture(
     if (evidence.vacancyTitles.some(({ value }) => {
       const title = normalizeText(value);
       return meaningfulTitle(title) && contextText.includes(title);
-    })) return { captureAcceptedAsVacancy: true };
-    return rejected("NO_MEANINGFUL_VACANCY_EVIDENCE");
+    })) return accept();
+    return reject("NO_MEANINGFUL_VACANCY_EVIDENCE");
   }
   // Personio provides a unique, bounded job header on its direct /job/<id> page.
   if (isPersonioSource(observation.source.sourceName, sourceUrl)
@@ -55,7 +80,7 @@ export async function assessBrowserVacancyCapture(
       : [];
     if (meaningfulTitle(extractPersonioHeaderFacts(html).title ?? "")
       && personioTitles.length === 1 && !hidden(personioHeaders[0]!) && !hidden(personioTitles[0]!)) {
-      return { captureAcceptedAsVacancy: true };
+      return accept();
     }
   }
   // Generic Workday's direct detail header is accepted only with a unique
@@ -73,7 +98,7 @@ export async function assessBrowserVacancyCapture(
     const title = hasHeaderTitle ? extractWorkdayStructuredFields(header, sourceUrl)?.title : undefined;
     if (ids.size === 1 && ids.has(observation.source.externalId) && !hidden(header)
       && (titleElements.length === 0 || !hidden(titleElements[0]!)) && meaningfulTitle(title ?? "")) {
-      return { captureAcceptedAsVacancy: true };
+      return accept();
     }
   }
   // Bürkert publishes a single bounded JobPosting article on its direct route.
@@ -84,7 +109,7 @@ export async function assessBrowserVacancyCapture(
     && [...html.matchAll(/<article\b[^>]*\bitemtype=["']https:\/\/schema\.org\/JobPosting["'][^>]*>/giu)].length === 1) {
     const postings = new SchemaOrgJobPostingExtractor().extractHtml(html);
     if (postings.length === 1 && typeof postings[0]!.title === "string" && meaningfulTitle(postings[0]!.title)) {
-      return { captureAcceptedAsVacancy: true };
+      return accept();
     }
   }
   // Daimler Truck direct job ads expose one JobPosting record.
@@ -101,14 +126,10 @@ export async function assessBrowserVacancyCapture(
       if ((identifier === undefined || identifierValue === provider.externalId)
         && (postingUrl === undefined || typeof postingUrl === "string" && new ProviderCaptureRegistry().capture({
           sourceName: observation.source.sourceName, sourceUrl: postingUrl,
-        }).externalId === provider.externalId)) return { captureAcceptedAsVacancy: true };
+        }).externalId === provider.externalId)) return accept();
     }
   }
-  return rejected("NO_TRUSTED_VACANCY_CONTEXT");
-}
-
-function rejected(rejectionReason: "NO_TRUSTED_VACANCY_CONTEXT" | "NO_MEANINGFUL_VACANCY_EVIDENCE"): VacancyCaptureAcceptance {
-  return { captureAcceptedAsVacancy: false, rejectionReason };
+  return reject("NO_TRUSTED_VACANCY_CONTEXT");
 }
 function normalizeText(value: string): string {
   return value.normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase();

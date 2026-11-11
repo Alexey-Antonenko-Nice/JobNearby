@@ -8,7 +8,7 @@ import type {
   EmployerProcessingSummary,
   ProcessVacancyObservationResult,
 } from "../vacancies/processVacancyObservation.js";
-import { assessBrowserVacancyCapture, type VacancyCaptureAcceptance } from "./assessBrowserVacancyCapture.js";
+import { assessBrowserVacancyCapture, type VacancyCaptureRejectionReason } from "./assessBrowserVacancyCapture.js";
 import { createVacancyEvidenceExtractor } from "../evidence/createVacancyEvidenceExtractor.js";
 
 export type CaptureEmployerStatus =
@@ -42,7 +42,9 @@ export type CaptureAndProcessBrowserVacancyResult =
       readonly capture: CaptureSummary;
       readonly processing: {
         readonly status: "VACANCY_NOT_DETECTED";
-      } & Extract<VacancyCaptureAcceptance, { captureAcceptedAsVacancy: false }>;
+        readonly captureAcceptedAsVacancy: false;
+        readonly rejectionReason: VacancyCaptureRejectionReason;
+      };
     }
   | {
       readonly capture: CaptureSummary;
@@ -73,12 +75,16 @@ export async function captureAndProcessBrowserVacancy(
     if (observation === null) throw new Error("Persisted browser capture was not found.");
     const acceptance = await assessBrowserVacancyCapture(observation, createVacancyEvidenceExtractor());
     if (!acceptance.captureAcceptedAsVacancy) {
-      return { capture, processing: { status: "VACANCY_NOT_DETECTED", ...acceptance } };
+      return { capture, processing: {
+        status: "VACANCY_NOT_DETECTED",
+        captureAcceptedAsVacancy: false,
+        rejectionReason: acceptance.rejectionReason,
+      } };
     }
     // Snapshot reuse only deduplicates immutable source content. Always reproject
     // the returned observation with current extractors, including exact recaptures.
     const processing = await dependencies.processVacancyObservation(
-      ingestion.sourceObservationId,
+      acceptance.sourceObservationId,
     );
     return {
       capture,
