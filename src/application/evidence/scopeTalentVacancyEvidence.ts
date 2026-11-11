@@ -1,6 +1,6 @@
 import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
-import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import { TalentSelectedVacancyContextLocator, talentHeaderFields, talentVacancyId } from "../acquisition/TalentSelectedVacancyContextLocator.js";
+import { buildBoundedEvidenceView } from "./buildBoundedEvidenceView.js";
 
 const scopedTalentInput = Symbol("scopedTalentInput");
 
@@ -13,15 +13,19 @@ export function scopeTalentVacancyEvidence(input: VacancyEvidenceExtractionInput
   const externalId = input.source.externalId ?? talentVacancyId(sourceUrl);
   const context = new TalentSelectedVacancyContextLocator().locate({ providerKey: "TALENT", sourceUrl, html,
     ...(externalId === undefined ? {} : { externalId }) });
-  const { title: _title, displayedCompanyName: _company, locationText: _location, salaryText: _salary,
-    contractText: _contract, description: _description, contactText: _contact, rawContent: _raw, ...identity } = input;
-  const scoped = { ...identity, ...(context?.html === undefined ? {} : talentHeaderFields(context.html)),
-    [scopedTalentInput]: true, rawContent: context?.text ?? "", metadata: { ...input.metadata, acquisition: {
-      ...acquisition, html: context?.html ?? "", structuredPayload: undefined, contexts: context === undefined ? [] : [context],
-      metadata: { ...record(acquisition?.metadata), vacancyEvidenceScope: "SELECTED_VACANCY_REQUIRED" },
-    } } };
-  return context === undefined ? { ...scoped, evidenceContent: { kind: "SOURCE_OBSERVATION" } }
-    : fromSelectedVacancyContext(scoped, context);
+  const header = context?.html === undefined ? undefined : talentHeaderFields(context.html);
+  const approvedProjection = header === undefined
+    ? undefined
+    : {
+      title: header.title,
+      displayedCompanyName: header.displayedCompanyName,
+      locationText: header.locationText,
+    };
+  const scoped = buildBoundedEvidenceView(input, context, approvedProjection);
+
+  Object.defineProperty(scoped, scopedTalentInput, { value: true, configurable: false });
+
+  return scoped;
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
