@@ -5,6 +5,7 @@ import { alstomElements } from "./AlstomVacancy.js";
 import { randstadText as text } from "./RandstadVacancy.js";
 import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
+import { reconcileExplicitIdentity } from "./reconcileExplicitIdentity.js";
 
 export function michaelPageVacancyId(value: string, base?: string, apply = false): string | undefined {
   try { const url = new URL(value, base);
@@ -57,7 +58,8 @@ export function michaelPageFacts(html: string) {
   const reference = values["Référence de l´offre"]?.toLowerCase();
   const contact = one(elements(descriptionHtml, "job-contact-info"));
   const refs = contact ? [...text(contact).matchAll(/\bJN-\d{6}-\d+\b/giu)].map(m => m[0].toLowerCase()) : [];
-  if (!reference || !/^jn-\d{6}-\d+$/u.test(reference) || refs.length !== 1 || refs[0] !== reference
+  if (!reference || !/^jn-\d{6}-\d+$/u.test(reference) || refs.length !== 1
+    || reconcileExplicitIdentity(reference, refs, { requireExplicitMatch: true }).status !== "MATCH"
     || values["Où ?"] !== location || values["Type de contrat"] !== contract || (telework !== undefined && values["Poste à pourvoir en :"] !== telework)) return undefined;
   // All three body sections must survive; a header/summary alone is not a vacancy.
   if (["job_advert__job-desc-company", "job_advert__job-desc-role", "job_advert__job-desc-candidate", "job_advert__job-desc-deal"].some(name => !field(descriptionHtml, name))) return undefined;
@@ -70,33 +72,41 @@ export function michaelPageFacts(html: string) {
 export class MichaelPageSelectedVacancyContextLocator implements SelectedVacancyContextLocator {
   locate(input: Parameters<SelectedVacancyContextLocator["locate"]>[0]) {
     const id = michaelPageVacancyId(input.sourceUrl);
-    if (input.providerKey !== "MICHAEL_PAGE" || !id || (input.externalId !== undefined && input.externalId.toLowerCase() !== id)) return undefined;
+    if (input.providerKey !== "MICHAEL_PAGE" || !id
+      || reconcileExplicitIdentity(id, input.externalId === undefined ? [] : [input.externalId.toLowerCase()]).status !== "MATCH") return undefined;
     const clean = input.html.replace(/<!--[\s\S]*?-->/gu, "").replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1>/giu, "");
     const facts = michaelPageFacts(clean);
-    if (!facts || facts.reference !== id) return undefined;
+    if (!facts || reconcileExplicitIdentity(id, [facts.reference], { requireExplicitMatch: true }).status !== "MATCH") return undefined;
     for (const part of [facts.header, facts.article]) {
       const opening = part.slice(0, part.indexOf(">") + 1);
       if (/\s(?:hidden(?:[\s=>])|aria-hidden=["']true["'])|\bstyle=["'][^"']*display\s*:\s*none/iu.test(opening)
-        || michaelPageVacancyId(about(part) ?? "", input.sourceUrl) !== id) return undefined;
+        || reconcileExplicitIdentity(id, [michaelPageVacancyId(about(part) ?? "", input.sourceUrl) ?? ""], { requireExplicitMatch: true }).status !== "MATCH") return undefined;
     }
     const actions = elements(facts.article, "apply-job");
     if (actions.length !== 1 || text(actions[0]!) !== "Postuler") return undefined;
     const apply = /\bhref=["']([^"']+)["']/u.exec(actions[0]!)?.[1];
-    if (!apply || michaelPageVacancyId(apply, input.sourceUrl, true) !== id) return undefined;
+    if (!apply || reconcileExplicitIdentity(id, [michaelPageVacancyId(apply, input.sourceUrl, true) ?? ""], { requireExplicitMatch: true }).status !== "MATCH") return undefined;
     for (const match of (facts.header + facts.article).matchAll(/\b(?:href|about)=["']([^"']+)["']/gu)) {
-      if (/\/(?:job-detail|job-apply)\//u.test(match[1]!) && michaelPageVacancyId(match[1]!, input.sourceUrl, true) !== id) return undefined;
+      if (/\/(?:job-detail|job-apply)\//u.test(match[1]!)
+        && reconcileExplicitIdentity(id, [michaelPageVacancyId(match[1]!, input.sourceUrl, true) ?? ""]).status !== "MATCH") return undefined;
     }
     for (const tag of clean.matchAll(/<(?:link|meta)\b[^>]*>/giu)) {
       if (!/\b(?:rel=["']canonical["']|property=["']og:url["'])/u.test(tag[0])) continue;
       const url = /\b(?:href|content)=["']([^"']+)["']/u.exec(tag[0])?.[1];
-      if (!url || michaelPageVacancyId(url, input.sourceUrl) !== id) return undefined;
+      if (!url || reconcileExplicitIdentity(id, [michaelPageVacancyId(url, input.sourceUrl) ?? ""]).status !== "MATCH") return undefined;
     }
     const postings = new SchemaOrgJobPostingExtractor().extract(new LiteralJsonLdDocumentExtractor().extract(input.html));
     for (const posting of postings) {
       const identifier = typeof posting.identifier === "object" && posting.identifier !== null ? (posting.identifier as Record<string, unknown>).value : posting.identifier;
       const ref = typeof identifier === "string" ? identifier.toLowerCase() : undefined;
       const linked = typeof posting.url === "string" ? michaelPageVacancyId(posting.url, input.sourceUrl) : undefined;
-      if ((ref === id || linked === id || postings.length === 1) && ((identifier !== undefined && ref !== id) || (posting.url !== undefined && linked !== id))) return undefined;
+      if (ref === id || linked === id || postings.length === 1) {
+        const associated = [
+          ...(identifier === undefined ? [] : [ref ?? ""]),
+          ...(posting.url === undefined ? [] : [linked ?? ""]),
+        ];
+        if (reconcileExplicitIdentity(id, associated).status !== "MATCH") return undefined;
+      }
     }
     const brand = /\balt=["']Michael Page - Cabinet de recrutement en France["']/u.test(clean)
       || /\bproperty=["']og:site_name["'][^>]*\bcontent=["']Michael Page France["']/u.test(clean);

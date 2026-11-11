@@ -2,6 +2,7 @@ import { createAcquisitionContext } from "../../domain/acquisition/AcquisitionCo
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 import { randstadText } from "./RandstadVacancy.js";
 import { alstomElements as elements } from "./AlstomVacancy.js";
+import { reconcileExplicitIdentity } from "./reconcileExplicitIdentity.js";
 
 export const HAYS_HOST = "m.hays.fr";
 export function isHaysSource(sourceName: string, sourceUrl: string) {
@@ -56,7 +57,7 @@ export function haysFacts(html: string) {
   const description = randstadText(descriptions[0]!);
   if (!title || title.length > 250 || !/^[1-9]\d*$/u.test(reference) || !description.trim()) return undefined;
   const analytics = ["JobId", "JobReference"].flatMap(id => byId(section, id).map(flat));
-  if (analytics.some(value => value !== reference)) return undefined;
+  if (reconcileExplicitIdentity(reference, analytics).status !== "MATCH") return undefined;
   const clientAssignment = CLIENT_ASSIGNMENT.test(description);
   return {
     title,
@@ -72,12 +73,13 @@ export function haysFacts(html: string) {
 export class HaysSelectedVacancyContextLocator implements SelectedVacancyContextLocator {
   locate(input: Parameters<SelectedVacancyContextLocator["locate"]>[0]) {
     const routeId = haysVacancyId(input.sourceUrl);
-    if (input.providerKey !== "HAYS" || !routeId || input.externalId !== undefined && input.externalId !== routeId) return undefined;
+    if (input.providerKey !== "HAYS" || !routeId
+      || reconcileExplicitIdentity(routeId, input.externalId === undefined ? [] : [input.externalId]).status !== "MATCH") return undefined;
     const html = clean(input.html);
     const canonical = [...html.matchAll(/<link\b[^>]*>/giu)].filter(m => attr(m[0], "rel") === "canonical");
-    if (canonical.length > 1 || canonical.some(m => haysVacancyId(attr(m[0], "href") ?? "") !== routeId)) return undefined;
+    if (canonical.length > 1 || reconcileExplicitIdentity(routeId, canonical.map(m => haysVacancyId(attr(m[0], "href") ?? "") ?? "")).status !== "MATCH") return undefined;
     const facts = haysFacts(html);
-    if (!facts || facts.reference !== routeId) return undefined;
+    if (!facts || reconcileExplicitIdentity(routeId, [facts.reference], { requireExplicitMatch: true }).status !== "MATCH") return undefined;
     return createAcquisitionContext({
       kind: "SELECTED_VACANCY",
       associationMethod: "PROVIDER_LOCATOR",
