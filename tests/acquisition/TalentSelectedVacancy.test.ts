@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisition/BrowserCaptureAcquisitionAdapter.js";
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { scopeTalentVacancyEvidence } from "../../src/application/evidence/scopeTalentVacancyEvidence.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
@@ -63,6 +64,43 @@ describe("Talent.com selected vacancy isolation", () => {
     expect(evidence.locations.every((item) => item.value === location)).toBe(true);
     expect(canonical.organizationRelationships).toContainEqual(expect.objectContaining({ role: "DISPLAYED_COMPANY", rawName: company }));
     expect(JSON.stringify(evidence)).not.toMatch(/Mécanicien|Olacar|5 ans|80 000|allemand|Footer Company/);
+  });
+  it("restores only selected header facts from the validated pane and leaves the input unchanged", () => {
+    const observation = capture().observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      displayedCompanyName: "POISON PAGE COMPANY",
+      locationText: "POISON PAGE LOCATION",
+    };
+    const before = structuredClone(input);
+
+    const scoped = scopeTalentVacancyEvidence(input);
+
+    expect(scoped.title).toBe(title);
+    expect(scoped.displayedCompanyName).toBe(company);
+    expect(scoped.locationText).toBe(location);
+    expect(scoped.rawContent).not.toMatch(/Mécanicien|Olacar|5 ans|80 000|Footer Company/);
+    expect(JSON.stringify(scoped.metadata.acquisition)).not.toMatch(/Mécanicien|Olacar|603602935722547640/);
+    expect(input).toEqual(before);
+  });
+  it("does not restore selected-header projections or page content without trusted pane identity", () => {
+    const observation = capture(page(pane(header.replace('data-hook="job-card-container"', 'data-hook="job-card-container" data-job-id="legacy-untrusted"')))).observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      displayedCompanyName: "POISON PAGE COMPANY",
+      locationText: "POISON PAGE LOCATION",
+    };
+
+    const scoped = scopeTalentVacancyEvidence(input);
+
+    expect(scoped.title).toBeUndefined();
+    expect(scoped.displayedCompanyName).toBeUndefined();
+    expect(scoped.locationText).toBeUndefined();
+    expect(scoped.rawContent ?? "").not.toMatch(/Conducteur de ligne|ACTUAL MARSEILLE|Allauch|Mécanicien|Olacar/);
+    expect(scoped.source.externalId).toBe(id);
+    expect("evidenceContent" in scoped ? scoped.evidenceContent : undefined).toEqual({ kind: "SOURCE_OBSERVATION" });
   });
   it("extracts explicit interim without inferring full-time from working hours", async () => {
     const { canonical } = await project();
