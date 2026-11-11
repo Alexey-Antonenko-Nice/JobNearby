@@ -135,6 +135,13 @@ describe("Hays internal careers vacancy", () => {
   it("validates a supplied primary ID instead of trusting stale context", () => {
     expect(new HaysSelectedVacancyContextLocator().locate({ providerKey: "HAYS", sourceUrl: url, externalId: "8313", html })).toBeUndefined();
   });
+  it("allows repeated matching associated analytics but requires the visible reference", () => {
+    const duplicate = html.replace('id="JobId" hidden="hidden">8312</span>', 'id="JobId" hidden="hidden">8312</span><span id="JobId">8312</span>');
+    expect(duplicate).not.toBe(html);
+    expect(capture(duplicate).acquisition.contexts?.[0]).toEqual(capture().acquisition.contexts?.[0]);
+    expect(capture(duplicate.replace('id="JobId">8312</span>', 'id="JobId">8313</span>')).acquisition.contexts).toBeUndefined();
+    expect(capture(html.replace('id="jd_reference">8312<', 'id="jd_reference"><')).acquisition.contexts).toBeUndefined();
+  });
 });
 
 describe("Hays organization-role review and recapture", () => {

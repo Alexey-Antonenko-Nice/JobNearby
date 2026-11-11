@@ -74,6 +74,14 @@ describe("Michael Page bounded vacancy", () => {
     expect(locate(html, "jn-082026-9999999")).toBeUndefined();
     expect(locate(html + `<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", url, identifier: "jn-082026-9999999" })}</script>`)).toBeUndefined();
   });
+  it("keeps provider-specific case normalization and associated posting checks", () => {
+    expect(locate(html, "JN-082026-7089819")).toEqual(locate());
+    const posting = (identifier: string, postingUrl: string) => `<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", url: postingUrl, identifier })}</script>`;
+    const matching = posting("JN-082026-7089819", url);
+    const unrelated = posting("jn-082026-9999999", url.replace("jn-082026-7089819", "jn-082026-9999999"));
+    expect(locate(html + matching + unrelated)).toEqual(locate());
+    expect(locate(html + posting("jn-082026-9999999", url) + unrelated)).toBeUndefined();
+  });
   it.each(["missing", "duplicate", "incomplete", "hidden"])("fails closed for %s selected article", variant => {
     const page = variant === "missing" ? html.replace(article, "") : variant === "duplicate" ? html + article
       : variant === "incomplete" ? html.replace('class="job_advert__job-desc-candidate"', 'class="missing"')
