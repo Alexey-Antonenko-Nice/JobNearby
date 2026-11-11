@@ -5,6 +5,8 @@ import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acq
 import { LhhSelectedVacancyContextLocator, lhhSalary, lhhVacancyId } from "../../src/application/acquisition/LhhVacancy.js";
 import * as identity from "../../src/application/acquisition/reconcileExplicitIdentity.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { scopeLhhVacancyEvidence } from "../../src/application/evidence/scopeLhhVacancyEvidence.js";
+import { normalizeVacancyEvidenceInput } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
@@ -55,6 +57,85 @@ describe("LHH selected vacancy", () => {
     expect(context.text).toContain("Ingénieur DevOps (H/F)");
     expect(context.text).toContain("2106003901");
     expect(context.text).not.toMatch(neighbours);
+    expect(context.associationEvidence).toContain("BOUNDED_SELECTED_JOB_PANE");
+  });
+  it("uses the selected-pane context without restoring page fields or structured data", async () => {
+    const observation = capture(html + '<script type="application/ld+json">{"@type":"JobPosting","identifier":"9999999999","title":"POISON STRUCTURED TITLE"}</script>').observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      displayedCompanyName: "POISON PAGE COMPANY",
+      locationText: "POISON PAGE LOCATION",
+      salaryText: "POISON PAGE SALARY",
+      contractText: "POISON PAGE CONTRACT",
+      description: "POISON PAGE DESCRIPTION",
+      contactText: "POISON PAGE CONTACT",
+      publishedAt: new Date("2026-01-01T00:00:00Z"),
+      rawContent: "POISON PAGE CONTENT",
+      metadata: {
+        ...observation.metadata,
+        acquisition: {
+          ...(observation.metadata.acquisition as Record<string, unknown>),
+          structuredPayload: { title: "POISON STRUCTURED TITLE", identifier: "9999999999" },
+        },
+      },
+    };
+    const before = structuredClone(input);
+
+    const scoped = normalizeVacancyEvidenceInput(scopeLhhVacancyEvidence(input));
+    const result = await extractor.extract(input);
+
+    expect(scoped.evidenceContent).toMatchObject({
+      kind: "SELECTED_VACANCY_CONTEXT",
+      context: { providerKey: "LHH", providerExternalId: "2106003901" },
+    });
+    for (const field of ["title", "displayedCompanyName", "locationText", "salaryText", "contractText", "description", "contactText", "publishedAt"] as const) {
+      expect(scoped[field]).toBeUndefined();
+    }
+    expect(JSON.stringify(scoped)).not.toMatch(/POISON|9999999999/u);
+    expect((scoped.metadata.acquisition as Record<string, unknown>).structuredPayload).toBeUndefined();
+    expect(result.vacancyTitles).toEqual([expect.objectContaining({ value: "Ingénieur DevOps (H/F)" })]);
+    expect(result.locations).toEqual([expect.objectContaining({ value: "TOURS, Indre-Et-Loire" })]);
+    expect(result.engagements).toEqual([expect.objectContaining({ normalizedTerms: ["INDEFINITE"] })]);
+    expect(result.compensations).toEqual([expect.objectContaining({ minimum: 40000, maximum: 45000 })]);
+    expect(JSON.stringify(result)).not.toMatch(/POISON|9999999999|Responsable Marketing|MONTAUBAN/u);
+    expect(input).toEqual(before);
+  });
+  it("keeps the legacy direct context outside the selected-pane helper path", () => {
+    const legacyHtml = "<main><h1>Responsable maintenance H/F</h1><p>recherche pour son client</p></main>";
+    const observation = capture(legacyHtml, "https://www.lhh.com/fr-fr/offres-emploi/detail/2089206701").observation;
+    const context = new LhhSelectedVacancyContextLocator().locate({
+      providerKey: "LHH",
+      sourceUrl: "https://www.lhh.com/fr-fr/offres-emploi/detail/2089206701",
+      externalId: "2089206701",
+      html: legacyHtml,
+    });
+
+    expect(context?.associationEvidence).toEqual(["URL_EXTERNAL_ID", "LHH_DETAIL_PAGE"]);
+    const scoped = normalizeVacancyEvidenceInput(scopeLhhVacancyEvidence(observation));
+    expect(scoped.evidenceContent).toMatchObject({ kind: "SELECTED_VACANCY_CONTEXT", context: { associationEvidence: ["URL_EXTERNAL_ID", "LHH_DETAIL_PAGE"] } });
+    expect(scoped.rawContent).toContain("Responsable maintenance H/F");
+  });
+  it("rejects the legacy direct path without canonical or employer side effects", async () => {
+    const db = createDatabase(":memory:");
+    try {
+      const result = await createCaptureProcessingRuntime(db).captureAndProcessBrowserVacancy({
+        pageUrl: "https://www.lhh.com/fr-fr/offres-emploi/detail/2089206701",
+        pageTitle: "LHH legacy vacancy",
+        visibleText: "Responsable maintenance H/F recherche pour son client",
+        html: "<main><h1>Responsable maintenance H/F</h1><p>recherche pour son client</p></main>",
+        capturedAt: "2026-10-24T10:00:00Z",
+      });
+
+      expect(result.processing.status).toBe("VACANCY_NOT_DETECTED");
+      expect(db.prepare("SELECT source_name, external_id FROM source_observations WHERE id = ?").get(result.capture.observationId))
+        .toEqual({ source_name: "lhh.com", external_id: "2089206701" });
+      for (const table of ["canonical_vacancies", "canonical_vacancy_source_observations", "canonical_vacancy_observation_claims", "canonical_vacancy_exact_identity_claims", "employer_clusters", "observation_cluster_assignments"]) {
+        expect(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()).toEqual({ count: 0 });
+      }
+    } finally {
+      db.close();
+    }
   });
   it("extracts title, raw-preserving location and CDI as the only engagement", async () => {
     const { evidence, canonical } = await project();
