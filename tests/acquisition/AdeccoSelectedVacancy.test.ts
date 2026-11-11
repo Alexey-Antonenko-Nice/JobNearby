@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisition/BrowserCaptureAcquisitionAdapter.js";
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { scopeAdeccoVacancyEvidence } from "../../src/application/evidence/scopeAdeccoVacancyEvidence.js";
 import { createVacancyPositionCountEvidence } from "../../src/domain/evidence/VacancyPositionCountEvidence.js";
 import { createExtractedVacancyEvidence } from "../../src/domain/evidence/ExtractedVacancyEvidence.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
@@ -54,6 +55,58 @@ describe("Adecco selected vacancy capture", () => {
     expect(evidence.languageRequirements).toEqual([]);
     expect(evidence.travelRequirements).toEqual([]);
     expect(canonical.canonicalizationStatus).toBe("USABLE");
+  });
+  it("projects only selected-pane title and location, excluding page and neighboring-card poison", () => {
+    const neighborWithConflictingId = adeccoOutside.replace(
+      "</section>",
+      `<a href="${adeccoDirectUrl.replace(adeccoId, "9999999999")}">Other vacancy</a></section>`,
+    );
+    const html = adeccoPage().replace(adeccoOutside, neighborWithConflictingId);
+    const input = {
+      ...capture(html).observation,
+      title: "POISON PAGE TITLE",
+      locationText: "POISON PAGE LOCATION",
+    };
+    const before = structuredClone(input);
+
+    const scoped = scopeAdeccoVacancyEvidence(input);
+
+    expect(scoped.title).toBe("Technicien de Maintenance (h/f)");
+    expect(scoped.locationText).toBe("STRASBOURG, Bas-Rhin");
+    expect(scoped.title).not.toContain("POISON");
+    expect(scoped.locationText).not.toContain("POISON");
+    expect(scoped.rawContent).not.toMatch(/Technicien de Maintenance CVC|38250|ILLKIRCH|Télétravail|5 ans|Footer Company/);
+    expect(scoped.metadata.acquisition).toMatchObject({
+      html: expect.not.stringContaining("Technicien de Maintenance CVC"),
+      contexts: [expect.objectContaining({ providerKey: "ADECCO", providerExternalId: adeccoId })],
+    });
+    expect(JSON.stringify(scoped.metadata.acquisition)).not.toContain("9999999999");
+    expect(input).toEqual(before);
+  });
+  it("keeps the validated pane identity authoritative and drops projections for conflicting or missing panes", () => {
+    const page = capture();
+    const valid = scopeAdeccoVacancyEvidence(page.observation);
+    expect(valid.source.externalId).toBe(adeccoId);
+    expect("evidenceContent" in valid ? valid.evidenceContent : undefined).toMatchObject({
+      kind: "SELECTED_VACANCY_CONTEXT",
+      context: { providerKey: "ADECCO", providerExternalId: adeccoId },
+    });
+
+    const conflicting = scopeAdeccoVacancyEvidence(capture(
+      adeccoPage(adeccoPane().replace(`<b class="job-id">${adeccoId}`, '<b class="job-id">9999999999')),
+    ).observation);
+    expect(conflicting.title).toBeUndefined();
+    expect(conflicting.locationText).toBeUndefined();
+    expect(conflicting.rawContent ?? "").not.toMatch(/Technicien de Maintenance|STRASBOURG|38250|100000/);
+    expect("evidenceContent" in conflicting ? conflicting.evidenceContent : undefined).toEqual({ kind: "SOURCE_OBSERVATION" });
+    expect(conflicting.metadata.acquisition).toBeUndefined();
+
+    const missing = scopeAdeccoVacancyEvidence(capture(adeccoPage("")).observation);
+    expect(missing.title).toBeUndefined();
+    expect(missing.locationText).toBeUndefined();
+    expect(missing.rawContent ?? "").not.toMatch(/Technicien de Maintenance|STRASBOURG|38250|100000/);
+    expect("evidenceContent" in missing ? missing.evidenceContent : undefined).toEqual({ kind: "SOURCE_OBSERVATION" });
+    expect(missing.metadata.acquisition).toBeUndefined();
   });
   it("preserves start date and private-organization metadata only in bounded source context", () => {
     const { acquisition } = capture();
