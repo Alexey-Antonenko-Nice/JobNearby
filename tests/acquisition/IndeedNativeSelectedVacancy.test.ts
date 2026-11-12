@@ -55,9 +55,12 @@ describe("Indeed native selected-vacancy isolation", () => {
     expect(acquisition.contexts).toHaveLength(1);
     expect(acquisition.contexts![0]!.providerExternalId).toBe(id);
     expect(acquisition.contexts![0]!.associationEvidence).not.toContain("INDEED_DIRECT_JOB_HEADER_AND_CONTENT");
+    expect(acquisition.contexts![0]!.associationEvidence).toContain("MATCHING_SELECTED_RESULT");
+    expect(acquisition.contexts![0]!.html).toMatch(/^<div data-testid="viewjob-main-content"/u);
     expect(acquisition.contexts![0]!.text).not.toMatch(/30 k|80k|Other Company|Autre emploi|Paris|Footer Company/u);
     const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(observation));
-    expect((scoped.metadata.acquisition as Record<string, unknown>).acquisitionId).toBe("acquisition");
+    expect((scoped.metadata.acquisition as Record<string, unknown>).acquisitionId).toBeUndefined();
+    expect((scoped.metadata.acquisition as Record<string, unknown>).structuredPayload).toBeUndefined();
     const evidence = await createVacancyEvidenceExtractor().extract(observation);
     const canonical = canonicalize(observation, evidence);
     expect(canonical.role).toMatchObject({ status: "RESOLVED", value: { title: "Technicien polyvalent H/F" } });
@@ -69,6 +72,47 @@ describe("Indeed native selected-vacancy isolation", () => {
     expect(evidence.locations[0]?.provenance.contentOrigin).toBe("SELECTED_VACANCY_CONTEXT");
     expect(evidence.compensations[0]?.provenance.contentOrigin).toBe("SELECTED_VACANCY_CONTEXT");
     expect(JSON.stringify(evidence)).not.toMatch(/30 k|80k|Other Company|Autre emploi|Paris/u);
+  });
+
+  it("uses only validated native-pane context and restores no page-level fields", async () => {
+    const observation = capture().observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      displayedCompanyName: "POISON PAGE COMPANY",
+      locationText: "POISON PAGE LOCATION",
+      salaryText: "POISON PAGE SALARY",
+      contractText: "POISON PAGE CONTRACT",
+      description: "POISON PAGE DESCRIPTION",
+      contactText: "POISON CONTACT",
+      rawContent: "POISON PAGE CONTENT",
+      metadata: {
+        ...observation.metadata,
+        acquisition: {
+          ...(observation.metadata.acquisition as Record<string, unknown>),
+          structuredPayload: { title: "POISON STRUCTURED TITLE", identifier: "other" },
+        },
+      },
+    };
+    const before = structuredClone(input);
+
+    const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(input));
+    const evidence = await createVacancyEvidenceExtractor().extract(input);
+
+    expect(scoped.evidenceContent).toMatchObject({
+      kind: "SELECTED_VACANCY_CONTEXT",
+      context: { providerKey: "INDEED", providerExternalId: id },
+    });
+    for (const field of ["title", "displayedCompanyName", "locationText", "salaryText", "contractText", "description", "contactText"] as const) {
+      expect(scoped[field]).toBeUndefined();
+    }
+    expect(JSON.stringify(scoped)).not.toMatch(/POISON/u);
+    expect(evidence.vacancyTitles).toContainEqual(expect.objectContaining({ value: "Technicien polyvalent H/F" }));
+    expect(evidence.locations).toContainEqual(expect.objectContaining({ value: "Strasbourg (67)" }));
+    expect(evidence.compensations).toContainEqual(expect.objectContaining({ minimum: 2500, maximum: 2700, period: "MONTH" }));
+    expect(evidence.engagements.flatMap(item => item.normalizedTerms)).toEqual(expect.arrayContaining(["INDEFINITE"]));
+    expect(JSON.stringify(evidence)).not.toMatch(/POISON|Other Company|80k|Paris/u);
+    expect(input).toEqual(before);
   });
 
   it("retains full-time only when explicit in the selected context", async () => {
