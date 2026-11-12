@@ -3,6 +3,8 @@ import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisit
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { indeedUrlVacancyId, requiresIndeedSelectedContext } from "../../src/application/acquisition/IndeedSelectedVacancyContextLocator.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { scopeIndeedVacancyEvidence } from "../../src/application/evidence/scopeIndeedVacancyEvidence.js";
+import { normalizeVacancyEvidenceInput } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
@@ -70,7 +72,10 @@ describe("Indeed company-jobs selected pane", () => {
     const { acquisition, observation, evidence, canonical } = await projection();
     expect(acquisition.contexts).toHaveLength(1);
     expect(acquisition.contexts![0]).toMatchObject({ providerKey: "INDEED", providerExternalId: id });
+    expect(acquisition.contexts![0]!.associationEvidence).not.toContain("INDEED_DIRECT_JOB_HEADER_AND_CONTENT");
     expect(acquisition.contexts![0]!.html).toMatch(/^<div data-testid="JobDetail"/u);
+    const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(observation));
+    expect((scoped.metadata.acquisition as Record<string, unknown>).acquisitionId).toBe("acquisition");
     expect(canonical.role).toMatchObject({ status: "RESOLVED", value: { title } });
     expect(canonical.location).toMatchObject({ status: "RESOLVED", value: { rawText: "Sarreguemines (57)" } });
     expect(canonical.compensation).toMatchObject({ status: "RESOLVED", value: { rawText: salary, currency: "EUR", minimum: 36000, maximum: 39000, period: "YEAR" } });
