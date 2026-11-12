@@ -75,7 +75,8 @@ describe("Indeed company-jobs selected pane", () => {
     expect(acquisition.contexts![0]!.associationEvidence).not.toContain("INDEED_DIRECT_JOB_HEADER_AND_CONTENT");
     expect(acquisition.contexts![0]!.html).toMatch(/^<div data-testid="JobDetail"/u);
     const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(observation));
-    expect((scoped.metadata.acquisition as Record<string, unknown>).acquisitionId).toBe("acquisition");
+    expect((scoped.metadata.acquisition as Record<string, unknown>).acquisitionId).toBeUndefined();
+    expect(scoped.metadata.acquisition).toMatchObject({ contexts: [acquisition.contexts![0]] });
     expect(canonical.role).toMatchObject({ status: "RESOLVED", value: { title } });
     expect(canonical.location).toMatchObject({ status: "RESOLVED", value: { rawText: "Sarreguemines (57)" } });
     expect(canonical.compensation).toMatchObject({ status: "RESOLVED", value: { rawText: salary, currency: "EUR", minimum: 36000, maximum: 39000, period: "YEAR" } });
@@ -88,6 +89,50 @@ describe("Indeed company-jobs selected pane", () => {
     for (const item of [...evidence.vacancyTitles, ...evidence.organizations, ...evidence.locations, ...evidence.compensations]) {
       expect(item.provenance.contentOrigin).toBe("SELECTED_VACANCY_CONTEXT");
     }
+  });
+
+  it("uses only the validated JobDetail context and restores no page-level fields", async () => {
+    const observation = capture().observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      displayedCompanyName: "POISON PAGE COMPANY",
+      locationText: "POISON PAGE LOCATION",
+      salaryText: "POISON PAGE SALARY",
+      contractText: "POISON PAGE CONTRACT",
+      description: "POISON PAGE DESCRIPTION",
+      contactText: "POISON CONTACT",
+      rawContent: "POISON PAGE CONTENT",
+      metadata: {
+        ...observation.metadata,
+        acquisition: {
+          ...(observation.metadata.acquisition as Record<string, unknown>),
+          structuredPayload: { title: "POISON STRUCTURED TITLE", identifier: "other" },
+        },
+      },
+    };
+    const before = structuredClone(input);
+
+    const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(input));
+    const evidence = await createVacancyEvidenceExtractor().extract(input);
+
+    expect(scoped.evidenceContent).toMatchObject({
+      kind: "SELECTED_VACANCY_CONTEXT",
+      context: { providerKey: "INDEED", providerExternalId: id },
+    });
+    expect(scoped.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
+      ? scoped.evidenceContent.context.html
+      : undefined).toMatch(/^<div data-testid="JobDetail"/u);
+    for (const field of ["title", "displayedCompanyName", "locationText", "salaryText", "contractText", "description", "contactText"] as const) {
+      expect(scoped[field]).toBeUndefined();
+    }
+    expect((scoped.metadata.acquisition as Record<string, unknown>).structuredPayload).toBeUndefined();
+    expect(JSON.stringify(scoped)).not.toMatch(/POISON/u);
+    expect(evidence.vacancyTitles).toContainEqual(expect.objectContaining({ value: title }));
+    expect(evidence.locations).toContainEqual(expect.objectContaining({ value: "Sarreguemines (57)" }));
+    expect(evidence.compensations).toContainEqual(expect.objectContaining({ minimum: 36000, maximum: 39000 }));
+    expect(JSON.stringify(evidence)).not.toMatch(/POISON|ONDAL|Opérateur de production|Approvisionneur|24000|27000|35000|42000/u);
+    expect(input).toEqual(before);
   });
 
   it("accepts URL jk when the supported pane does not repeat an explicit identifier", () => {
