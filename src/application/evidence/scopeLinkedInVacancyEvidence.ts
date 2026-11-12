@@ -6,8 +6,8 @@ import { LinkedInSelectedVacancyContextLocator } from "../acquisition/LinkedInSe
 import { extractLinkedInVacancyId } from "../acquisition/LinkedInVacancyUrl.js";
 
 /**
- * LinkedIn evidence scoping. Only the direct job view (/jobs/view/<slug>/) is
- * bounded here; every other LinkedIn layout keeps its legacy input unchanged.
+ * LinkedIn evidence scoping for the direct job view and matching-link search pane.
+ * All other LinkedIn layouts keep their legacy input unchanged.
  *
  * The locator also emits LINKEDIN_DIRECT_JOB_DETAILS_SCREEN for SDUI panes on
  * /jobs/search-results/ (including B-Hive), so that marker alone is not proof of
@@ -43,7 +43,8 @@ export function scopeLinkedInVacancyEvidence(input: VacancyEvidenceExtractionInp
       ...(input.source.externalId === undefined ? {} : { externalId: input.source.externalId }),
     }));
 
-  if (context !== undefined && isDirectView(context, url, input.source.externalId)) {
+  if (context !== undefined && (isDirectView(context, url, input.source.externalId) ||
+    isMatchingLinkSearchPane(context, url, input.source.externalId))) {
     // Page-level contact text is not part of the selected vacancy.
     const { contactText: _contactText, ...inputWithoutContactText } = input;
     return buildBoundedEvidenceView(inputWithoutContactText, context);
@@ -59,6 +60,27 @@ function isDirectView(context: AcquisitionContext, url: string | undefined, exte
   try {
     const parsed = new URL(url);
     return /^\/jobs\/view\/[^/]+\/?$/u.test(parsed.pathname) && extractLinkedInVacancyId(parsed) === externalId;
+  } catch {
+    return false;
+  }
+}
+
+function isMatchingLinkSearchPane(context: AcquisitionContext, url: string | undefined, externalId: string | undefined): boolean {
+  if (url === undefined || externalId === undefined) return false;
+  if (context.kind !== "SELECTED_VACANCY" || context.associationMethod !== "PROVIDER_LOCATOR") return false;
+  if (context.providerKey !== "LINKEDIN" || context.providerExternalId !== externalId) return false;
+  const proof = context.associationEvidence ?? [];
+  if (!["URL_EXTERNAL_ID", "MATCHING_JOB_DETAILS", "BOUNDED_JOB_DETAIL", "MATCHING_LINKEDIN_JOB_LINK"]
+    .every((marker) => proof.includes(marker))) return false;
+  // SDUI search screens (including B-Hive) and component-only panes stay legacy.
+  if (proof.includes("LINKEDIN_DIRECT_JOB_DETAILS_SCREEN") ||
+    proof.includes("MATCHING_LINKEDIN_COMPONENT_REFERENCE")) return false;
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+      (parsed.hostname === "linkedin.com" || parsed.hostname.endsWith(".linkedin.com")) &&
+      /^\/jobs\/(?:search|search-results)\/?$/u.test(parsed.pathname) &&
+      extractLinkedInVacancyId(parsed) === externalId;
   } catch {
     return false;
   }

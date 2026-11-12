@@ -8,6 +8,11 @@ import { LinkedInSelectedVacancyEvidenceExtractor } from "../../src/application/
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
 import { scopeProviderVacancyEvidence } from "../../src/application/evidence/scopeProviderVacancyEvidence.js";
 import { evidenceExtractionInputFor } from "../../src/application/vacancies/processVacancyObservation.js";
+import type { AcquisitionContext } from "../../src/domain/acquisition/AcquisitionContext.js";
+import { fromSelectedVacancyContext } from "../../src/domain/evidence/VacancyEvidenceInput.js";
+import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
+import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
+import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
 import type { SourceObservation } from "../../src/domain/capture/SourceObservation.js";
 import { normalizeVacancyEvidenceInput } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 
@@ -182,6 +187,14 @@ describe("LinkedIn layout isolation", () => {
     ["B-Hive scrolled", "linkedinBHiveScrolledAbout"],
   ])("leaves %s unscoped", (_name, name) => {
     const observation = fixture(name);
+    const proof = selectedContext(observation).associationEvidence!;
+    if (name === "linkedinBHiveScrolledAbout") {
+      expect(proof).toContain("MATCHING_LINKEDIN_COMPONENT_REFERENCE");
+      expect(proof).not.toContain("MATCHING_LINKEDIN_JOB_LINK");
+    } else {
+      expect(proof).toContain("MATCHING_LINKEDIN_JOB_LINK");
+      expect(proof).toContain("LINKEDIN_DIRECT_JOB_DETAILS_SCREEN");
+    }
     expect(scopeProviderVacancyEvidence(observation)).toBe(observation);
     expect(scopeProviderVacancyEvidence(withoutStoredContext(observation))).toEqual(withoutStoredContext(observation));
     const production = evidenceExtractionInputFor(observation);
@@ -189,7 +202,7 @@ describe("LinkedIn layout isolation", () => {
     expect(production.rawContent).toBe(observation.rawContent);
   });
 
-  it("leaves a search-results link layout and a component-ref layout unscoped", () => {
+  it("scopes only the matching-link layout and leaves component-ref legacy", () => {
     const id = "4460344242";
     const evidence = [] as string[][];
     for (const withLink of [true, false]) {
@@ -197,7 +210,8 @@ describe("LinkedIn layout isolation", () => {
       const context = (observation.metadata.acquisition as { contexts: Array<{ associationEvidence: string[] }> }).contexts[0]!;
       evidence.push(context.associationEvidence);
       expect(context.associationEvidence).not.toContain("LINKEDIN_DIRECT_JOB_DETAILS_SCREEN");
-      expect(scopeProviderVacancyEvidence(observation)).toBe(observation);
+      if (withLink) expect(scopeProviderVacancyEvidence(observation)).not.toBe(observation);
+      else expect(scopeProviderVacancyEvidence(observation)).toBe(observation);
     }
     expect(evidence[0]).toContain("MATCHING_LINKEDIN_JOB_LINK");
     expect(evidence[1]).toContain("MATCHING_LINKEDIN_COMPONENT_REFERENCE");
@@ -282,5 +296,183 @@ describe("LinkedIn direct-view contamination", () => {
     const before = JSON.stringify(withoutContext);
     expect(scopeProviderVacancyEvidence(withoutContext)).not.toBe(withoutContext);
     expect(JSON.stringify(withoutContext)).toBe(before);
+  });
+});
+
+const SEARCH_ID = "4460344242";
+const SEARCH_URL = "https://www.linkedin.com/jobs/search-results/?currentJobId=" + SEARCH_ID;
+function matchingPaneHtml(): string {
+  return paneHtml(SEARCH_ID, true)
+    .replace('<div class="job-header">', '<div class="job-header"><p>Selected Engineering</p><p>')
+    .replace("</a></div>", "</a></p><p>Strasbourg, France</p></div>")
+    .replace("Other vacancy", "Competing Title Competing Co Neighbor City");
+}
+function searchObservation() { return capture(matchingPaneHtml(), SEARCH_URL); }
+function selectedContext(input: SourceObservation): AcquisitionContext {
+  return (input.metadata.acquisition as { contexts: AcquisitionContext[] }).contexts[0]!;
+}
+function withContext(input: SourceObservation, context: AcquisitionContext): SourceObservation {
+  return { ...input, metadata: { ...input.metadata, acquisition: {
+    ...(input.metadata.acquisition as Record<string, unknown>), contexts: [context],
+  } } };
+}
+
+describe("LinkedIn matching-link search pane scoping", () => {
+  it.each(["search", "search/", "search-results", "search-results/"])("accepts /jobs/%s with selected identity", (path) => {
+    for (const host of ["linkedin.com", "www.linkedin.com", "fr.linkedin.com"]) {
+      const observation = capture(matchingPaneHtml(), "https://" + host + "/jobs/" + path + "?currentJobId=" + SEARCH_ID);
+      for (const input of [observation, withoutStoredContext(observation), fromSelectedVacancyContext(observation, selectedContext(observation))]) {
+        const scoped = normalizeVacancyEvidenceInput(scopeProviderVacancyEvidence(input));
+        expect(scoped.evidenceContent.kind).toBe("SELECTED_VACANCY_CONTEXT");
+        expect(scoped.rawContent).toBe(selectedContext(observation).text);
+        expect(scoped.metadata.acquisition).toMatchObject({ metadata: { vacancyEvidenceScope: "SELECTED_VACANCY_REQUIRED" } });
+      }
+    }
+  });
+
+  it("preserves locator context and extracts selected header facts without projections or page poison", async () => {
+    const clean = searchObservation();
+    const context = selectedContext(clean);
+    expect(context.associationEvidence).toEqual([
+      "URL_EXTERNAL_ID", "MATCHING_JOB_DETAILS", "BOUNDED_JOB_DETAIL", "MATCHING_LINKEDIN_JOB_LINK",
+    ]);
+    expect(context.text).toContain("Selected Engineering");
+    expect(context.text).toContain("Selected vacancy title");
+    expect(context.text).toContain("Strasbourg, France");
+    const input = deepFreeze(poisoned(clean));
+    const snapshot = JSON.stringify(input);
+    const scoped = normalizeVacancyEvidenceInput(scopeProviderVacancyEvidence(input));
+    expect(scoped.evidenceContent).toEqual({ kind: "SELECTED_VACANCY_CONTEXT", context });
+    if (scoped.evidenceContent.kind !== "SELECTED_VACANCY_CONTEXT") throw new Error("not scoped");
+    expect(scoped.evidenceContent.context).toBe(context);
+    for (const field of ["title", "displayedCompanyName", "locationText", "description", "contactText"]) {
+      expect(scoped).not.toHaveProperty(field);
+    }
+    expect(scoped.metadata.acquisition).not.toHaveProperty("structuredPayload");
+    expect(JSON.stringify(scoped)).not.toMatch(POISON);
+    expect(JSON.stringify(input)).toBe(snapshot);
+    const raw = deepFreeze(withoutStoredContext(input));
+    const before = JSON.stringify(raw);
+    expect(scopeProviderVacancyEvidence(raw)).not.toBe(raw);
+    expect(JSON.stringify(raw)).toBe(before);
+    const extractor = new LinkedInSelectedVacancyEvidenceExtractor();
+    expect((await extractor.extract(withoutStoredContext(clean))).vacancyTitles).toEqual([]);
+    const evidence = await extractor.extract(scoped);
+    expect(evidence.vacancyTitles).toEqual([expect.objectContaining({
+      value: "Selected vacancy title", provenance: expect.objectContaining({ contentOrigin: "SELECTED_VACANCY_CONTEXT" }),
+    })]);
+    expect(evidence.organizations).toEqual([expect.objectContaining({ value: "Selected Engineering", role: "DISPLAYED_COMPANY" })]);
+    expect(evidence.locations).toEqual([expect.objectContaining({ value: "Strasbourg, France" })]);
+    expect(await extract(input)).toEqual(await extract(clean));
+    expect(JSON.stringify(await extract(input))).not.toMatch(POISON);
+    expect(scopeProviderVacancyEvidence(scoped)).toEqual(scoped);
+  });
+
+  it.each(["URL_EXTERNAL_ID", "MATCHING_JOB_DETAILS", "BOUNDED_JOB_DETAIL", "MATCHING_LINKEDIN_JOB_LINK"])(
+    "keeps legacy passthrough when locator proof lacks %s", (marker) => {
+      const input = searchObservation();
+      const context = { ...selectedContext(input), associationEvidence: selectedContext(input).associationEvidence!.filter((value) => value !== marker) };
+      const stored = withContext(input, context);
+      expect(scopeProviderVacancyEvidence(stored)).toBe(stored);
+      const attached = fromSelectedVacancyContext(input, context);
+      expect(scopeProviderVacancyEvidence(attached)).toBe(attached);
+    },
+  );
+
+  it.each([
+    { providerExternalId: "9999999999" },
+    { providerExternalId: undefined },
+    { associationMethod: "USER_SELECTED" as const },
+    { associationEvidence: ["MATCHING_LINKEDIN_JOB_LINK"] },
+    { associationEvidence: undefined },
+  ])("rejects insufficient context proof: %j", (change) => {
+    const input = searchObservation();
+    const stored = withContext(input, Object.fromEntries(Object.entries({ ...selectedContext(input), ...change }).filter(([, value]) => value !== undefined)) as unknown as AcquisitionContext);
+    expect(scopeProviderVacancyEvidence(stored)).toBe(stored);
+  });
+
+  it("does not promote a foreign provider context", () => {
+    const input = withoutStoredContext(searchObservation());
+    const noHtml = { ...input, metadata: {} };
+    const attached = fromSelectedVacancyContext(noHtml, { ...selectedContext(searchObservation()), providerKey: "INDEED" });
+    expect(scopeProviderVacancyEvidence(attached)).toBe(attached);
+  });
+
+  it.each([
+    undefined, "invalid", "https://www.linkedin.com/jobs/search/",
+    "https://www.linkedin.com/jobs/search/?currentJobId=9999999999",
+    "https://www.linkedin.com/jobs/collections/?currentJobId=4460344242",
+    "https://www.linkedin.com/jobs/search/extra?currentJobId=4460344242",
+    "https://fake-linkedin.com/jobs/search/?currentJobId=4460344242",
+    "https://linkedin.com.example.com/jobs/search/?currentJobId=4460344242",
+    "ftp://linkedin.com/jobs/search/?currentJobId=4460344242",
+  ])("rejects missing, mismatching or unsupported URL %s", (sourceUrl) => {
+    const input = searchObservation();
+    const { sourceUrl: _sourceUrl, ...source } = input.source;
+    const changed = { ...input, source: { ...source, ...(sourceUrl === undefined ? {} : { sourceUrl }) } };
+    expect(scopeProviderVacancyEvidence(changed)).toBe(changed);
+  });
+
+  it.each([undefined, "9999999999"])("rejects source ID %s", (externalId) => {
+    const input = searchObservation();
+    const { externalId: _externalId, ...source } = input.source;
+    const changed = { ...input, source: { ...source, ...(externalId === undefined ? {} : { externalId }) } };
+    expect(scopeProviderVacancyEvidence(changed)).toBe(changed);
+  });
+
+  it.each([
+    '<div><a href="/jobs/view/4460344242/">Separate matching link</a></div>',
+    '<div id="JobDetails_AboutTheJob_9999999999">Other detail</div>',
+  ])("fails closed on competing ownership: %s", async (extra) => {
+    const input = capture(matchingPaneHtml().replace("</main>", extra + "</main>"), SEARCH_URL);
+    expect(input.metadata.acquisition).not.toHaveProperty("contexts");
+    expect(scopeProviderVacancyEvidence(input)).toBe(input);
+    expect((await new LinkedInSelectedVacancyEvidenceExtractor().extract(input)).vacancyTitles).toEqual([]);
+  });
+
+  it("rejects a competing foreign link inside the selected header", () => {
+    const html = matchingPaneHtml().replace("</a>", '</a><a href="/jobs/view/9999999999/">Competing Title</a>');
+    const input = capture(html, SEARCH_URL);
+    expect(input.metadata.acquisition).not.toHaveProperty("contexts");
+    expect(scopeProviderVacancyEvidence(input)).toBe(input);
+  });
+
+  it("preserves locator acceptance of repeated same-ID links inside one boundary", () => {
+    const html = matchingPaneHtml().replace("</a>", '</a><a href="/jobs/view/4460344242/">Selected vacancy title</a>');
+    const input = capture(html, SEARCH_URL);
+    expect(normalizeVacancyEvidenceInput(scopeProviderVacancyEvidence(input)).evidenceContent.kind).toBe("SELECTED_VACANCY_CONTEXT");
+  });
+
+  it("leaves unknown and Kickmaker legacy captures unchanged, without promotion from ID alone", () => {
+    for (const html of ["<main>Unknown LinkedIn layout</main>", "<main></main>"]) {
+      const input = withoutStoredContext(capture(html, SEARCH_URL));
+      expect(scopeProviderVacancyEvidence(input)).toBe(input);
+    }
+    const input = { ...capture("<main></main>", SEARCH_URL), rawContent: readFileSync("tests/fixtures/linkedinKickmaker.txt", "utf8") };
+    expect(scopeProviderVacancyEvidence(input)).toBe(input);
+  });
+
+  it("recaptures matching-link search into the same canonical without changing stored source or human state", async () => {
+    const db = createDatabase(":memory:");
+    try {
+      const runtime = createCaptureProcessingRuntime(db);
+      const payload = { pageUrl: SEARCH_URL, pageTitle: "LinkedIn vacancy", html: matchingPaneHtml(),
+        visibleText: "Full page POISON text", capturedAt: "2026-11-01T10:00:00Z" };
+      const first = await runtime.captureAndProcessBrowserVacancy(payload);
+      if (first.processing.status !== "PROCESSED") throw new Error("Initial processing failed");
+      const canonicalId = first.processing.canonicalVacancyId;
+      db.prepare("INSERT INTO user_vacancy_interaction_events (id,canonical_vacancy_id,event_type,occurred_at,recorded_at,metadata_json) VALUES ('human-interest',?,'INTERESTED','2026-11-01T10:01:00Z','2026-11-01T10:01:00Z',NULL)").run(canonicalId);
+      const snapshot = () => ["source_observations", "observation_cluster_assignments", "employer_clusters", "user_vacancy_interaction_events"]
+        .map((table) => db.prepare("SELECT * FROM " + table + " ORDER BY rowid").all());
+      const before = snapshot();
+      const again = await runtime.captureAndProcessBrowserVacancy({ ...payload, capturedAt: "2026-11-02T10:00:00Z" });
+      expect(again.capture.observationId).toBe(first.capture.observationId);
+      expect(again.processing).toMatchObject({ status: "PROCESSED", canonicalVacancyId: canonicalId, observationAdded: false });
+      expect(snapshot()).toEqual(before);
+      const canonical = await new SqliteCanonicalVacancyRepository(db).findById(canonicalId);
+      expect(canonical?.role.value?.title).toBe("Selected vacancy title");
+      expect(canonical?.location.value?.rawText).toBe("Strasbourg, France");
+      expect(JSON.stringify(canonical)).not.toMatch(POISON);
+    } finally { db.close(); }
   });
 });
