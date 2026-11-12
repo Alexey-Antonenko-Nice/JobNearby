@@ -1,4 +1,4 @@
-import { IndeedSelectedVacancyContextLocator, requiresIndeedSelectedContext } from "../acquisition/IndeedSelectedVacancyContextLocator.js";
+import { IndeedSelectedVacancyContextLocator, indeedElementsWithAttribute, isIndeedCompanyJobsUrl, requiresIndeedSelectedContext } from "../acquisition/IndeedSelectedVacancyContextLocator.js";
 import { fromSelectedVacancyContext, normalizeVacancyEvidenceInput, type VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import { buildBoundedEvidenceView } from "./buildBoundedEvidenceView.js";
@@ -21,6 +21,13 @@ export function scopeIndeedVacancyEvidence(input: VacancyEvidenceExtractionInput
     ...(input.source.externalId === undefined ? {} : { externalId: input.source.externalId }),
   }));
   if (context?.associationEvidence?.includes("INDEED_DIRECT_JOB_HEADER_AND_CONTENT")) {
+    const { contactText: _contactText, ...inputWithoutContactText } = input;
+    return buildBoundedEvidenceView(inputWithoutContactText, context);
+  }
+  if (url !== undefined && isIndeedCompanyJobsUrl(url)
+    && context?.associationEvidence?.includes("BOUNDED_JOB_DETAIL")
+    && context.html !== undefined
+    && indeedElementsWithAttribute(context.html, "data-testid", "JobDetail").length === 1) {
     const { contactText: _contactText, ...inputWithoutContactText } = input;
     return buildBoundedEvidenceView(inputWithoutContactText, context);
   }
