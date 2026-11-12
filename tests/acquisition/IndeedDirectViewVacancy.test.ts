@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisition/BrowserCaptureAcquisitionAdapter.js";
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
+import { scopeIndeedVacancyEvidence } from "../../src/application/evidence/scopeIndeedVacancyEvidence.js";
+import { normalizeVacancyEvidenceInput } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 import { ExistingPipelineCanonicalVacancyAdapter } from "../../src/application/vacancies/ExistingPipelineCanonicalVacancyAdapter.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
@@ -47,6 +49,15 @@ async function projection(html = page()) {
 }
 
 describe("Indeed standalone direct vacancy isolation", () => {
+  it.each([
+    [`https://fr.indeed.com/viewjob?jk=${id}`, id],
+    [`https://fr.indeed.com/viewjob?vjk=${id}`, id],
+  ])("captures the direct URL identity using its supported key: %s", (pageUrl, expectedId) => {
+    const { acquisition } = capture(page(), pageUrl);
+    expect(acquisition.externalId).toBe(expectedId);
+    expect(acquisition.contexts?.[0]?.providerExternalId).toBe(expectedId);
+    expect(acquisition.contexts?.[0]?.associationEvidence).toContain("INDEED_DIRECT_JOB_HEADER_AND_CONTENT");
+  });
   it.each([url, `${url}&from=alert&utm_source=test`])("captures direct URL identity and a bounded context: %s", (pageUrl) => {
     const { acquisition, observation } = capture(page(), pageUrl);
     expect(acquisition.externalId).toBe(id);
@@ -55,6 +66,72 @@ describe("Indeed standalone direct vacancy isolation", () => {
     expect(acquisition.contexts![0]!.text).toContain("Maintenance préventive");
     expect(acquisition.contexts![0]!.text).not.toMatch(/Paris|Search Company|Other Company|80 000|Footer Company/);
     expect(observation.metadata.acquisition).toMatchObject({ html: page() });
+  });
+  it("uses the direct selected context without page-level projections or structured data", async () => {
+    const observation = capture(
+      page() + `<script type="application/ld+json">${JSON.stringify({ "@type": "JobPosting", identifier: "other", title: "POISON STRUCTURED TITLE" })}</script>`,
+    ).observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      displayedCompanyName: "POISON PAGE COMPANY",
+      locationText: "POISON PAGE LOCATION",
+      salaryText: "POISON PAGE SALARY",
+      contractText: "POISON PAGE CONTRACT",
+      description: "POISON PAGE DESCRIPTION",
+      contactText: "POISON PAGE CONTACT",
+      rawContent: "POISON PAGE CONTENT",
+      metadata: {
+        ...observation.metadata,
+        acquisition: {
+          ...(observation.metadata.acquisition as Record<string, unknown>),
+          structuredPayload: { title: "POISON STRUCTURED TITLE", identifier: "other" },
+        },
+      },
+    };
+    const before = structuredClone(input);
+
+    const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(input));
+    const evidence = await extractor.extract(input);
+
+    expect(scoped.evidenceContent).toMatchObject({
+      kind: "SELECTED_VACANCY_CONTEXT",
+      context: { providerKey: "INDEED", providerExternalId: id },
+    });
+    expect(scoped.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
+      ? scoped.evidenceContent.context.associationEvidence
+      : undefined).toContain("INDEED_DIRECT_JOB_HEADER_AND_CONTENT");
+    for (const field of ["title", "displayedCompanyName", "locationText", "salaryText", "contractText", "description", "contactText"] as const) {
+      expect(scoped[field]).toBeUndefined();
+    }
+    expect(JSON.stringify(scoped)).not.toMatch(/POISON/u);
+    expect((scoped.metadata.acquisition as Record<string, unknown>).structuredPayload).toBeUndefined();
+    expect(evidence.vacancyTitles).toContainEqual(expect.objectContaining({ value: title }));
+    expect(evidence.locations).toContainEqual(expect.objectContaining({ value: "Strasbourg (67)" }));
+    expect(evidence.compensations).toContainEqual(expect.objectContaining({ minimum: 36000, maximum: 42000, period: "YEAR" }));
+    expect(evidence.engagements.flatMap(item => item.normalizedTerms)).toEqual(expect.arrayContaining(["INDEFINITE", "FULL_TIME"]));
+    expect(JSON.stringify(evidence)).not.toMatch(/POISON|Other Company|80 000|10 à 15 ans|allemand/u);
+    expect(input).toEqual(before);
+  });
+  it("does not fall back to page content when direct context validation fails", () => {
+    const observation = capture(outside).observation;
+    const input = {
+      ...observation,
+      title: "POISON PAGE TITLE",
+      locationText: "POISON PAGE LOCATION",
+      contactText: "POISON CONTACT",
+      rawContent: "POISON PAGE CONTENT",
+    };
+
+    const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(input));
+
+    expect(scoped.evidenceContent).toEqual({ kind: "SOURCE_OBSERVATION" });
+    expect(scoped.rawContent).toBe("");
+    expect(scoped.title).toBeUndefined();
+    expect(scoped.locationText).toBeUndefined();
+    expect(scoped.contactText).toBeUndefined();
+    expect(scoped.source.externalId).toBe(id);
+    expect(JSON.stringify(scoped)).not.toMatch(/POISON/u);
   });
   it("projects title, company and location exclusively from the direct job", async () => {
     const { canonical, evidence } = await projection();

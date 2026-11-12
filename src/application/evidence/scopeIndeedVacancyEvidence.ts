@@ -1,6 +1,7 @@
 import { IndeedSelectedVacancyContextLocator, requiresIndeedSelectedContext } from "../acquisition/IndeedSelectedVacancyContextLocator.js";
 import { fromSelectedVacancyContext, normalizeVacancyEvidenceInput, type VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
+import { buildBoundedEvidenceView } from "./buildBoundedEvidenceView.js";
 
 /** Transient evidence view only. Never overwrites the immutable source snapshot. */
 export function scopeIndeedVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
@@ -19,6 +20,10 @@ export function scopeIndeedVacancyEvidence(input: VacancyEvidenceExtractionInput
     providerKey: "INDEED", sourceUrl: url, html,
     ...(input.source.externalId === undefined ? {} : { externalId: input.source.externalId }),
   }));
+  if (context?.associationEvidence?.includes("INDEED_DIRECT_JOB_HEADER_AND_CONTENT")) {
+    const { contactText: _contactText, ...inputWithoutContactText } = input;
+    return buildBoundedEvidenceView(inputWithoutContactText, context);
+  }
   // Generic source fields and page-level structured payloads may describe a
   // neighboring card or preferences, even when the selected context is sound.
   const { title: _title, displayedCompanyName: _company, locationText: _location,

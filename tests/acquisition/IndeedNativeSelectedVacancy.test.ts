@@ -3,6 +3,7 @@ import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisit
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
 import { scopeIndeedVacancyEvidence } from "../../src/application/evidence/scopeIndeedVacancyEvidence.js";
+import { normalizeVacancyEvidenceInput } from "../../src/domain/evidence/VacancyEvidenceInput.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
@@ -53,7 +54,10 @@ describe("Indeed native selected-vacancy isolation", () => {
     expect(acquisition.externalId).toBe(id);
     expect(acquisition.contexts).toHaveLength(1);
     expect(acquisition.contexts![0]!.providerExternalId).toBe(id);
+    expect(acquisition.contexts![0]!.associationEvidence).not.toContain("INDEED_DIRECT_JOB_HEADER_AND_CONTENT");
     expect(acquisition.contexts![0]!.text).not.toMatch(/30 k|80k|Other Company|Autre emploi|Paris|Footer Company/u);
+    const scoped = normalizeVacancyEvidenceInput(scopeIndeedVacancyEvidence(observation));
+    expect((scoped.metadata.acquisition as Record<string, unknown>).acquisitionId).toBe("acquisition");
     const evidence = await createVacancyEvidenceExtractor().extract(observation);
     const canonical = canonicalize(observation, evidence);
     expect(canonical.role).toMatchObject({ status: "RESOLVED", value: { title: "Technicien polyvalent H/F" } });
