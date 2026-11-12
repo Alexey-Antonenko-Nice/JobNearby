@@ -31,6 +31,10 @@ export function scopeIndeedVacancyEvidence(input: VacancyEvidenceExtractionInput
     const { contactText: _contactText, ...inputWithoutContactText } = input;
     return buildBoundedEvidenceView(inputWithoutContactText, context);
   }
+  if (url !== undefined && context !== undefined && isIndeedNativeSelectedPane(url, context)) {
+    const { contactText: _contactText, ...inputWithoutContactText } = input;
+    return buildBoundedEvidenceView(inputWithoutContactText, context);
+  }
   // Generic source fields and page-level structured payloads may describe a
   // neighboring card or preferences, even when the selected context is sound.
   const { title: _title, displayedCompanyName: _company, locationText: _location,
@@ -47,4 +51,18 @@ export function scopeIndeedVacancyEvidence(input: VacancyEvidenceExtractionInput
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : undefined;
+}
+
+function isIndeedNativeSelectedPane(url: string, context: AcquisitionContext | undefined): boolean {
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return false;
+  }
+  return (pathname === "/" || pathname === "/jobs")
+    && context?.associationEvidence?.includes("MATCHING_SELECTED_RESULT") === true
+    && context.associationEvidence.includes("BOUNDED_JOB_DETAIL")
+    && context.html !== undefined
+    && indeedElementsWithAttribute(context.html, "data-testid", "viewjob-main-content").length === 1;
 }
