@@ -26,6 +26,7 @@ import { HelloWorkSelectedVacancyContextLocator, helloWorkHeaderFields, helloWor
 import { SchemaOrgJobPostingProjector } from "../acquisition/SchemaOrgJobPostingProjector.js";
 import { scopeIndeedVacancyEvidence } from "./scopeIndeedVacancyEvidence.js";
 import { scopeLinkedInVacancyEvidence } from "./scopeLinkedInVacancyEvidence.js";
+import { FRANCE_TRAVAIL_SOURCE_NAME, scopeFranceTravailVacancyEvidence } from "./scopeFranceTravailVacancyEvidence.js";
 
 import { scopeTalentVacancyEvidence } from "./scopeTalentVacancyEvidence.js";
 
@@ -58,6 +59,7 @@ export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInp
   if (input.source.sourceName === "adecco.com") return scopeAdeccoVacancyEvidence(input);
   if (input.source.sourceName === "talent.com") return scopeTalentVacancyEvidence(input);
   if (input.source.sourceName === "linkedin.com") return scopeLinkedInVacancyEvidence(input);
+  if (input.source.sourceName === FRANCE_TRAVAIL_SOURCE_NAME) return scopeFranceTravailVacancyEvidence(input);
   if (input.source.sourceName !== "hellowork.com") return scopeIndeedVacancyEvidence(input);
   if (boundedHelloWorkInput in input) return input;
   const acquisition = record(input.metadata.acquisition);
