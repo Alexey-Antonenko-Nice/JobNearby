@@ -550,6 +550,61 @@ describe("processVacancyObservation", () => {
       processVacancyObservation("obs-a", fixture.dependencies),
     ).rejects.toThrow(/multiple selected vacancy acquisition contexts/u);
   });
+
+  it("uses the supplied existing identity claim without calling claimIdentity again", async () => {
+    const fixture = makeFixture();
+    const source = {
+      sourceType: "JOB_BOARD" as const,
+      sourceName: "linkedin.com",
+      sourceUrl: "https://www.linkedin.com/jobs/view/engineer-4478539511/",
+      externalId: "4478539511",
+    };
+    await fixture.sources.save(observation("identity-rich", source.externalId, "Engineer", { source }));
+    const established = await processVacancyObservation("identity-rich", fixture.dependencies);
+    const context = {
+      kind: "SELECTED_VACANCY" as const,
+      associationMethod: "PROVIDER_LOCATOR" as const,
+      providerKey: "LINKEDIN" as const,
+      providerExternalId: source.externalId,
+      associationEvidence: [
+        "URL_EXTERNAL_ID",
+        "MATCHING_JOB_DETAILS",
+        "BOUNDED_JOB_DETAIL",
+        "LINKEDIN_DIRECT_JOB_DETAILS_SCREEN",
+      ],
+      text: "À propos de l’offre d’emploi\nA bounded description of the selected vacancy.",
+      html: '<div id="JobDetails_AboutTheJob_4478539511" componentkey="JobDetails_AboutTheJob_4478539511"></div>',
+    };
+    await fixture.sources.save(observation("identity-partial", source.externalId, undefined, {
+      source,
+      title: "Untrusted page-level title",
+      displayedCompanyName: "Untrusted page-level company",
+      locationText: "Untrusted page-level location",
+      rawContent: "Untrusted page-level text",
+      metadata: { acquisition: { contexts: [context] } },
+    }));
+    const claim = await fixture.canonicals.attachObservationToExistingExactSourceIdentity(
+      "identity-partial",
+      "linkedin.com",
+      source.externalId,
+    );
+    expect(claim?.canonicalVacancyId).toBe(established.canonicalVacancyId);
+    const claimIdentity = vi.spyOn(fixture.canonicals, "claimIdentity")
+      .mockRejectedValue(new Error("Partial recapture must not call claimIdentity."));
+
+    const result = await processVacancyObservation(
+      "identity-partial",
+      fixture.dependencies,
+      {
+        existingCanonicalVacancyId: claim!.canonicalVacancyId,
+        partialRecaptureContext: context,
+      },
+    );
+    expect(claimIdentity).not.toHaveBeenCalled();
+    expect(result.canonicalVacancyId).toBe(established.canonicalVacancyId);
+    expect((await fixture.canonicals.findById(established.canonicalVacancyId))?.role.value?.title)
+      .toBe("Engineer");
+  });
 });
 
 function makeFixture(options: { employerOutcome?: "CREATED_NEW_CLUSTER" | "REVIEW_REQUIRED" } = {}) {

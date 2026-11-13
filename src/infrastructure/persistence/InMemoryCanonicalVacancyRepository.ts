@@ -120,6 +120,45 @@ export class InMemoryCanonicalVacancyRepository
     return this.findById(vacancyId);
   }
 
+  async attachObservationToExistingExactSourceIdentity(
+    sourceObservationId: SourceObservationId,
+    providerNamespace: string,
+    externalId: string,
+  ) {
+    const observation = await this.sourceObservationRepository.findById(sourceObservationId);
+    if (observation === null) {
+      throw new Error(
+        `Canonical vacancy identity attachment requires existing SourceObservation "${sourceObservationId}".`,
+      );
+    }
+
+    const provider = normalizeVacancyProviderNamespace(providerNamespace);
+    if (
+      normalizeVacancyProviderNamespace(observation.source.sourceName) !== provider ||
+      observation.source.externalId !== externalId
+    ) {
+      return null;
+    }
+
+    const key = identityKey(provider, externalId);
+    const identityWinner = this.exactIdentityClaims.get(key);
+    if (identityWinner === undefined) return null;
+    if (!this.vacancies.has(identityWinner)) {
+      throw new Error(
+        `Canonical vacancy identity integrity error: exact identity claim references missing canonical vacancy "${identityWinner}".`,
+      );
+    }
+
+    const observationWinner = this.observationClaims.get(sourceObservationId);
+    if (observationWinner !== undefined && observationWinner !== identityWinner) {
+      throw new Error(
+        `Canonical vacancy identity integrity error: observation and exact identity claims disagree for SourceObservation "${sourceObservationId}".`,
+      );
+    }
+    this.observationClaims.set(sourceObservationId, identityWinner);
+    return { canonicalVacancyId: identityWinner, outcome: "EXISTING" as const };
+  }
+
   async findClaimedSourceObservationIds(
     canonicalVacancyId: CanonicalVacancyId,
   ): Promise<readonly SourceObservationId[]> {

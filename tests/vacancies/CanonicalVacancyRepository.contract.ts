@@ -383,6 +383,47 @@ export function runCanonicalVacancyRepositoryContract(
       }
     });
 
+    it("attaches only to an existing exact identity and is idempotent", async () => {
+      const fixture = createFixture();
+      try {
+        await fixture.saveObservation(observation("identity-established", "LinkedIn", "LINKEDIN-1"));
+        await fixture.saveObservation(observation("identity-partial", "linkedin", "LINKEDIN-1"));
+        await fixture.saveObservation(observation("identity-unknown", "LinkedIn", "UNKNOWN-1"));
+        const vacancy = makeVacancy("identity-established", {
+          sourceObservationIds: ["identity-established"],
+        });
+        await fixture.repository.save(vacancy);
+
+        expect(await fixture.repository.attachObservationToExistingExactSourceIdentity(
+          "identity-partial",
+          "linkedin",
+          "LINKEDIN-1",
+        )).toEqual({ canonicalVacancyId: vacancy.id, outcome: "EXISTING" });
+        expect(await fixture.repository.attachObservationToExistingExactSourceIdentity(
+          "identity-partial",
+          "linkedin",
+          "LINKEDIN-1",
+        )).toEqual({ canonicalVacancyId: vacancy.id, outcome: "EXISTING" });
+        expect(await fixture.repository.attachObservationToExistingExactSourceIdentity(
+          "identity-unknown",
+          "LinkedIn",
+          "UNKNOWN-1",
+        )).toBeNull();
+        expect(await fixture.repository.attachObservationToExistingExactSourceIdentity(
+          "identity-partial",
+          "LinkedIn",
+          "DIFFERENT",
+        )).toBeNull();
+        expect(await fixture.repository.findClaimedSourceObservationIds(vacancy.id))
+          .toEqual(["identity-established", "identity-partial"]);
+        expect(await fixture.repository.findByExactSourceIdentity("LinkedIn", "UNKNOWN-1"))
+          .toBeNull();
+        expect(await fixture.repository.findById("canonical-identity-partial")).toBeNull();
+      } finally {
+        fixture.close();
+      }
+    });
+
     it("keeps leading zeros and external-ID case exact", async () => {
       const fixture = createFixture();
       try {

@@ -8,6 +8,7 @@ import type {
   EmployerProcessingSummary,
   ProcessVacancyObservationResult,
 } from "../vacancies/processVacancyObservation.js";
+import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import { assessBrowserVacancyCapture, type VacancyCaptureRejectionReason } from "./assessBrowserVacancyCapture.js";
 import { createVacancyEvidenceExtractor } from "../evidence/createVacancyEvidenceExtractor.js";
 
@@ -16,6 +17,7 @@ export type CaptureEmployerStatus =
   | "IDENTIFIED_NEW_RECORD"
   | "UNRESOLVED_RECORD_CREATED"
   | "UNRESOLVED_EXISTING_RECORD"
+  | "NO_EMPLOYER_EVIDENCE"
   | "REVIEW_REQUIRED";
 
 interface CaptureSummary {
@@ -58,6 +60,12 @@ export interface CaptureAndProcessBrowserVacancyDependencies {
   readonly processVacancyObservation: (
     sourceObservationId: string,
   ) => Promise<ProcessVacancyObservationResult>;
+  readonly processPartialRecapture?: (
+    sourceObservationId: string,
+    providerNamespace: string,
+    externalId: string,
+    selectedContext: AcquisitionContext,
+  ) => Promise<ProcessVacancyObservationResult | null>;
   readonly onProcessingFailure?: (
     sourceObservationId: string,
     error: unknown,
@@ -75,6 +83,17 @@ export async function captureAndProcessBrowserVacancy(
     if (observation === null) throw new Error("Persisted browser capture was not found.");
     const acceptance = await assessBrowserVacancyCapture(observation, createVacancyEvidenceExtractor());
     if (!acceptance.captureAcceptedAsVacancy) {
+      if (acceptance.partialRecaptureIdentity !== undefined &&
+        dependencies.processPartialRecapture !== undefined) {
+        const partial = acceptance.partialRecaptureIdentity;
+        const processing = await dependencies.processPartialRecapture(
+          acceptance.sourceObservationId,
+          partial.providerNamespace,
+          partial.externalId,
+          partial.selectedContext,
+        );
+        if (processing !== null) return processedCapture(capture, processing);
+      }
       return { capture, processing: {
         status: "VACANCY_NOT_DETECTED",
         captureAcceptedAsVacancy: false,
@@ -86,22 +105,29 @@ export async function captureAndProcessBrowserVacancy(
     const processing = await dependencies.processVacancyObservation(
       acceptance.sourceObservationId,
     );
-    return {
-      capture,
-      processing: {
-        status: "PROCESSED",
-        captureAcceptedAsVacancy: true,
-        canonicalVacancyId: processing.canonicalVacancyId,
-        vacancyOutcome: processing.canonicalVacancyOutcome,
-        observationAdded: processing.observationAdded,
-        canonicalizationStatus: processing.canonicalizationStatus,
-        ...mapEmployerFeedback(processing.employer),
-      },
-    };
+    return processedCapture(capture, processing);
   } catch (error) {
     dependencies.onProcessingFailure?.(ingestion.sourceObservationId, error);
     return { capture, processing: { status: "FAILED" } };
   }
+}
+
+function processedCapture(
+  capture: CaptureSummary,
+  processing: ProcessVacancyObservationResult,
+): CaptureAndProcessBrowserVacancyResult {
+  return {
+    capture,
+    processing: {
+      status: "PROCESSED",
+      captureAcceptedAsVacancy: true,
+      canonicalVacancyId: processing.canonicalVacancyId,
+      vacancyOutcome: processing.canonicalVacancyOutcome,
+      observationAdded: processing.observationAdded,
+      canonicalizationStatus: processing.canonicalizationStatus,
+      ...mapEmployerFeedback(processing.employer),
+    },
+  };
 }
 
 function captureSummary(result: BrowserCaptureIngestionResult): CaptureSummary {
@@ -115,6 +141,9 @@ function captureSummary(result: BrowserCaptureIngestionResult): CaptureSummary {
 function mapEmployerFeedback(
   employer: EmployerProcessingSummary,
 ): { readonly employerStatus: CaptureEmployerStatus; readonly employerDisplayName?: string } {
+  if (employer.outcome === "NO_EMPLOYER_EVIDENCE") {
+    return { employerStatus: "NO_EMPLOYER_EVIDENCE" };
+  }
   if (employer.outcome === "MATCHED_EXISTING_CLUSTER") {
     if (employer.employerClusterStatus === "CONFLICTED") return { employerStatus: "REVIEW_REQUIRED" };
     return employer.employerClusterStatus === "UNRESOLVED"

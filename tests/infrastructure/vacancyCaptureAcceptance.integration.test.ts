@@ -7,6 +7,8 @@ import { createBrowserCaptureServer } from "../../src/infrastructure/http/create
 import { captureAndProcessBrowserVacancy } from "../../src/application/acquisition/captureAndProcessBrowserVacancy.js";
 import { DeterministicAcquisitionCaptureMapper } from "../../src/application/acquisition/DeterministicAcquisitionCaptureMapper.js";
 import { InMemorySourceObservationRepository } from "../../src/infrastructure/persistence/InMemorySourceObservationRepository.js";
+import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
+import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
 import { adeccoElementsWithClass } from "../../src/application/acquisition/AdeccoSelectedVacancyContextLocator.js";
 
 const regressionUrl = "https://www.michaelpage.fr/job-detail/technicienne-sav-france-fh/ref/jn-102026-7118382";
@@ -20,6 +22,37 @@ const failedCapture = {
 };
 const validUrl = "https://www.michaelpage.fr/job-detail/ing%C3%A9nieur-conception-m%C3%A9canique-hf/ref/jn-082026-7089819";
 const validHtml = readFileSync("tests/fixtures/michaelPageSelectedVacancy.html", "utf8");
+const linkedinId = "4478539511";
+const linkedinUrl = `https://www.linkedin.com/jobs/view/concepteur-mecanique-h-f-at-segula-${linkedinId}/`;
+
+function linkedinCapture(mode: "RICH" | "DESCRIPTION_ONLY" | "HEADER_ONLY", capturedAt: string) {
+  const header = mode !== "DESCRIPTION_ONLY"
+    ? `<div data-testid="job-header">
+        <p>SEGULA Technologies</p>
+        <a href="/jobs/view/concepteur-mecanique-h-f-at-segula-${linkedinId}/">Concepteur mécanique H/F</a>
+        <p>Dunkerque, Hauts-de-France, France · il y a 2 semaines</p>
+      </div>`
+    : `<div data-testid="job-header"><a href="/jobs/view/concepteur-mecanique-h-f-at-segula-${linkedinId}/"></a></div>`;
+  const details = mode === "HEADER_ONLY"
+    ? `<div id="JobDetails_AboutTheJob_${linkedinId}" componentkey="JobDetails_AboutTheJob_${linkedinId}"></div>`
+    : `<div id="JobDetails_AboutTheJob_${linkedinId}" componentkey="JobDetails_AboutTheJob_${linkedinId}">
+        <h2>À propos de l’offre d’emploi</h2>
+        <p>Contribuez à des projets industriels innovants avec nos équipes techniques en France.</p>
+      </div>`;
+  return {
+    pageUrl: linkedinUrl,
+    pageTitle: mode === "RICH" ? "Concepteur mécanique H/F | SEGULA Technologies" : "LinkedIn",
+    visibleText: "Unrelated page text",
+    html: `<div data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.JobDetails">
+      <main><div data-testid="lazy-column">
+        <div id="JobDetails_ManageJobBanner_${linkedinId}"></div>
+        ${header}
+        <div data-testid="details-and-extras">${details}</div>
+      </div></main>
+    </div>`,
+    capturedAt,
+  };
+}
 
 describe("browser vacancy acceptance", () => {
   it("persists a rejected Michael Page capture without any claim, vacancy, cluster or assignment", async () => {
@@ -69,6 +102,259 @@ describe("browser vacancy acceptance", () => {
       expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancies").get()).toEqual({ count: 0 });
     } finally { db.close(); }
   });
+
+      it("attaches bounded LinkedIn description-only recaptures only to an existing exact identity", async () => {
+        const db = createDatabase(":memory:");
+        try {
+          const runtime = createCaptureProcessingRuntime(db);
+          const rich = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("RICH", "2026-11-11T10:00:00Z"),
+          );
+          expect(rich.processing.status).toBe("PROCESSED");
+          if (rich.processing.status !== "PROCESSED") throw Error("Expected an accepted rich capture.");
+          const canonicalId = rich.processing.canonicalVacancyId;
+          const before = db.prepare(`
+            SELECT v.id, f.value_json AS title
+            FROM canonical_vacancies v JOIN canonical_vacancy_fields f
+              ON f.canonical_vacancy_id = v.id AND f.field_name = 'role'
+            WHERE v.id = ?
+          `).get(canonicalId) as { id: string; title: string };
+          const roleBefore = JSON.parse(before.title) as { title: string };
+          const employerCount = db.prepare("SELECT COUNT(*) AS count FROM employer_clusters").get();
+
+          const partialPayload = linkedinCapture("DESCRIPTION_ONLY", "2026-11-11T11:00:00Z");
+          const partial = await runtime.captureAndProcessBrowserVacancy(partialPayload);
+          expect(partial.processing).toMatchObject({
+            status: "PROCESSED",
+            canonicalVacancyId: canonicalId,
+            vacancyOutcome: "UPDATED_EXISTING",
+            observationAdded: true,
+            employerStatus: "UNRESOLVED_EXISTING_RECORD",
+          });
+          expect(db.prepare(`
+            SELECT canonical_vacancy_id FROM canonical_vacancy_observation_claims
+            WHERE source_observation_id = ?
+          `).get(partial.capture.observationId)).toEqual({ canonical_vacancy_id: canonicalId });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancies").get()).toEqual({ count: 1 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM employer_clusters").get()).toEqual(employerCount);
+
+          const after = await new SqliteCanonicalVacancyRepository(db).findById(canonicalId);
+          expect(after?.role.value?.title).toBe(roleBefore.title);
+          expect(after?.location.value?.rawText).toContain("Dunkerque");
+          expect(after?.organizationRelationships).toContainEqual(
+            expect.objectContaining({ role: "DISPLAYED_COMPANY", rawName: "SEGULA Technologies" }),
+          );
+          expect(after?.sourceObservationIds).toContain(partial.capture.observationId);
+          const saved = await new SqliteSourceObservationRepository(db).findById(partial.capture.observationId);
+          const savedAcquisition = saved?.metadata.acquisition as { contexts?: Array<{ text?: string }> };
+          expect(savedAcquisition.contexts?.[0]?.text).toContain("Contribuez à des projets industriels");
+
+          const replay = await runtime.captureAndProcessBrowserVacancy(partialPayload);
+          expect(replay.capture.observationId).toBe(partial.capture.observationId);
+          expect(replay.processing).toMatchObject({
+            status: "PROCESSED",
+            canonicalVacancyId: canonicalId,
+            observationAdded: false,
+          });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancy_source_observations").get())
+            .toEqual({ count: 2 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM employer_clusters").get()).toEqual(employerCount);
+        } finally { db.close(); }
+      });
+
+      it("preserves prior description history when an accepted header-only capture follows", async () => {
+        const db = createDatabase(":memory:");
+        try {
+          const runtime = createCaptureProcessingRuntime(db);
+          const rich = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("RICH", "2026-11-11T18:00:00Z"),
+          );
+          if (rich.processing.status !== "PROCESSED") throw Error("Expected an accepted rich capture.");
+          const header = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("HEADER_ONLY", "2026-11-11T19:00:00Z"),
+          );
+          expect(header.processing).toMatchObject({
+            status: "PROCESSED",
+            canonicalVacancyId: rich.processing.canonicalVacancyId,
+            observationAdded: true,
+          });
+          const canonical = await new SqliteCanonicalVacancyRepository(db)
+            .findById(rich.processing.canonicalVacancyId);
+          expect(canonical?.sourceObservationIds).toHaveLength(2);
+          const initial = await new SqliteSourceObservationRepository(db).findById(rich.capture.observationId);
+          const initialAcquisition = initial?.metadata.acquisition as { contexts?: Array<{ text?: string }> };
+          expect(initialAcquisition.contexts?.[0]?.text).toContain("Contribuez à des projets industriels");
+        } finally { db.close(); }
+      });
+
+      it("surfaces changed bounded title and location as canonical conflicts", async () => {
+        const db = createDatabase(":memory:");
+        try {
+          const runtime = createCaptureProcessingRuntime(db);
+          const rich = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("RICH", "2026-11-11T20:00:00Z"),
+          );
+          if (rich.processing.status !== "PROCESSED") throw Error("Expected an accepted rich capture.");
+          const changed = linkedinCapture("RICH", "2026-11-11T21:00:00Z");
+          changed.html = changed.html
+            .replace("Concepteur mécanique H/F", "Ingénieur logiciel senior")
+            .replace("Dunkerque, Hauts-de-France, France", "Lyon, Auvergne-Rhône-Alpes, France");
+          const result = await runtime.captureAndProcessBrowserVacancy(changed);
+          expect(result.processing).toMatchObject({
+            status: "PROCESSED",
+            canonicalVacancyId: rich.processing.canonicalVacancyId,
+            canonicalizationStatus: "CONFLICTED",
+          });
+          const canonical = await new SqliteCanonicalVacancyRepository(db)
+            .findById(rich.processing.canonicalVacancyId);
+          expect(canonical?.role.status).toBe("CONFLICTED");
+          expect(canonical?.role.alternatives?.map(({ value }) => value.title)).toEqual(
+            expect.arrayContaining(["Concepteur mécanique H/F", "Ingénieur logiciel senior"]),
+          );
+          expect(canonical?.location.status).toBe("CONFLICTED");
+        } finally { db.close(); }
+      });
+
+      it("keeps description-only and identity-only LinkedIn captures unclaimed for new identities", async () => {
+        const db = createDatabase(":memory:");
+        try {
+          const runtime = createCaptureProcessingRuntime(db);
+          const description = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("DESCRIPTION_ONLY", "2026-11-11T12:00:00Z"),
+          );
+          expect(description.processing).toMatchObject({
+            status: "VACANCY_NOT_DETECTED",
+            rejectionReason: "NO_MEANINGFUL_VACANCY_EVIDENCE",
+          });
+          const identityOnlyPayload = linkedinCapture("DESCRIPTION_ONLY", "2026-11-11T13:00:00Z");
+          identityOnlyPayload.pageTitle = "Software Engineer";
+          identityOnlyPayload.visibleText = "Software Engineer\nParis";
+          identityOnlyPayload.html = identityOnlyPayload.html.replace(
+            /<div data-testid="details-and-extras">[\s\S]*?<\/div>/u,
+            `<div data-testid="details-and-extras"><div id="JobDetails_AboutTheJob_${linkedinId}" componentkey="JobDetails_AboutTheJob_${linkedinId}"><h2>À propos de l’offre d’emploi</h2></div></div>`,
+          );
+          const identityOnly = await runtime.captureAndProcessBrowserVacancy(identityOnlyPayload);
+          expect(identityOnly.processing).toMatchObject({
+            status: "VACANCY_NOT_DETECTED",
+            rejectionReason: "NO_MEANINGFUL_VACANCY_EVIDENCE",
+          });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancies").get()).toEqual({ count: 0 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancy_observation_claims").get()).toEqual({ count: 0 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM employer_clusters").get()).toEqual({ count: 0 });
+        } finally { db.close(); }
+      });
+
+      it("does not attach to an existing identity when the LinkedIn locator is absent or mismatched", async () => {
+        const db = createDatabase(":memory:");
+        try {
+          const runtime = createCaptureProcessingRuntime(db);
+          const rich = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("RICH", "2026-11-11T22:00:00Z"),
+          );
+          if (rich.processing.status !== "PROCESSED") throw Error("Expected an accepted rich capture.");
+          const badContext = linkedinCapture("DESCRIPTION_ONLY", "2026-11-11T22:30:00Z");
+          badContext.html = badContext.html.replaceAll(linkedinId, "4483996806");
+          const badLocator = await runtime.captureAndProcessBrowserVacancy(badContext);
+          expect(badLocator.processing).toMatchObject({
+            status: "VACANCY_NOT_DETECTED",
+            rejectionReason: "NO_TRUSTED_VACANCY_CONTEXT",
+          });
+
+          const unbounded = linkedinCapture("DESCRIPTION_ONLY", "2026-11-11T23:00:00Z");
+          unbounded.html = "<main>Selected vacancy description without a bounded locator.</main>";
+          const untrusted = await runtime.captureAndProcessBrowserVacancy(unbounded);
+          expect(untrusted.processing).toMatchObject({
+            status: "VACANCY_NOT_DETECTED",
+            rejectionReason: "NO_TRUSTED_VACANCY_CONTEXT",
+          });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancies").get()).toEqual({ count: 1 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancy_observation_claims").get()).toEqual({ count: 1 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM employer_clusters").get()).toEqual({ count: 1 });
+        } finally { db.close(); }
+      });
+
+      it("does not create an unresolved employer cluster when an attached partial has no employer evidence", async () => {
+        const db = createDatabase(":memory:");
+        try {
+          const runtime = createCaptureProcessingRuntime(db);
+          const rich = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("RICH", "2026-11-11T14:00:00Z"),
+          );
+          if (rich.processing.status !== "PROCESSED") throw Error("Expected an accepted rich capture.");
+          db.prepare("DELETE FROM observation_cluster_assignments").run();
+          db.prepare("DELETE FROM employer_clusters").run();
+
+          const partial = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("DESCRIPTION_ONLY", "2026-11-11T15:00:00Z"),
+          );
+          expect(partial.processing).toMatchObject({
+            status: "PROCESSED",
+            canonicalVacancyId: rich.processing.canonicalVacancyId,
+            employerStatus: "NO_EMPLOYER_EVIDENCE",
+          });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM employer_clusters").get()).toEqual({ count: 0 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM observation_cluster_assignments").get()).toEqual({ count: 0 });
+        } finally { db.close(); }
+      });
+
+      it("keeps human state, archive, and interaction history while reprojecting a partial recapture", async () => {
+        const db = createDatabase(":memory:");
+        try {
+          const runtime = createCaptureProcessingRuntime(db);
+          const rich = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("RICH", "2026-11-11T16:00:00Z"),
+          );
+          if (rich.processing.status !== "PROCESSED") throw Error("Expected an accepted rich capture.");
+          const canonicalId = rich.processing.canonicalVacancyId;
+          const assignment = db.prepare(`
+            SELECT id FROM observation_cluster_assignments
+            WHERE source_observation_id = ? AND superseded_at IS NULL
+          `).get(rich.capture.observationId) as { id: string };
+          db.prepare(`
+            UPDATE observation_cluster_assignments
+            SET status = 'USER_CONFIRMED', algorithm = 'user-employer-identity'
+            WHERE id = ?
+          `).run(assignment.id);
+          db.prepare(`
+            INSERT INTO vacancy_organization_role_decisions (
+              id, canonical_vacancy_id, identity_key, organization_name, normalized_name,
+              role, previous_decision_id, basis_json, override_acknowledged, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NULL, '{}', 0, ?)
+          `).run("human-role", canonicalId, "name:segula technologies", "SEGULA Technologies",
+            "segula technologies", "STAFFING_AGENCY", "2026-11-11T16:10:00Z");
+          db.prepare(`
+            INSERT INTO user_vacancy_interaction_events (
+              id, canonical_vacancy_id, event_type, occurred_at, recorded_at
+            ) VALUES (?, ?, 'APPLIED', ?, ?)
+          `).run("interaction", canonicalId, "2026-11-11T16:15:00Z", "2026-11-11T16:15:00Z");
+          db.prepare(`
+            INSERT INTO vacancy_cleanup_state (canonical_vacancy_id, archived_at)
+            VALUES (?, ?)
+          `).run(canonicalId, "2026-11-11T16:20:00Z");
+          const humanAssignmentBefore = db.prepare(`
+            SELECT employer_cluster_id, status, algorithm FROM observation_cluster_assignments WHERE id = ?
+          `).get(assignment.id);
+
+          const partial = await runtime.captureAndProcessBrowserVacancy(
+            linkedinCapture("DESCRIPTION_ONLY", "2026-11-11T17:00:00Z"),
+          );
+          expect(partial.processing).toMatchObject({ status: "PROCESSED", canonicalVacancyId: canonicalId });
+          expect(db.prepare(`
+            SELECT employer_cluster_id, status, algorithm FROM observation_cluster_assignments WHERE id = ?
+          `).get(assignment.id)).toEqual(humanAssignmentBefore);
+          expect(db.prepare("SELECT archived_at FROM vacancy_cleanup_state WHERE canonical_vacancy_id = ?").get(canonicalId))
+            .toEqual({ archived_at: "2026-11-11T16:20:00Z" });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM user_vacancy_interaction_events WHERE canonical_vacancy_id = ?").get(canonicalId))
+            .toEqual({ count: 1 });
+          expect(db.prepare("SELECT COUNT(*) AS count FROM vacancy_organization_role_decisions WHERE canonical_vacancy_id = ?").get(canonicalId))
+            .toEqual({ count: 1 });
+          const canonical = await new SqliteCanonicalVacancyRepository(db).findById(canonicalId);
+          expect(canonical?.organizationRelationships).toContainEqual(
+            expect.objectContaining({ rawName: "SEGULA Technologies", role: "STAFFING_AGENCY" }),
+          );
+          expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancies").get()).toEqual({ count: 1 });
+        } finally { db.close(); }
+      });
 
   it("does not accept unrelated JobPosting metadata or conflicting selected identity", async () => {
     const db = createDatabase(":memory:");

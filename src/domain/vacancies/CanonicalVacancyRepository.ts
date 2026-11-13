@@ -25,6 +25,11 @@ export interface CanonicalVacancyRepository {
     providerNamespace: string,
     externalId: string,
   ): Promise<CanonicalVacancy | null>;
+  attachObservationToExistingExactSourceIdentity(
+    sourceObservationId: SourceObservationId,
+    providerNamespace: string,
+    externalId: string,
+  ): Promise<CanonicalVacancyIdentityClaim | null>;
   findClaimedSourceObservationIds(
     canonicalVacancyId: CanonicalVacancyId,
   ): Promise<readonly SourceObservationId[]>;
