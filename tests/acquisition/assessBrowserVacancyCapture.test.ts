@@ -63,4 +63,40 @@ describe("browser vacancy acceptance decision", () => {
       retainedExternalId: "jn-102026-7118382",
     });
   });
+
+  it("does not offer partial recapture when the selected-context ID conflicts with the source ID", async () => {
+    const url = "https://www.linkedin.com/jobs/view/engineer-4478539511/";
+    const html = `<div data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.JobDetails">
+      <div data-testid="lazy-column">
+        <div id="JobDetails_ManageJobBanner_4478539511"></div>
+        <div data-testid="job-header"><a href="/jobs/view/engineer-4478539511/"></a></div>
+        <div data-testid="details-and-extras">
+          <div id="JobDetails_AboutTheJob_4478539511" componentkey="JobDetails_AboutTheJob_4478539511">
+            <h2>À propos de l’offre d’emploi</h2>
+            <p>Cette description détaillée présente les responsabilités du poste et l’équipe.</p>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    const acquisition = new BrowserCaptureAcquisitionAdapter().toAcquisitionPackage({
+      pageUrl: url,
+      pageTitle: "LinkedIn",
+      visibleText: "Page text",
+      html,
+      capturedAt: "2026-11-10T12:00:00Z",
+    }, "linkedin-acquisition");
+    const observation = new DeterministicAcquisitionCaptureMapper()
+      .toSourceObservation(acquisition, "linkedin-observation");
+    const conflicting = {
+      ...observation,
+      source: { ...observation.source, externalId: "4483996806" },
+    };
+    expect(await assessBrowserVacancyCapture(conflicting, createVacancyEvidenceExtractor()))
+      .toMatchObject({
+        captureAcceptedAsVacancy: false,
+        rejectionReason: "NO_TRUSTED_VACANCY_CONTEXT",
+      });
+    expect(await assessBrowserVacancyCapture(conflicting, createVacancyEvidenceExtractor()))
+      .not.toHaveProperty("partialRecaptureIdentity");
+  });
 });

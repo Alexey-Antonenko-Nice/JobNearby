@@ -79,6 +79,9 @@ export class CanonicalVacancyConcurrencyError extends Error {
 
 export type EmployerProcessingSummary =
   | {
+      readonly outcome: "NO_EMPLOYER_EVIDENCE";
+    }
+  | {
       readonly outcome: "MATCHED_EXISTING_CLUSTER";
       readonly employerClusterId: EmployerClusterId;
       readonly employerClusterStatus: EmployerClusterStatus;
@@ -129,15 +132,26 @@ export interface ProcessVacancyObservationDependencies {
 export async function processVacancyObservation(
   sourceObservationId: SourceObservationId,
   dependencies: ProcessVacancyObservationDependencies,
+  options: {
+    readonly existingCanonicalVacancyId?: CanonicalVacancyId;
+    readonly partialRecaptureContext?: AcquisitionContext;
+  } = {},
 ): Promise<ProcessVacancyObservationResult> {
+  if ((options.existingCanonicalVacancyId === undefined) !==
+    (options.partialRecaptureContext === undefined)) {
+    throw new Error("Partial recapture requires both an existing canonical identity and its validated context.");
+  }
   const requestedObservation =
     await dependencies.sourceObservationRepository.findById(sourceObservationId);
   if (requestedObservation === null) {
     throw new SourceObservationNotFoundError(sourceObservationId);
   }
-  const requestedEvidenceInput = evidenceExtractionInputFor(requestedObservation);
+  const projectionObservation = options.partialRecaptureContext === undefined
+    ? requestedObservation
+    : boundedPartialRecaptureObservation(requestedObservation, options.partialRecaptureContext);
+  const requestedEvidenceInput = evidenceExtractionInputFor(projectionObservation);
 
-  const proposedCanonicalVacancyId =
+  const proposedCanonicalVacancyId = options.existingCanonicalVacancyId ??
     await resolveLegacyApecContinuity(requestedObservation, dependencies) ??
     await resolveLegacyDirectEmploiContinuity(requestedObservation, dependencies) ??
     await resolveLegacyAlstomContinuity(requestedObservation, dependencies) ??
@@ -146,10 +160,15 @@ export async function processVacancyObservation(
     await resolveLegacyOranoContinuity(requestedObservation, dependencies) ??
     await resolveLegacyMichaelPageContinuity(requestedObservation, dependencies) ??
     (dependencies.generateCanonicalVacancyId ?? randomUUID)();
-  const claim = await dependencies.canonicalVacancyRepository.claimIdentity(
-    sourceObservationId,
-    proposedCanonicalVacancyId,
-  );
+  const claim = options.existingCanonicalVacancyId === undefined
+    ? await dependencies.canonicalVacancyRepository.claimIdentity(
+      sourceObservationId,
+      proposedCanonicalVacancyId,
+    )
+    : {
+      canonicalVacancyId: options.existingCanonicalVacancyId,
+      outcome: "EXISTING" as const,
+    };
   const maximumAttempts = dependencies.maximumProjectionAttempts ?? 3;
   if (!Number.isInteger(maximumAttempts) || maximumAttempts < 1) {
     throw new Error("maximumProjectionAttempts must be a positive integer.");
@@ -165,7 +184,11 @@ export async function processVacancyObservation(
       const extractedEvidence = await Promise.all(
         basis.observations.map((observation) =>
           dependencies.evidenceExtractor.extract(
-            evidenceExtractionInputFor(observation),
+            evidenceExtractionInputFor(
+              observation.id === requestedObservation.id
+                ? projectionObservation
+                : observation,
+            ),
           )),
       );
       const establishedEmployerCluster = await resolveCanonicalEmployerCluster(
@@ -178,12 +201,27 @@ export async function processVacancyObservation(
         sourceObservationId,
         dependencies.employerRecognition,
       );
-      const employerResult: ProcessObservationResult = existingMembership !== null
+      const requestedExtractedEvidence = extractedEvidence.find(
+        ({ sourceObservationId: id }) => id === requestedObservation.id,
+      );
+      const hasEmployerEvidence = requestedExtractedEvidence?.organizations.some(
+        ({ role, provenance }) =>
+          ["EMPLOYER", "DISPLAYED_COMPANY", "STAFFING_AGENCY"].includes(role) &&
+          provenance.organizationRoleDecisionId === undefined &&
+          provenance.organizationRoleMemoryId === undefined,
+      ) ?? false;
+      const employerResult: ProcessObservationResult | Extract<EmployerProcessingSummary, {
+        readonly outcome: "NO_EMPLOYER_EVIDENCE";
+      }> = existingMembership !== null
         ? {
           outcome: "MATCHED_EXISTING_CLUSTER",
           employerCluster: existingMembership.cluster,
           assignment: existingMembership.assignment,
         }
+        : options.existingCanonicalVacancyId !== undefined &&
+            !hasEmployerEvidence &&
+            establishedEmployerCluster === null
+        ? { outcome: "NO_EMPLOYER_EVIDENCE" }
         : establishedEmployerCluster === null ||
           dependencies.processEmployerObservation !== undefined
         ? await (
@@ -209,7 +247,10 @@ export async function processVacancyObservation(
       };
       const canonicalVacancy = dependencies.canonicalVacancyAdapter.canonicalize({
         canonicalVacancyId: claim.canonicalVacancyId,
-        observations: basis.observations,
+        observations: basis.observations.map(observation =>
+          observation.id === requestedObservation.id
+            ? projectionObservation
+            : observation),
         extractedEvidence,
         ...(employerCluster === null ? {} : { employerCluster }),
         derivation,
@@ -254,6 +295,34 @@ export function evidenceExtractionInputFor(
     );
   }
   return scopeProviderVacancyEvidence(fromSelectedVacancyContext(observation, selectedContexts[0]!));
+}
+
+function boundedPartialRecaptureObservation(
+  observation: SourceObservation,
+  context: AcquisitionContext,
+): SourceObservation {
+  if (
+    context.kind !== "SELECTED_VACANCY" ||
+    context.providerKey !== "LINKEDIN" ||
+    context.associationMethod !== "PROVIDER_LOCATOR" ||
+    context.providerExternalId !== observation.source.externalId
+  ) {
+    throw new CanonicalVacancyIntegrityError(
+      `SourceObservation "${observation.id}" has an invalid partial-recapture context.`,
+    );
+  }
+  return {
+    id: observation.id,
+    source: observation.source,
+    observedAt: observation.observedAt,
+    metadata: {
+      acquisition: {
+        html: context.html ?? "",
+        contexts: [context],
+        metadata: { vacancyEvidenceScope: "SELECTED_VACANCY_REQUIRED" },
+      },
+    },
+  };
 }
 
 function acquisitionContexts(observation: SourceObservation): readonly unknown[] {
@@ -468,8 +537,11 @@ function compareObservations(
 }
 
 function summarizeEmployerResult(
-  result: ProcessObservationResult,
+  result: ProcessObservationResult | Extract<EmployerProcessingSummary, {
+    readonly outcome: "NO_EMPLOYER_EVIDENCE";
+  }>,
 ): EmployerProcessingSummary {
+  if (result.outcome === "NO_EMPLOYER_EVIDENCE") return result;
   if (result.outcome === "REVIEW_REQUIRED") {
     return {
       outcome: result.outcome,

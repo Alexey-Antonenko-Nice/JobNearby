@@ -319,6 +319,89 @@ export class SqliteCanonicalVacancyRepository
     return this.findById(claim.canonical_vacancy_id);
   }
 
+  async attachObservationToExistingExactSourceIdentity(
+    sourceObservationId: SourceObservationId,
+    providerNamespace: string,
+    externalId: string,
+  ) {
+    const attach = this.db.transaction(() => {
+      const observation = this.db.prepare(`
+        SELECT source_name, external_id, retired_at
+        FROM source_observations
+        WHERE id = ?
+      `).get(sourceObservationId) as
+        | { source_name: string; external_id: string | null; retired_at: string | null }
+        | undefined;
+      if (observation === undefined) {
+        throw new Error(
+          `Canonical vacancy identity attachment requires existing SourceObservation "${sourceObservationId}".`,
+        );
+      }
+
+      const provider = normalizeVacancyProviderNamespace(providerNamespace);
+      if (
+        observation.retired_at !== null ||
+        normalizeVacancyProviderNamespace(observation.source_name) !== provider ||
+        observation.external_id !== externalId
+      ) {
+        return null;
+      }
+
+      const identityClaim = this.db.prepare(`
+        SELECT canonical_vacancy_id
+        FROM canonical_vacancy_exact_identity_claims
+        WHERE provider_namespace = ? AND external_id = ?
+      `).get(provider, externalId) as { canonical_vacancy_id: string } | undefined;
+      if (identityClaim === undefined) return null;
+
+      const canonicalExists = this.db.prepare(`
+        SELECT 1 FROM canonical_vacancies WHERE id = ?
+      `).get(identityClaim.canonical_vacancy_id) !== undefined;
+      if (!canonicalExists) {
+        throw new Error(
+          `Canonical vacancy identity integrity error: exact identity claim references missing canonical vacancy "${identityClaim.canonical_vacancy_id}".`,
+        );
+      }
+
+      const observationClaim = this.db.prepare(`
+        SELECT canonical_vacancy_id
+        FROM canonical_vacancy_observation_claims
+        WHERE source_observation_id = ?
+      `).get(sourceObservationId) as { canonical_vacancy_id: string } | undefined;
+      if (
+        observationClaim !== undefined &&
+        observationClaim.canonical_vacancy_id !== identityClaim.canonical_vacancy_id
+      ) {
+        throw new Error(
+          `Canonical vacancy identity integrity error: observation and exact identity claims disagree for SourceObservation "${sourceObservationId}".`,
+        );
+      }
+
+      this.db.prepare(`
+        INSERT INTO canonical_vacancy_observation_claims (
+          source_observation_id, canonical_vacancy_id
+        ) VALUES (?, ?)
+        ON CONFLICT(source_observation_id) DO NOTHING
+      `).run(sourceObservationId, identityClaim.canonical_vacancy_id);
+
+      const persistedClaim = this.db.prepare(`
+        SELECT canonical_vacancy_id
+        FROM canonical_vacancy_observation_claims
+        WHERE source_observation_id = ?
+      `).get(sourceObservationId) as { canonical_vacancy_id: string };
+      if (persistedClaim.canonical_vacancy_id !== identityClaim.canonical_vacancy_id) {
+        throw new Error(
+          `Canonical vacancy identity integrity error: concurrent claims disagree for SourceObservation "${sourceObservationId}".`,
+        );
+      }
+      return {
+        canonicalVacancyId: identityClaim.canonical_vacancy_id,
+        outcome: "EXISTING" as const,
+      };
+    });
+    return attach.immediate();
+  }
+
   async findClaimedSourceObservationIds(
     canonicalVacancyId: CanonicalVacancyId,
   ): Promise<readonly SourceObservationId[]> {

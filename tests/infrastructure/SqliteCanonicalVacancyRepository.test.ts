@@ -138,6 +138,59 @@ describe("SqliteCanonicalVacancyRepository integrity", () => {
     db.close();
   });
 
+  it("attaches atomically to an existing identity without inserting an identity claim", async () => {
+    const db = createDatabase(":memory:");
+    const observations = new SqliteSourceObservationRepository(db);
+    for (const id of ["partial-existing", "partial-new"]) {
+      await observations.save({
+        id,
+        source: { sourceType: "JOB_BOARD", sourceName: "linkedin.com", externalId: "4478539511" },
+        observedAt: new Date("2026-08-29T12:00:00.000Z"),
+        metadata: {},
+      });
+    }
+    const repository = new SqliteCanonicalVacancyRepository(db);
+    const vacancy = new DeterministicCanonicalVacancyCanonicalizer().canonicalize({
+      id: "canonical-partial",
+      sourceObservationIds: ["partial-existing"],
+      evidenceReferences: [],
+      derivation: heuftVacancy().derivation,
+    });
+    await repository.save(vacancy);
+
+    expect(await repository.attachObservationToExistingExactSourceIdentity(
+      "partial-new",
+      "linkedin.com",
+      "4478539511",
+    )).toEqual({ canonicalVacancyId: "canonical-partial", outcome: "EXISTING" });
+    expect(await repository.attachObservationToExistingExactSourceIdentity(
+      "partial-new",
+      "linkedin.com",
+      "4478539511",
+    )).toEqual({ canonicalVacancyId: "canonical-partial", outcome: "EXISTING" });
+    expect(db.prepare(`
+      SELECT canonical_vacancy_id FROM canonical_vacancy_observation_claims
+      WHERE source_observation_id = 'partial-new'
+    `).get()).toEqual({ canonical_vacancy_id: "canonical-partial" });
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM canonical_vacancy_exact_identity_claims
+    `).get()).toEqual({ count: 1 });
+    expect(await repository.attachObservationToExistingExactSourceIdentity(
+      "partial-new",
+      "linkedin.com",
+      "unknown-id",
+    )).toBeNull();
+    expect(await repository.attachObservationToExistingExactSourceIdentity(
+      "partial-new",
+      "linkedin.com",
+      "4478539512",
+    )).toBeNull();
+    expect(db.prepare(`
+      SELECT COUNT(*) AS count FROM canonical_vacancy_exact_identity_claims
+    `).get()).toEqual({ count: 1 });
+    db.close();
+  });
+
   it("rolls back the complete projection replacement when a child insert fails", async () => {
     const db = createDatabase(":memory:");
     const repository = new SqliteCanonicalVacancyRepository(db);

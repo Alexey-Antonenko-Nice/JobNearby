@@ -87,6 +87,24 @@ export function createCaptureProcessingRuntime(
         ingestion,
         processVacancyObservation: (sourceObservationId) =>
           processVacancyObservation(sourceObservationId, processingDependencies),
+        processPartialRecapture: async (sourceObservationId, providerNamespace, externalId, selectedContext) => {
+          const claim = await canonicalVacancyRepository.attachObservationToExistingExactSourceIdentity(
+            sourceObservationId,
+            providerNamespace,
+            externalId,
+          );
+          if (claim === null) return null;
+          const result = await processVacancyObservation(sourceObservationId, processingDependencies, {
+            existingCanonicalVacancyId: claim.canonicalVacancyId,
+            partialRecaptureContext: selectedContext,
+          });
+          if (result.canonicalVacancyId !== claim.canonicalVacancyId) {
+            throw new Error(
+              `Partial recapture identity integrity error: observation "${sourceObservationId}" attached to "${claim.canonicalVacancyId}" but processed as "${result.canonicalVacancyId}".`,
+            );
+          }
+          return result;
+        },
         ...(options.onProcessingFailure === undefined
           ? {}
           : { onProcessingFailure: options.onProcessingFailure }),

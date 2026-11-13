@@ -18,6 +18,8 @@ export function captureFeedback(body) {
       ? identifiedEmployerMessage(body.processing.employerDisplayName)
       : body.processing.employerStatus === "REVIEW_REQUIRED"
         ? "Employer match needs review."
+        : body.processing.employerStatus === "NO_EMPLOYER_EVIDENCE"
+          ? "Employer evidence was not present in this capture."
         : "Employer not identified yet.";
   messages.push(employerMessage);
   if (body.processing.canonicalizationStatus === "CONFLICTED") {
