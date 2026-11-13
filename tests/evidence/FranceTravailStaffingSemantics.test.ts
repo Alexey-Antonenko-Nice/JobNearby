@@ -16,7 +16,7 @@ describe("France Travail staffing semantics", () => {
     const context = fromSelectedVacancyContext(observation, {
       kind: "SELECTED_VACANCY", associationMethod: "PROVIDER_LOCATOR", providerKey: "FRANCE_TRAVAIL", providerExternalId: "213LMMK",
       text: "Technicien de maintenance industriel (H/F)\nSATIS JOBS CENTER INDUSTRIE recrute un Technicien de maintenance industriel (H/F) en CDI.\nSATIS JOBS CENTER INDUSTRIE COLMAR, expert(e) dans ce domaine vous propose des contrats de l'intérim au CDI.\nEmployeur\nSATIS TT COLMAR\nSecteur d'activité : Activités des agences de travail temporaire",
-      html: "<section>context</section>", associationEvidence: ["fixture"],
+      html: "<section>context</section>", associationEvidence: ["URL_EXTERNAL_ID", "MATCHING_ACTIVE_RESULT", "OPEN_OFFER_DETAIL", "DETAIL_EXTERNAL_ID_MATCH"],
     });
     const evidence = await createVacancyEvidenceExtractor().extract(context);
     expect(evidence.organizations).toEqual(expect.arrayContaining([
