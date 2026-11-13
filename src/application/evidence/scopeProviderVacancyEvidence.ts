@@ -34,32 +34,49 @@ import { scopeAdeccoVacancyEvidence } from "./scopeAdeccoVacancyEvidence.js";
 
 const boundedHelloWorkInput = Symbol("boundedHelloWorkInput");
 
+type ProviderScope = (input: VacancyEvidenceExtractionInput) => VacancyEvidenceExtractionInput;
+
+/**
+ * The single source of truth for explicit per-source scope routes. Sources with selected-vacancy
+ * semantics must be listed here (or be Renault/HelloWork below) rather than reach the legacy fallback.
+ */
+const scopeRoutesBySourceName: ReadonlyMap<string, ProviderScope> = new Map<string, ProviderScope>([
+  ["expectra.mc", scopeExpectraVacancyEvidence],
+  ["job-boards.eu.greenhouse.io", scopeGreenhouseVacancyEvidence],
+  ["jobs.groupe-psa.com", scopeStellantisVacancyEvidence],
+  ["jobs.orano.group", scopeOranoVacancyEvidence],
+  ["michaelpage.fr", scopeMichaelPageVacancyEvidence],
+  [KELLY_WORKDAY_HOST, scopeKellyVacancyEvidence],
+  ["m.hays.fr", scopeHaysVacancyEvidence],
+  ["lhh.com", scopeLhhVacancyEvidence],
+  ["jobsearch.alstom.com", scopeAlstomVacancyEvidence],
+  ["apec.fr", scopeApecVacancyEvidence],
+  ["directemploi.com", scopeDirectEmploiVacancyEvidence],
+  ["gigroup.com", scopeGiGroupVacancyEvidence],
+  ["mon-espace.proman-emploi.fr", scopePromanVacancyEvidence],
+  ["startpeople.fr", scopeStartPeopleVacancyEvidence],
+  ["actualgroup.com", scopeActualVacancyEvidence],
+  ["crit-job.com", scopeCritVacancyEvidence],
+  ["synergie.fr", scopeSynergieVacancyEvidence],
+  ["randstad.fr", scopeRandstadVacancyEvidence],
+  ["manpower.com", scopeManpowerVacancyEvidence],
+  ["adecco.com", scopeAdeccoVacancyEvidence],
+  ["talent.com", scopeTalentVacancyEvidence],
+  ["linkedin.com", scopeLinkedInVacancyEvidence],
+  [FRANCE_TRAVAIL_SOURCE_NAME, scopeFranceTravailVacancyEvidence],
+  ["indeed.com", scopeIndeedVacancyEvidence],
+]);
+
+/** True when the source has a deliberate scope decision rather than relying on the legacy fallback. */
+export function hasExplicitVacancyEvidenceScopeRoute(sourceName: string, sourceUrl = ""): boolean {
+  return scopeRoutesBySourceName.has(sourceName) || sourceName === "hellowork.com" || isRenaultWorkdaySource(sourceName, sourceUrl);
+}
+
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
 export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInput): VacancyEvidenceExtractionInput {
-  if (input.source.sourceName === "expectra.mc") return scopeExpectraVacancyEvidence(input);
-  if (input.source.sourceName === "job-boards.eu.greenhouse.io") return scopeGreenhouseVacancyEvidence(input);
-  if (input.source.sourceName === "jobs.groupe-psa.com") return scopeStellantisVacancyEvidence(input);
-  if (input.source.sourceName === "jobs.orano.group") return scopeOranoVacancyEvidence(input);
-  if (input.source.sourceName === "michaelpage.fr") return scopeMichaelPageVacancyEvidence(input);
   if (isRenaultWorkdaySource(input.source.sourceName, input.source.sourceUrl ?? "")) return scopeRenaultVacancyEvidence(input);
-  if (input.source.sourceName === KELLY_WORKDAY_HOST) return scopeKellyVacancyEvidence(input);
-  if (input.source.sourceName === "m.hays.fr") return scopeHaysVacancyEvidence(input);
-  if (input.source.sourceName === "lhh.com") return scopeLhhVacancyEvidence(input);
-  if (input.source.sourceName === "jobsearch.alstom.com") return scopeAlstomVacancyEvidence(input);
-  if (input.source.sourceName === "apec.fr") return scopeApecVacancyEvidence(input);
-  if (input.source.sourceName === "directemploi.com") return scopeDirectEmploiVacancyEvidence(input);
-  if (input.source.sourceName === "gigroup.com") return scopeGiGroupVacancyEvidence(input);
-  if (input.source.sourceName === "mon-espace.proman-emploi.fr") return scopePromanVacancyEvidence(input);
-  if (input.source.sourceName === "startpeople.fr") return scopeStartPeopleVacancyEvidence(input);
-  if (input.source.sourceName === "actualgroup.com") return scopeActualVacancyEvidence(input);
-  if (input.source.sourceName === "crit-job.com") return scopeCritVacancyEvidence(input);
-  if (input.source.sourceName === "synergie.fr") return scopeSynergieVacancyEvidence(input);
-  if (input.source.sourceName === "randstad.fr") return scopeRandstadVacancyEvidence(input);
-  if (input.source.sourceName === "manpower.com") return scopeManpowerVacancyEvidence(input);
-  if (input.source.sourceName === "adecco.com") return scopeAdeccoVacancyEvidence(input);
-  if (input.source.sourceName === "talent.com") return scopeTalentVacancyEvidence(input);
-  if (input.source.sourceName === "linkedin.com") return scopeLinkedInVacancyEvidence(input);
-  if (input.source.sourceName === FRANCE_TRAVAIL_SOURCE_NAME) return scopeFranceTravailVacancyEvidence(input);
+  const route = scopeRoutesBySourceName.get(input.source.sourceName);
+  if (route !== undefined) return route(input);
   if (input.source.sourceName !== "hellowork.com") return scopeIndeedVacancyEvidence(input);
   if (boundedHelloWorkInput in input) return input;
   const acquisition = record(input.metadata.acquisition);
