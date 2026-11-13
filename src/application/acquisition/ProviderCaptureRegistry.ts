@@ -19,7 +19,7 @@ import { SynergieSelectedVacancyContextLocator, synergieFacts, synergiePublished
 import { RandstadSelectedVacancyContextLocator, randstadFacts, randstadPublishedAt } from "./RandstadVacancy.js";
 import { ManpowerSelectedVacancyContextLocator, manpowerFacts } from "./ManpowerVacancy.js";
 import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
-import { extractBurkertApplyId } from "./BurkertVacancyIdentity.js";
+import { isBurkertSource, locateBurkertVacancyContext, resolveBurkertExternalId } from "./BurkertVacancyIdentity.js";
 import { ConservativeProviderVacancyIdExtractor } from "./ConservativeProviderVacancyIdExtractor.js";
 import { FranceTravailSelectedVacancyContextLocator } from "./FranceTravailSelectedVacancyContextLocator.js";
 import { HostnameAcquisitionProviderRecognizer } from "./HostnameAcquisitionProviderRecognizer.js";
@@ -96,9 +96,13 @@ export class ProviderCaptureRegistry {
   capture(input: ProviderCaptureInput): ProviderCaptureResult {
     const providerKey = this.recognizer.recognize({ sourceName: input.sourceName, sourceUrl: input.sourceUrl });
     const providerExternalId = this.idExtractor.extract({ sourceName: input.sourceName, sourceUrl: input.sourceUrl });
-    const externalId = input.sourceName === "burkert.com" && input.html !== undefined
-      ? extractBurkertApplyId(input.html) ?? providerExternalId
+    const burkert = isBurkertSource(input.sourceName, input.sourceUrl);
+    const externalId = burkert && input.html !== undefined
+      ? resolveBurkertExternalId(input.html, providerExternalId)
       : providerExternalId;
+    const burkertContext = burkert && input.html !== undefined
+      ? locateBurkertVacancyContext({ sourceName: input.sourceName, sourceUrl: input.sourceUrl, html: input.html })
+      : undefined;
     const context = providerKey === undefined || input.html === undefined
       ? undefined
       : this.contextLocators[providerKey]?.locate({
@@ -177,7 +181,9 @@ export class ProviderCaptureRegistry {
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
       ...(providerKey === "EXPECTRA_MONACO" || providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" || providerKey === "HAYS" || providerKey === "LHH" || providerKey === "FRANCE_TRAVAIL" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
+      ...(burkert ? { requiresSelectedVacancyContext: true } : {}),
       ...(context === undefined ? {} : { context }),
+      ...(burkertContext === undefined ? {} : { context: burkertContext }),
       ...(structuredFields === undefined ? {} : { structuredFields }),
     };
   }

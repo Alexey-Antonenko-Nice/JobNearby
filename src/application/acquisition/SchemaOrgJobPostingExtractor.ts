@@ -23,7 +23,7 @@ export class SchemaOrgJobPostingExtractor {
   }
 }
 
-function findJobPostingArticle(html: string): string | undefined {
+export function findJobPostingArticle(html: string): string | undefined {
   const match = /<article\b[^>]*itemtype=["']https:\/\/schema\.org\/JobPosting["'][^>]*>/iu.exec(html);
   return match === null ? undefined : balancedElement(html, "article", match.index);
 }

@@ -26,7 +26,9 @@ import { HelloWorkSelectedVacancyContextLocator, helloWorkHeaderFields, helloWor
 import { SchemaOrgJobPostingProjector } from "../acquisition/SchemaOrgJobPostingProjector.js";
 import { scopeIndeedVacancyEvidence } from "./scopeIndeedVacancyEvidence.js";
 import { scopeLinkedInVacancyEvidence } from "./scopeLinkedInVacancyEvidence.js";
-import { FRANCE_TRAVAIL_SOURCE_NAME, scopeFranceTravailVacancyEvidence } from "./scopeFranceTravailVacancyEvidence.js";
+import { scopeFranceTravailVacancyEvidence, FRANCE_TRAVAIL_SOURCE_NAME } from "./scopeFranceTravailVacancyEvidence.js";
+import { BURKERT_SOURCE_NAME } from "../acquisition/BurkertVacancyIdentity.js";
+import { scopeBurkertVacancyEvidence } from "./scopeBurkertVacancyEvidence.js";
 
 import { scopeTalentVacancyEvidence } from "./scopeTalentVacancyEvidence.js";
 
@@ -64,6 +66,7 @@ const scopeRoutesBySourceName: ReadonlyMap<string, ProviderScope> = new Map<stri
   ["talent.com", scopeTalentVacancyEvidence],
   ["linkedin.com", scopeLinkedInVacancyEvidence],
   [FRANCE_TRAVAIL_SOURCE_NAME, scopeFranceTravailVacancyEvidence],
+  [BURKERT_SOURCE_NAME, scopeBurkertVacancyEvidence],
   ["indeed.com", scopeIndeedVacancyEvidence],
 ]);
 
