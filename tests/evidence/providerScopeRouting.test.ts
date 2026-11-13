@@ -86,6 +86,14 @@ describe("provider vacancy-evidence scope routing", () => {
     expect(unroutedSelectedContextProviders(production)).not.toContain("PERSONIO");
   });
 
+  it("explicitly routes keyless providers that require selected context", () => {
+    const keyless: Sample[] = [{ sourceName: "burkert.com", sourceUrl: "https://www.burkert.com/en/company-career/career/job-openings/some-job" }];
+    for (const sample of keyless) {
+      expect(registry.capture(sample).requiresSelectedVacancyContext, sample.sourceName).toBe(true);
+      expect(production(sample), sample.sourceName).toBe(true);
+    }
+  });
+
   it("does not treat unknown sources as explicitly routed", () => {
     expect(hasExplicitVacancyEvidenceScopeRoute("example.org", "https://example.org/job/1")).toBe(false);
   });

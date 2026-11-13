@@ -128,13 +128,12 @@ export async function assessBrowserVacancyCapture(
       return accept();
     }
   }
-  // Bürkert publishes a single bounded JobPosting article on its direct route.
-  if (observation.source.sourceName === "burkert.com" && new ProviderCaptureRegistry().capture({
-    sourceName: observation.source.sourceName, sourceUrl,
-  }).externalId !== undefined && provider.externalId !== undefined
-    && provider.externalId === observation.source.externalId
-    && [...html.matchAll(/<article\b[^>]*\bitemtype=["']https:\/\/schema\.org\/JobPosting["'][^>]*>/giu)].length === 1) {
-    const postings = new SchemaOrgJobPostingExtractor().extractHtml(html);
+  // Bürkert publishes a single bounded JobPosting article on its direct route; the registry
+  // returns it as the locator context only when it is unique and its identity is unambiguous.
+  if (observation.source.sourceName === "burkert.com" && provider.context?.html !== undefined
+    && provider.externalId !== undefined && provider.externalId === observation.source.externalId
+    && provider.context.providerExternalId === provider.externalId) {
+    const postings = new SchemaOrgJobPostingExtractor().extractHtml(provider.context.html);
     if (postings.length === 1 && typeof postings[0]!.title === "string" && meaningfulTitle(postings[0]!.title)) {
       return accept();
     }
