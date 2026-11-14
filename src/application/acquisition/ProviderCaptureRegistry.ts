@@ -1,3 +1,4 @@
+import { isGenericWorkdaySource, locateGenericWorkdayContext } from "./GenericWorkdayVacancy.js";
 import { StellantisSelectedVacancyContextLocator, stellantisFacts } from "./StellantisVacancy.js";
 import { ExpectraSelectedVacancyContextLocator, expectraFacts } from "./ExpectraVacancy.js";
 import { GreenhouseSelectedVacancyContextLocator, greenhouseFacts } from "./GreenhouseVacancy.js";
@@ -28,7 +29,7 @@ import { JoobleSelectedVacancyContextLocator } from "./JoobleSelectedVacancyCont
 import { CadremploiSelectedVacancyContextLocator } from "./CadremploiSelectedVacancyContextLocator.js";
 import { LhhSelectedVacancyContextLocator } from "./LhhSelectedVacancyContextLocator.js";
 import { LinkedInSelectedVacancyContextLocator } from "./LinkedInSelectedVacancyContextLocator.js";
-import { extractWorkdayStructuredFields, isWorkdaySource } from "./WorkdayVacancy.js";
+import { extractWorkdayStructuredFields } from "./WorkdayVacancy.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 import { extractPersonioHeaderFacts, PersonioSelectedVacancyContextLocator } from "./PersonioVacancy.js";
 
@@ -104,6 +105,8 @@ export class ProviderCaptureRegistry {
     const burkertContext = burkert && input.html !== undefined
       ? locateBurkertVacancyContext({ sourceName: input.sourceName, sourceUrl: input.sourceUrl, html: input.html })
       : undefined;
+    const genericWorkday = isGenericWorkdaySource(input.sourceName, input.sourceUrl);
+    const workdayContext = genericWorkday && input.html !== undefined ? locateGenericWorkdayContext({ ...input, html: input.html, ...(externalId === undefined ? {} : { externalId }) }) : undefined;
     const context = providerKey === undefined || input.html === undefined
       ? undefined
       : this.contextLocators[providerKey]?.locate({
@@ -173,8 +176,8 @@ export class ProviderCaptureRegistry {
           ...(personioHeader.title === undefined ? {} : { title: personioHeader.title }),
           ...(personioHeader.contractTerms.length === 0 ? {} : { contractText: personioHeader.contractTerms.join(" · ") }),
         }
-      : providerKey !== "RENAULT_WORKDAY" && providerKey !== "KELLY_WORKDAY" && input.html !== undefined && isWorkdaySource(input.sourceName, input.sourceUrl)
-      ? extractWorkdayStructuredFields(input.html, input.sourceUrl)
+      : workdayContext?.html !== undefined
+      ? extractWorkdayStructuredFields(workdayContext.html, input.sourceUrl)
       : undefined;
     const selectedExternalId = providerKey === "STELLANTIS" ? context?.providerExternalId : apecConflict || directEmploiConflict ? undefined : context?.providerExternalId ?? externalId;
     return {
@@ -183,6 +186,8 @@ export class ProviderCaptureRegistry {
       ...(providerKey === "PERSONIO" || providerKey === "EXPECTRA_MONACO" || providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" || providerKey === "HAYS" || providerKey === "LHH" || providerKey === "FRANCE_TRAVAIL" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(burkert ? { requiresSelectedVacancyContext: true } : {}),
+      ...(genericWorkday ? { requiresSelectedVacancyContext: true } : {}),
+      ...(workdayContext === undefined ? {} : { context: workdayContext }),
       ...(context === undefined ? {} : { context }),
       ...(burkertContext === undefined ? {} : { context: burkertContext }),
       ...(structuredFields === undefined ? {} : { structuredFields }),

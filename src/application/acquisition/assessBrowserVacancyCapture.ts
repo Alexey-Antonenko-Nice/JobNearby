@@ -7,8 +7,8 @@ import { isPersonioHostname } from "./PersonioVacancy.js";
 import { scopePersonioVacancyEvidence } from "../evidence/scopePersonioVacancyEvidence.js";
 import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
-import { alstomElements } from "./AlstomVacancy.js";
-import { extractWorkdayStructuredFields, extractWorkdayVacancyId, isWorkdaySource } from "./WorkdayVacancy.js";
+import { isGenericWorkdaySource } from "./GenericWorkdayVacancy.js";
+import { scopeWorkdayVacancyEvidence } from "../evidence/scopeWorkdayVacancyEvidence.js";
 import { extractLinkedInVacancyId } from "./LinkedInVacancyUrl.js";
 
 export type VacancyCaptureRejectionReason =
@@ -102,23 +102,10 @@ export async function assessBrowserVacancyCapture(
       ...(partialRecaptureIdentity === undefined ? {} : { partialRecaptureIdentity }),
     };
   }
-  // Generic Workday's direct detail header is accepted only with a unique
-  // requisition reference agreeing with the route, not the extractor's page fallback.
-  if (provider.providerKey === undefined && isWorkdaySource(observation.source.sourceName, sourceUrl)
-    && extractWorkdayVacancyId(sourceUrl) === observation.source.externalId
-    && observation.source.externalId !== undefined) {
-    const clean = html.replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1>/giu, "");
-    const headers = alstomElements(clean, open => /\bdata-automation-id=["']jobPostingHeader["']/iu.test(open));
-    const references = alstomElements(clean, open => /\bdata-automation-id=["'](?:requisitionId|subtitle)["']/iu.test(open));
-    const ids = new Set(references.flatMap(value => value.match(/\bJR-[A-Z0-9]+(?:-[A-Z0-9]+)*\b/giu) ?? []).map(value => value.toUpperCase()));
-    const header = headers.length === 1 ? headers[0]! : "";
-    const titleElements = alstomElements(header, open => /\bdata-automation-id=["']jobTitle["']/iu.test(open));
-    const hasHeaderTitle = titleElements.length === 1 || titleElements.length === 0 && /^<h[12]\b/iu.test(header);
-    const title = hasHeaderTitle ? extractWorkdayStructuredFields(header, sourceUrl)?.title : undefined;
-    if (ids.size === 1 && ids.has(observation.source.externalId) && !hidden(header)
-      && (titleElements.length === 0 || !hidden(titleElements[0]!)) && meaningfulTitle(title ?? "")) {
-      return accept();
-    }
+  if (isGenericWorkdaySource(observation.source.sourceName, sourceUrl)) {
+    const scoped = scopeWorkdayVacancyEvidence(observation);
+    return "evidenceContent" in scoped && scoped.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
+      && observation.source.externalId !== undefined ? accept() : reject("NO_TRUSTED_VACANCY_CONTEXT");
   }
   // Bürkert publishes a single bounded JobPosting article on its direct route; the registry
   // returns it as the locator context only when it is unique and its identity is unambiguous.

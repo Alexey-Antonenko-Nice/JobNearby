@@ -32,8 +32,6 @@ describe("shared vacancy evidence extractor composition", () => {
     expect(diagnosticEvidence.externalIdentifiers).toEqual([
       expect.objectContaining({ value: "JR-2026-21408", provider: "airproducts.wd5.myworkdayjobs.com" }),
     ]);
-    expect(diagnosticEvidence.organizations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ value: "Air Products", role: "UNKNOWN" }),
-    ]));
+    expect(diagnosticEvidence.organizations).toEqual([]);
   });
 });

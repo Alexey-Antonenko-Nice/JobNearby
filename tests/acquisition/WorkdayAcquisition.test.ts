@@ -1,3 +1,5 @@
+import { assessBrowserVacancyCapture } from "../../src/application/acquisition/assessBrowserVacancyCapture.js";
+import { createVacancyEvidenceExtractor } from "../../src/application/evidence/createVacancyEvidenceExtractor.js";
 import { describe, expect, it } from "vitest";
 
 import { BrowserCaptureAcquisitionAdapter } from "../../src/application/acquisition/BrowserCaptureAcquisitionAdapter.js";
@@ -8,7 +10,7 @@ import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime
 const adapter = new BrowserCaptureAcquisitionAdapter();
 const mapper = new DeterministicAcquisitionCaptureMapper();
 const url = "https://airproducts.wd5.myworkdayjobs.com/fr-FR/AP0001/details/Chauffeur-SPL-ADR--H-F-_JR-2026-21864?locationCountry=54c5b6971ffb4bf0b116fe7651ec789a";
-const html = `<div data-automation-id="headerTitle">Air Products Careers</div><div data-automation-id="jobPostingHeader"><div data-automation-id="jobTitle">Chauffeur SPL ADR (H/F)</div><div data-automation-id="subtitle">Rouen</div></div><div data-automation-id="timeType">Full time</div><div data-automation-id="requisitionId">JR-2026-21864</div><div data-automation-id="jobPostingDescription">Taux horaire = 13,50€</div>`;
+const html = `<div data-automation-id="headerTitle">Air Products Careers</div><div data-automation-id="jobPostingHeader"><div data-automation-id="jobTitle">Chauffeur SPL ADR (H/F)</div><div data-automation-id="subtitle">Rouen</div><div data-automation-id="timeType">Full time</div><div data-automation-id="requisitionId">JR-2026-21864</div></div><div data-automation-id="jobPostingDescription">Taux horaire = 13,50€</div>`;
 const multiLocationUrl = "https://airproducts.wd5.myworkdayjobs.com/fr-FR/AP0001/details/Chauffeur-SPL-CITERNE-H-F_JR-2026-21869?locationCountry=54c5b6971ffb4bf0b116fe7651ec789a";
 const multiLocationHtml = `<div data-automation-id="headerTitle">Air Products Careers</div><h2 data-automation-id="jobPostingHeader">Chauffeur SPL CITERNE H/F</h2><ul data-automation-id="subtitle"><li>Strasbourg, France; Beinheim, France; Reichstett, France; Schiltigheim, France</li><li>JR-2026-21869</li><li>Chauffeur SPL CITERNE H/F</li></ul><div data-automation-id="timeType">Full time</div>`;
 
@@ -18,6 +20,12 @@ function capture(pageUrl = url, content = html, id = "observation") {
 }
 
 describe("generic Workday acquisition", () => {
+  it("rejects the former disjoint header/timeType/requisition fixture", async () => {
+    const unowned = '<div data-automation-id="headerTitle">Air Products Careers</div><div data-automation-id="jobPostingHeader"><div data-automation-id="jobTitle">Chauffeur SPL ADR (H/F)</div><div data-automation-id="subtitle">Rouen</div></div><div data-automation-id="timeType">Full time</div><div data-automation-id="requisitionId">JR-2026-21864</div><div data-automation-id="jobPostingDescription">Description</div>';
+    expect(await assessBrowserVacancyCapture(capture(url, unowned).observation, createVacancyEvidenceExtractor()))
+      .toMatchObject({ captureAcceptedAsVacancy: false });
+  });
+
   it("extracts stable identity and core fields", () => {
     const { acquisition, observation } = capture();
     expect(acquisition.externalId).toBe("JR-2026-21864");
@@ -25,14 +33,14 @@ describe("generic Workday acquisition", () => {
     expect(observation.title).toBe("Chauffeur SPL ADR (H/F)");
     expect(observation.locationText).toBe("Rouen");
     expect(observation.contractText).toBe("Full time");
-    expect(observation.displayedCompanyName).toBe("Air Products");
+    expect(observation.displayedCompanyName).toBeUndefined();
   });
 
   it("extracts the live multi-location Workday variant", () => {
     const { acquisition, observation } = capture(multiLocationUrl, multiLocationHtml, "multi");
     expect(acquisition.externalId).toBe("JR-2026-21869");
     expect(observation.title).toBe("Chauffeur SPL CITERNE H/F");
-    expect(observation.contractText).toBe("Full time");
+    expect(observation.contractText).toBeUndefined();
     expect(observation.locationText).toBeUndefined();
   });
 
@@ -78,7 +86,7 @@ describe("generic Workday acquisition", () => {
       if (result.processing.status !== "PROCESSED") throw new Error("Expected processing to succeed.");
       const fields = db.prepare("SELECT field_name, status, value_json FROM canonical_vacancy_fields WHERE canonical_vacancy_id = ?").all(result.processing.canonicalVacancyId) as Array<{ field_name: string; status: string; value_json: string | null }>;
       expect(fields.find(({ field_name }) => field_name === "role")).toMatchObject({ status: "RESOLVED", value_json: JSON.stringify({ title: "Chauffeur SPL CITERNE H/F" }) });
-      expect(fields.find(({ field_name }) => field_name === "engagement")).toMatchObject({ status: "RESOLVED" });
+      expect(fields.find(({ field_name }) => field_name === "engagement")).toMatchObject({ status: "UNKNOWN" });
       expect(fields.find(({ field_name }) => field_name === "location")).toMatchObject({ status: "CONFLICTED" });
       const evidence = db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancy_evidence_references WHERE canonical_vacancy_id = ? AND kind = 'LOCATION_EVIDENCE'").get(result.processing.canonicalVacancyId) as { count: number };
       expect(evidence.count).toBe(4);

@@ -87,7 +87,7 @@ describe("provider vacancy-evidence scope routing", () => {
   });
 
   it("explicitly routes keyless providers that require selected context", () => {
-    const keyless: Sample[] = [{ sourceName: "burkert.com", sourceUrl: "https://www.burkert.com/en/company-career/career/job-openings/some-job" }];
+    const keyless: Sample[] = [host("airproducts.wd5.myworkdayjobs.com", "/en-US/AP0001/details/Engineer_JR-123"), { sourceName: "burkert.com", sourceUrl: "https://www.burkert.com/en/company-career/career/job-openings/some-job" }];
     for (const sample of keyless) {
       expect(registry.capture(sample).requiresSelectedVacancyContext, sample.sourceName).toBe(true);
       expect(production(sample), sample.sourceName).toBe(true);

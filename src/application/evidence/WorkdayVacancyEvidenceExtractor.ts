@@ -1,3 +1,4 @@
+import { scopeWorkdayVacancyEvidence } from "./scopeWorkdayVacancyEvidence.js";
 import { isRenaultWorkdaySource } from "../acquisition/RenaultWorkdayVacancy.js";
 import { isKellyWorkdaySource } from "../acquisition/KellyWorkdayVacancy.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
@@ -7,7 +8,7 @@ import { extractWorkdayStructuredFields, isWorkdaySource } from "../acquisition/
 
 export class WorkdayVacancyEvidenceExtractor implements VacancyEvidenceExtractor {
   async extract(input: VacancyEvidenceExtractionInput) {
-    const observation = normalizeVacancyEvidenceInput(input);
+    const observation = normalizeVacancyEvidenceInput(scopeWorkdayVacancyEvidence(input));
     const html = observation.metadata.acquisition && typeof observation.metadata.acquisition === "object"
       ? (observation.metadata.acquisition as Record<string, unknown>).html
       : undefined;
