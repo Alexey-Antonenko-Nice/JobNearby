@@ -78,11 +78,12 @@ describe("Personio acquisition", () => {
     expect((await new PersonioVacancyEvidenceExtractor().extract(observation(url, html(salary)))).compensations).toEqual([]);
   });
 
-  it("uses existing FULL_TIME and INDEFINITE engagement terms while retaining structured geography", async () => {
+  it("uses existing FULL_TIME and INDEFINITE engagement terms without importing page-level geography", async () => {
     const captured = observation();
     const evidence = await createVacancyEvidenceExtractor().extract(captured);
     expect(evidence.engagements).toContainEqual(expect.objectContaining({ rawTerms: ["Full-time", "Permanent employee"], normalizedTerms: ["FULL_TIME", "INDEFINITE"] }));
-    expect(captured.locationText).toBe("Wels, Oberösterreich, AT");
+    expect(captured.locationText).toBeUndefined();
+    expect(evidence.organizations).toEqual([]);
     expect(evidence.locations.some((location) => location.value.includes("DC1"))).toBe(false);
   });
 
@@ -104,7 +105,7 @@ describe("Personio acquisition", () => {
     expect(evidence.compensations).toEqual([]);
   });
 
-  it("reuses identical snapshots, attaches changed and translated snapshots, and preserves confirmed employer memory", async () => {
+  it("reuses identical snapshots, attaches changed and translated snapshots, without matching employer memory from unbounded JSON-LD", async () => {
     const db = createDatabase(":memory:");
     try {
       const runtime = createCaptureProcessingRuntime(db);
@@ -115,11 +116,6 @@ describe("Personio acquisition", () => {
         interactionRepository: new SqliteUserVacancyInteractionRepository(db),
       };
       const workflow = createVacancyReviewWorkflow(deps);
-      // A different prior vacancy receives the only human confirmation.
-      const prior = await runtime.captureAndProcessBrowserVacancy(payload(url.replace("2441986", "2441000")));
-      if (prior.processing.status !== "PROCESSED") throw new Error("Prior processing failed");
-      await workflow.confirmVacancyEmployer({ canonicalVacancyId: prior.processing.canonicalVacancyId, candidateName: "VectaCore GmbH" });
-      const confirmed = (await deps.assignmentRepository.findEffectiveByObservationId(prior.capture.observationId))!;
       const first = await runtime.captureAndProcessBrowserVacancy(payload());
       if (first.processing.status !== "PROCESSED") throw new Error("Capture processing failed");
       const canonicalId = first.processing.canonicalVacancyId;
@@ -142,14 +138,14 @@ describe("Personio acquisition", () => {
       expect(canonical.sourceObservationIds).toHaveLength(3);
       expect(canonical.engagement).toMatchObject({ status: "RESOLVED", value: { normalizedTerms: expect.arrayContaining(["FULL_TIME", "INDEFINITE"]) } });
       expect(canonical.compensation).toMatchObject({ status: "RESOLVED", value: { rawText: "55,356 € per year", currency: "EUR", minimum: 55356, maximum: 55356, period: "YEAR" } });
-      expect(canonical.location).toMatchObject({ status: "RESOLVED", value: { rawText: "Wels, Oberösterreich, AT" } });
-      expect(await deps.assignmentRepository.findEffectiveByObservationId(first.capture.observationId)).toMatchObject({ employerClusterId: confirmed.employerClusterId, status: "ACCEPTED", algorithm: "confirmed-employer-memory" });
+      expect(canonical.location.status).toBe("UNKNOWN");
+      expect(await deps.assignmentRepository.findEffectiveByObservationId(first.capture.observationId)).toMatchObject({ algorithm: "new-employer-cluster" });
       expect(await deps.assignmentRepository.findByObservationId(first.capture.observationId)).toHaveLength(1);
       const review = await workflow.getVacancyReview(canonicalId);
       expect(review.vacancyContext.seenBefore).toBe(true);
       expect(review.employer.confirmationCandidate).toBeNull();
-      expect(review.employer.employerClusterId).toBe(confirmed.employerClusterId);
-      expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancies").get()).toEqual({ count: 2 });
+      expect(review.employer.status).toBe("UNRESOLVED");
+      expect(db.prepare("SELECT COUNT(*) AS count FROM canonical_vacancies").get()).toEqual({ count: 1 });
     } finally { db.close(); }
   });
 

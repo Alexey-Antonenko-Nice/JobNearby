@@ -1,3 +1,4 @@
+import { scopePersonioVacancyEvidence } from "./scopePersonioVacancyEvidence.js";
 import { extractPersonioHeaderFacts, extractPersonioVacancyId, isPersonioSource } from "../acquisition/PersonioVacancy.js";
 import { createExtractedVacancyEvidence } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import { normalizeVacancyEvidenceInput, type VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
@@ -5,7 +6,7 @@ import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvid
 
 export class PersonioVacancyEvidenceExtractor implements VacancyEvidenceExtractor {
   async extract(input: VacancyEvidenceExtractionInput) {
-    const observation = normalizeVacancyEvidenceInput(input);
+    const observation = normalizeVacancyEvidenceInput(scopePersonioVacancyEvidence(input));
     const url = observation.source.sourceUrl;
     const acquisition = observation.metadata.acquisition;
     const html = acquisition && typeof acquisition === "object" ? (acquisition as Record<string, unknown>).html : undefined;

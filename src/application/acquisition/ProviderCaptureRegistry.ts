@@ -30,7 +30,7 @@ import { LhhSelectedVacancyContextLocator } from "./LhhSelectedVacancyContextLoc
 import { LinkedInSelectedVacancyContextLocator } from "./LinkedInSelectedVacancyContextLocator.js";
 import { extractWorkdayStructuredFields, isWorkdaySource } from "./WorkdayVacancy.js";
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
-import { extractPersonioHeaderFacts } from "./PersonioVacancy.js";
+import { extractPersonioHeaderFacts, PersonioSelectedVacancyContextLocator } from "./PersonioVacancy.js";
 
 import { HelloWorkSelectedVacancyContextLocator, helloWorkHeaderFields } from "./HelloWorkVacancy.js";
 
@@ -70,6 +70,7 @@ export class ProviderCaptureRegistry {
     JOOBLE: new JoobleSelectedVacancyContextLocator(),
     CADREMPLOI: new CadremploiSelectedVacancyContextLocator(),
     LHH: new LhhSelectedVacancyContextLocator(),
+    PERSONIO: new PersonioSelectedVacancyContextLocator(),
     HELLOWORK: new HelloWorkSelectedVacancyContextLocator(),
     TALENT: new TalentSelectedVacancyContextLocator(),
     STELLANTIS: new StellantisSelectedVacancyContextLocator(),
@@ -110,8 +111,8 @@ export class ProviderCaptureRegistry {
           ...(externalId === undefined ? {} : { externalId }), html: input.html,
         });
     const expectra = providerKey === "EXPECTRA_MONACO" && context?.html ? expectraFacts(context.html) : undefined;
-    const personioHeader = providerKey === "PERSONIO" && externalId !== undefined && input.html !== undefined
-      ? extractPersonioHeaderFacts(input.html) : undefined;
+    const personioHeader = providerKey === "PERSONIO" && context?.html !== undefined
+      ? extractPersonioHeaderFacts(context.html!) : undefined;
     const adeccoFacts = providerKey === "ADECCO" && context?.html ? adeccoSelectedFacts(context.html) : undefined;
     const manpower = providerKey === "MANPOWER" && context?.html ? manpowerFacts(context.html) : undefined;
     const randstad = providerKey === "RANDSTAD" && context?.html ? randstadFacts(context.html) : undefined;
@@ -179,7 +180,7 @@ export class ProviderCaptureRegistry {
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "EXPECTRA_MONACO" || providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" || providerKey === "HAYS" || providerKey === "LHH" || providerKey === "FRANCE_TRAVAIL" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "PERSONIO" || providerKey === "EXPECTRA_MONACO" || providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" || providerKey === "HAYS" || providerKey === "LHH" || providerKey === "FRANCE_TRAVAIL" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(burkert ? { requiresSelectedVacancyContext: true } : {}),
       ...(context === undefined ? {} : { context }),

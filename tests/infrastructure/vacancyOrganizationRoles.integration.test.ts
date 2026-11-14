@@ -179,18 +179,13 @@ describe("vacancy-specific human organization roles", () => {
       f.db.close();
     }
   });
-  it("uses history only when current evidence is unknown and allows conflicting histories to coexist", async () => {
+  it("does not use unbounded Personio company data to match conflicting histories", async () => {
     const f = fixture();
     try {
       const first = await f.capture();
       await f.choose(first.id, "STAFFING_AGENCY");
       const plain = await f.capture('<div class="job-header"><h1 class="job-position-title">Engineer</h1></div><script type="application/ld+json">{"@type":"JobPosting","title":"Engineer","hiringOrganization":{"name":"Kelly"}}</script>', "https://example.jobs.personio.de/job/123");
-      const card = (await f.workflow.getVacancyReview(plain.id)).organizationRoleReview![0]!;
-      expect(card).toMatchObject({
-        recommendedRole: "STAFFING_AGENCY",
-        evidenceStrength: "HISTORY",
-        confirmedRole: null
-      });
+      expect((await f.workflow.getVacancyReview(plain.id)).organizationRoleReview ?? []).toEqual([]);
       expect((await f.deps.canonicalVacancyRepository.findById(plain.id))!.organizationRelationships.some(r => r.role === "STAFFING_AGENCY")).toBe(false);
       const second = await f.capture(kelly.replaceAll("JR100451", "JR100452"), kellyUrl.replaceAll("JR100451", "JR100452"));
       expect((await f.workflow.getVacancyReview(second.id)).organizationRoleReview![0]).toMatchObject({
@@ -198,10 +193,7 @@ describe("vacancy-specific human organization roles", () => {
         evidenceStrength: "CONTEXTUAL"
       });
       await f.choose(second.id, "EMPLOYER");
-      expect((await f.workflow.getVacancyReview(plain.id)).organizationRoleReview![0]).toMatchObject({
-        recommendedRole: "UNKNOWN",
-        confirmedRole: null
-      });
+      expect((await f.workflow.getVacancyReview(plain.id)).organizationRoleReview ?? []).toEqual([]);
     } finally {
       f.db.close();
     }
