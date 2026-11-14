@@ -1,3 +1,5 @@
+import { requiresGenericWorkdayScope } from "../acquisition/GenericWorkdayVacancy.js";
+import { scopeWorkdayVacancyEvidence } from "./scopeWorkdayVacancyEvidence.js";
 import { isPersonioHostname } from "../acquisition/PersonioVacancy.js";
 import { scopePersonioVacancyEvidence } from "./scopePersonioVacancyEvidence.js";
 import { scopeStellantisVacancyEvidence } from "./scopeStellantisVacancyEvidence.js";
@@ -74,7 +76,7 @@ const scopeRoutesBySourceName: ReadonlyMap<string, ProviderScope> = new Map<stri
 
 /** True when the source has a deliberate scope decision rather than relying on the legacy fallback. */
 export function hasExplicitVacancyEvidenceScopeRoute(sourceName: string, sourceUrl = ""): boolean {
-  return isPersonioHostname(sourceName) || scopeRoutesBySourceName.has(sourceName) || sourceName === "hellowork.com" || isRenaultWorkdaySource(sourceName, sourceUrl);
+  return requiresGenericWorkdayScope(sourceName, sourceUrl) || isPersonioHostname(sourceName) || scopeRoutesBySourceName.has(sourceName) || sourceName === "hellowork.com" || isRenaultWorkdaySource(sourceName, sourceUrl);
 }
 
 /** Reconstruct a transient, bounded view, including for pre-guard immutable captures. */
@@ -83,6 +85,7 @@ export function scopeProviderVacancyEvidence(input: VacancyEvidenceExtractionInp
   if (isRenaultWorkdaySource(input.source.sourceName, input.source.sourceUrl ?? "")) return scopeRenaultVacancyEvidence(input);
   const route = scopeRoutesBySourceName.get(input.source.sourceName);
   if (route !== undefined) return route(input);
+  if (requiresGenericWorkdayScope(input.source.sourceName, input.source.sourceUrl ?? "")) return scopeWorkdayVacancyEvidence(input);
   if (input.source.sourceName !== "hellowork.com") return scopeIndeedVacancyEvidence(input);
   if (boundedHelloWorkInput in input) return input;
   const acquisition = record(input.metadata.acquisition);

@@ -26,7 +26,8 @@ export function extractWorkdayVacancyId(sourceUrl: string): string | undefined {
 }
 
 export function extractWorkdayStructuredFields(html: string, sourceUrl?: string): WorkdayStructuredFields | undefined {
-  const header = automationElement(html, "jobPostingHeader") ?? html;
+  const header = automationElement(html, "jobPostingHeader");
+  if (header === undefined) return undefined;
   const title = automationText(header, "jobTitle") ?? htmlToText(header);
   const requisition = sourceUrl === undefined ? undefined : extractWorkdayVacancyId(sourceUrl);
   const subtitle = findMatchingSubtitle(html, requisition);
