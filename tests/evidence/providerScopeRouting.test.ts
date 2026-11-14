@@ -69,17 +69,17 @@ describe("provider vacancy-evidence scope routing", () => {
     expect(unroutedSelectedContextProviders(withoutHelloWork)).toEqual(["HELLOWORK"]);
   });
 
-  it.each(["FRANCE_TRAVAIL", "LINKEDIN", "INDEED", "LHH", "HELLOWORK", "RENAULT_WORKDAY", "KELLY_WORKDAY"] as const)(
+  it.each(["FRANCE_TRAVAIL", "LINKEDIN", "INDEED", "LHH", "HELLOWORK", "RENAULT_WORKDAY", "KELLY_WORKDAY", "PERSONIO"] as const)(
     "routes %s explicitly", (key) => {
       expect(production(samples[key]), key).toBe(true);
     });
 
   it("requires selected context for France Travail, LHH and HelloWork", () => {
-    for (const key of ["FRANCE_TRAVAIL", "LHH", "HELLOWORK"] as const) expect(requiringKeys).toContain(key);
+    for (const key of ["FRANCE_TRAVAIL", "LHH", "HELLOWORK", "PERSONIO"] as const) expect(requiringKeys).toContain(key);
   });
 
   it("does not reject providers that do not require selected context", () => {
-    for (const key of ["JOOBLE", "CADREMPLOI", "PERSONIO"] as const) {
+    for (const key of ["JOOBLE", "CADREMPLOI"] as const) {
       expect(requiringKeys, key).not.toContain(key);
       expect(production(samples[key]), key).toBe(false);
     }

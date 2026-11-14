@@ -3,7 +3,8 @@ import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionCon
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
 import { ProviderCaptureRegistry } from "./ProviderCaptureRegistry.js";
-import { extractPersonioHeaderFacts, extractPersonioVacancyId, isPersonioSource } from "./PersonioVacancy.js";
+import { isPersonioHostname } from "./PersonioVacancy.js";
+import { scopePersonioVacancyEvidence } from "../evidence/scopePersonioVacancyEvidence.js";
 import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
 import { alstomElements } from "./AlstomVacancy.js";
@@ -57,6 +58,11 @@ export async function assessBrowserVacancyCapture(
   if (!["http:", "https:"].includes(parsedUrl.protocol)) return reject("NO_TRUSTED_VACANCY_CONTEXT");
   const provider = new ProviderCaptureRegistry().capture({ sourceName: observation.source.sourceName, sourceUrl, html });
   const context = provider.context;
+  if (isPersonioHostname(observation.source.sourceName)) {
+    const scoped = scopePersonioVacancyEvidence(observation);
+    return "evidenceContent" in scoped && scoped.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
+      && observation.source.externalId !== undefined ? accept() : reject("NO_TRUSTED_VACANCY_CONTEXT");
+  }
   // These legacy locators can return an entire page or an unbounded suffix.
   if (provider.providerKey === "CADREMPLOI" || provider.providerKey === "JOOBLE"
     || context?.providerKey === "LHH" && context.associationEvidence?.includes("LHH_DETAIL_PAGE")) {
@@ -95,20 +101,6 @@ export async function assessBrowserVacancyCapture(
       ...reject("NO_MEANINGFUL_VACANCY_EVIDENCE"),
       ...(partialRecaptureIdentity === undefined ? {} : { partialRecaptureIdentity }),
     };
-  }
-  // Personio provides a unique, bounded job header on its direct /job/<id> page.
-  if (isPersonioSource(observation.source.sourceName, sourceUrl)
-    && extractPersonioVacancyId(sourceUrl) === observation.source.externalId
-    && observation.source.externalId !== undefined) {
-    const personioHeaders = alstomElements(html.replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1>/giu, ""),
-      open => /\bclass=["'][^"']*\bjob-header\b[^"']*["']/iu.test(open));
-    const personioTitles = personioHeaders.length === 1
-      ? alstomElements(personioHeaders[0]!, (open, tag) => tag === "h1" && /\bclass=["'][^"']*\bjob-position-title\b[^"']*["']/iu.test(open))
-      : [];
-    if (meaningfulTitle(extractPersonioHeaderFacts(html).title ?? "")
-      && personioTitles.length === 1 && !hidden(personioHeaders[0]!) && !hidden(personioTitles[0]!)) {
-      return accept();
-    }
   }
   // Generic Workday's direct detail header is accepted only with a unique
   // requisition reference agreeing with the route, not the extractor's page fallback.

@@ -247,7 +247,7 @@ describe("human-confirmed agency memory", () => {
       expect(original).toEqual(before);
     } finally { f.db.close(); }
   });
-  it("keeps historical agency roles as review support without forcing a future capture role", async () => {
+  it("does not match agency history using unbounded Personio JSON-LD", async () => {
     const f = fixture();
     try {
       await f.add("first", "Agency", "RECRUITER"); await f.confirm("first");
@@ -259,13 +259,13 @@ describe("human-confirmed agency memory", () => {
       const current = (await f.deps.canonicalVacancyRepository.findById(captured.processing.canonicalVacancyId))!;
       expect(current.organizationRelationships.some(r => r.role === "RECRUITER" && r.rawName === "Agency")).toBe(false);
       const review = await f.workflow.getVacancyReview(current.id);
-      expect(review.agencyContext?.known[0]?.source).toBe("AGENCY_MEMORY");
+      expect(review.agencyContext?.known).toEqual([]);
       expect(review.agencyContext?.candidates).toEqual([]);
       expect(review.employer.status).toBe("UNRESOLVED");
       expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 1 });
     } finally { f.db.close(); }
   });
-  it("preserves explicit direct-employer evidence during capture even for a known agency", async () => {
+  it("excludes unbounded Personio employer text even for a known agency", async () => {
     const f = fixture();
     try {
       await f.add("first", "Agency", "RECRUITER"); await f.confirm("first");
@@ -275,7 +275,8 @@ describe("human-confirmed agency memory", () => {
         html: '<div class="job-header"><h1 class="job-position-title">Technicien H/F</h1></div><script type="application/ld+json">{"@type":"JobPosting","title":"Technicien H/F","hiringOrganization":{"name":"Agency"}}</script>' });
       if (result.processing.status !== "PROCESSED") throw Error("Processing failed");
       const vacancy = (await f.deps.canonicalVacancyRepository.findById(result.processing.canonicalVacancyId))!;
-      expect(vacancy.organizationRelationships).toContainEqual(expect.objectContaining({ role: "EMPLOYER", rawName: "Agency" }));
+      expect(vacancy.organizationRelationships.every(r => r.rawName === undefined)).toBe(true);
+      expect((await f.workflow.getVacancyReview(vacancy.id)).employer.status).toBe("UNRESOLVED");
       expect(vacancy.organizationRelationships.some((r) => r.role === "RECRUITER")).toBe(false);
       expect((await f.workflow.getVacancyReview(vacancy.id)).agencyContext?.known).toEqual([]);
     } finally { f.db.close(); }

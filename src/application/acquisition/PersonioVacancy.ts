@@ -1,3 +1,34 @@
+import { createAcquisitionContext, type AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
+import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
+import { alstomElements } from "./AlstomVacancy.js";
+
+/** The existing direct-page boundary: one visible div.job-header and one title. */
+export class PersonioSelectedVacancyContextLocator implements SelectedVacancyContextLocator {
+  locate(input: Parameters<SelectedVacancyContextLocator["locate"]>[0]): AcquisitionContext | undefined {
+    const id = extractPersonioVacancyId(input.sourceUrl);
+    if (input.providerKey !== "PERSONIO" || id === undefined
+      || !/^https?:/iu.test(input.sourceUrl)
+      || input.externalId !== undefined && input.externalId !== id) return undefined;
+    const clean = input.html.replace(/<!--[\s\S]*?-->/gu, "")
+      .replace(/<(script|style|template|noscript|svg)\b[^>]*>[\s\S]*?<\/\1>/giu, "");
+    const hasClass = (open: string, name: string) => /\bclass=["']([^"']*)["']/iu.exec(open)?.[1]?.split(/\s+/u).includes(name) === true;
+    const headers = alstomElements(clean, open => hasClass(open, "job-header"));
+    if (headers.length !== 1 || !/^<div\b/iu.test(headers[0]!)) return undefined;
+    const header = headers[0]!;
+    const titles = alstomElements(header, (open, tag) => tag === "h1" && hasClass(open, "job-position-title"));
+    const hidden = (html: string) => /\s+hidden(?:\s|=|>)|\baria-hidden=["']true["']|\bstyle=["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden)/iu.test(html);
+    if (titles.length !== 1 || hidden(header)) return undefined;
+    if (alstomElements(clean, open => hidden(open)).some(region => region.includes(header))) return undefined;
+    const title = extractPersonioHeaderFacts(header).title ?? "";
+    const normalized = title.normalize("NFKC").replace(/\s+/gu, " ").trim();
+    if (normalized.length < 5 || normalized.length > 250
+      || /^(?:search|search jobs|job search|jobs?|careers?|vacancies|offres? d['’]emploi|recherche d['’]emploi)$/iu.test(normalized)) return undefined;
+    return createAcquisitionContext({ kind: "SELECTED_VACANCY", associationMethod: "PROVIDER_LOCATOR",
+      providerKey: "PERSONIO", providerExternalId: id, html: header, text: text(header),
+      associationEvidence: ["PERSONIO_DIRECT_JOB_ROUTE", "UNIQUE_VISIBLE_JOB_HEADER", "UNIQUE_MEANINGFUL_TITLE"] });
+  }
+}
+
 export function isPersonioHostname(hostname: string): boolean {
   return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.jobs\.personio\.de$/iu.test(hostname);
 }
