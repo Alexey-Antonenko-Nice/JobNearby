@@ -77,28 +77,32 @@ describe("DirectFieldVacancyEvidenceExtractor", () => {
     expect(result.externalIdentifiers).toHaveLength(1);
   });
 
-  it("emits employer evidence while retaining the displayed company for a trusted Daimler Truck source", async () => {
+  it("emits employer evidence only from the trusted Daimler posting", async () => {
+    const company = "Mercedes-Benz Trucks Molsheim SASU";
     const result = await extractor.extract(makeObservation({
-      source: { sourceType: "EMPLOYER_WEBSITE", sourceName: "jobsearch.daimlertruck.com", sourceUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425092" },
-      displayedCompanyName: "Mercedes-Benz Trucks Molsheim SASU",
+      source: { sourceType: "EMPLOYER_WEBSITE", sourceName: "jobsearch.daimlertruck.com", sourceUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425092", externalId: "425092" },
+      displayedCompanyName: company,
+      metadata: { acquisition: { html: '<script type="application/ld+json">' + JSON.stringify({ "@type": "JobPosting", title: "Software Engineer", hiringOrganization: { name: company } }) + '</script>' } },
     }));
     expect(result.organizations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "UNKNOWN" }),
-      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "EMPLOYER" }),
+      expect.objectContaining({ value: company, role: "UNKNOWN" }),
+      expect.objectContaining({ value: company, role: "EMPLOYER" }),
     ]));
   });
 
-  it("emits trusted structured hiring organizations and preserves disagreement with the displayed company", async () => {
+  it("ignores stale Daimler displayed and payload companies", async () => {
     const result = await extractor.extract(makeObservation({
-      source: { sourceType: "EMPLOYER_WEBSITE", sourceName: "jobsearch.daimlertruck.com", sourceUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425092" },
-      displayedCompanyName: "Mercedes-Benz Trucks Molsheim SASU",
-      metadata: { acquisition: { structuredPayload: { jobPostings: [{ hiringOrganization: { name: "Daimler Truck AG" } }] } } },
+      source: { sourceType: "EMPLOYER_WEBSITE", sourceName: "jobsearch.daimlertruck.com", sourceUrl: "https://jobsearch.daimlertruck.com/index.php?ac=jobad&id=425092", externalId: "425092" },
+      displayedCompanyName: "Foreign company",
+      metadata: { acquisition: {
+        html: '<script type="application/ld+json">{"@type":"JobPosting","title":"Software Engineer","hiringOrganization":{"name":"Daimler Truck AG"}}</script>',
+        structuredPayload: { jobPostings: [{ hiringOrganization: { name: "Foreign payload company" } }] },
+      } },
     }));
-    expect(result.organizations).toEqual(expect.arrayContaining([
-      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "UNKNOWN" }),
-      expect.objectContaining({ value: "Mercedes-Benz Trucks Molsheim SASU", role: "EMPLOYER" }),
+    expect(result.organizations).toEqual([
+      expect.objectContaining({ value: "Daimler Truck AG", role: "UNKNOWN" }),
       expect.objectContaining({ value: "Daimler Truck AG", role: "EMPLOYER" }),
-    ]));
+    ]);
   });
 
   it("does not promote a displayed company from an untrusted source", async () => {
