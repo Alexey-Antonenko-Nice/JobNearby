@@ -30,8 +30,8 @@ function legacy(html = script(posting)): SourceObservation {
 const extractor = createVacancyEvidenceExtractor();
 describe("Daimler single JobPosting guard", () => {
   it.each([
-    {}, { identifier: "425255" }, { identifier: { "@type": "PropertyValue", value: "425255" } },
-    { url }, { identifier: "425255", url: url + "&utm_source=test#details" },
+    {},
+    { url }, { url: url + "&utm_source=test#details" },
   ])("accepts one posting with compatible identity %j", async identity => {
     const input = observation(script({ ...posting, ...identity }));
     expect(await assessBrowserVacancyCapture(input, extractor)).toMatchObject({ captureAcceptedAsVacancy: true });
@@ -50,7 +50,7 @@ describe("Daimler single JobPosting guard", () => {
     { url: null }, { url: "https://foreign.example/index.php?ac=jobad&id=425255" },
     { url: "https://jobsearch.daimlertruck.com/other.php?ac=jobad&id=425255" },
     { url: url + "&id=999" },
-    // Observed real JSON-LD: route 425255 and an internal numeric PropertyValue.
+    // A real secondary number without DOM/application corroboration is insufficient.
     { identifier: { "@type": "PropertyValue", name: "Mercedes-Benz Trucks Molsheim SASU", value: 10027 } },
   ])("fails closed on conflicting or unsupported structured identity %j", async identity => {
     const input = legacy(script({ ...posting, ...identity }));
