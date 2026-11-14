@@ -1,3 +1,4 @@
+import { DAIMLER_TRUCK_SOURCE, trustedDaimlerJobPosting } from "./DaimlerTruckVacancy.js";
 import type { SourceObservation, SourceObservationId } from "../../domain/capture/SourceObservation.js";
 import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import { fromSelectedVacancyContext } from "../../domain/evidence/VacancyEvidenceInput.js";
@@ -5,7 +6,6 @@ import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvid
 import { ProviderCaptureRegistry } from "./ProviderCaptureRegistry.js";
 import { isPersonioHostname } from "./PersonioVacancy.js";
 import { scopePersonioVacancyEvidence } from "../evidence/scopePersonioVacancyEvidence.js";
-import { LiteralJsonLdDocumentExtractor } from "./LiteralJsonLdDocumentExtractor.js";
 import { SchemaOrgJobPostingExtractor } from "./SchemaOrgJobPostingExtractor.js";
 import { isGenericWorkdaySource } from "./GenericWorkdayVacancy.js";
 import { scopeWorkdayVacancyEvidence } from "../evidence/scopeWorkdayVacancyEvidence.js";
@@ -117,22 +117,9 @@ export async function assessBrowserVacancyCapture(
       return accept();
     }
   }
-  // Daimler Truck direct job ads expose one JobPosting record.
-  if (observation.source.sourceName === "jobsearch.daimlertruck.com"
-    && parsedUrl.hostname === "jobsearch.daimlertruck.com"
-    && parsedUrl.pathname === "/index.php" && parsedUrl.searchParams.getAll("ac").length === 1
-    && parsedUrl.searchParams.get("ac") === "jobad" && parsedUrl.searchParams.getAll("id").length === 1
-    && provider.externalId !== undefined && provider.externalId === observation.source.externalId) {
-    const postings = new SchemaOrgJobPostingExtractor().extract(new LiteralJsonLdDocumentExtractor().extract(html));
-    if (postings.length === 1 && typeof postings[0]!.title === "string" && meaningfulTitle(postings[0]!.title)) {
-      const postingUrl = postings[0]!.url;
-      const identifier = postings[0]!.identifier;
-      const identifierValue = typeof identifier === "string" ? identifier : record(identifier)?.value;
-      if ((identifier === undefined || identifierValue === provider.externalId)
-        && (postingUrl === undefined || typeof postingUrl === "string" && new ProviderCaptureRegistry().capture({
-          sourceName: observation.source.sourceName, sourceUrl: postingUrl,
-        }).externalId === provider.externalId)) return accept();
-    }
+  if (observation.source.sourceName === DAIMLER_TRUCK_SOURCE) {
+    return observation.source.externalId !== undefined && trustedDaimlerJobPosting({ ...observation.source, html }) !== undefined
+      ? accept() : reject("NO_TRUSTED_VACANCY_CONTEXT");
   }
   return reject("NO_TRUSTED_VACANCY_CONTEXT");
 }

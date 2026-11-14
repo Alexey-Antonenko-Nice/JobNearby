@@ -1,3 +1,4 @@
+import { scopeDaimlerTruckVacancyEvidence } from "./scopeDaimlerTruckVacancyEvidence.js";
 import type { VacancyEvidenceExtractor } from "../../domain/evidence/VacancyEvidenceExtractor.js";
 import {
   normalizeVacancyEvidenceInput,
@@ -16,7 +17,7 @@ export class DirectFieldVacancyEvidenceExtractor
   async extract(
     input: VacancyEvidenceExtractionInput,
   ): Promise<ExtractedVacancyEvidence> {
-    const observation = normalizeVacancyEvidenceInput(input);
+    const observation = normalizeVacancyEvidenceInput(scopeDaimlerTruckVacancyEvidence(input));
     const provenance = {
       sourceObservationId: observation.id,
       extractionMethod: "DIRECT_FIELD" as const,

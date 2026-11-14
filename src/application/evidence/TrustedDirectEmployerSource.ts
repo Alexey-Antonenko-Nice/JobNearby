@@ -1,3 +1,4 @@
+import { DAIMLER_TRUCK_SOURCE, trustedDaimlerJobPosting } from "../acquisition/DaimlerTruckVacancy.js";
 import type { SourceObservation } from "../../domain/capture/SourceObservation.js";
 
 const TRUSTED_DIRECT_EMPLOYER_HOSTS = new Set(["jobsearch.daimlertruck.com", "burkert.com"]);
@@ -5,6 +6,12 @@ const TRUSTED_DIRECT_EMPLOYER_HOSTS = new Set(["jobsearch.daimlertruck.com", "bu
 export function directEmployerOrganizationNames(
   observation: SourceObservation,
 ): readonly string[] {
+  if (observation.source.sourceName === DAIMLER_TRUCK_SOURCE) {
+    const html = record(observation.metadata.acquisition)?.html;
+    const posting = trustedDaimlerJobPosting({ ...observation.source, ...(typeof html === "string" ? { html } : {}) });
+    const name = record(posting?.hiringOrganization)?.name;
+    return typeof name === "string" && name.trim() ? [name.trim()] : [];
+  }
   if (!isTrustedDirectEmployerSource(observation)) return [];
   return unique([
     observation.displayedCompanyName,

@@ -1,3 +1,4 @@
+import { DAIMLER_TRUCK_SOURCE, trustedDaimlerJobPosting } from "./DaimlerTruckVacancy.js";
 import {
   createAcquisitionPackage,
   type AcquisitionId,
@@ -48,7 +49,11 @@ export class BrowserCaptureAcquisitionAdapter {
     const jsonLdJobPostings = evidenceHtml === undefined
       ? []
       : this.jobPostingExtractor.extract(this.jsonLdExtractor.extract(evidenceHtml));
-    const jobPostings = providerCapture.providerKey === "HELLOWORK"
+    const daimlerPosting = sourceName === DAIMLER_TRUCK_SOURCE
+      ? trustedDaimlerJobPosting({ sourceName, sourceUrl: pageUrl, ...(html === undefined ? {} : { html }),
+        ...(providerCapture.externalId === undefined ? {} : { externalId: providerCapture.externalId }) }) : undefined;
+    const jobPostings = sourceName === DAIMLER_TRUCK_SOURCE ? (daimlerPosting === undefined ? [] : [daimlerPosting])
+      : providerCapture.providerKey === "HELLOWORK"
       ? helloWorkJobPostings(html ?? "", pageUrl)
       : jsonLdJobPostings.length > 0
       ? jsonLdJobPostings
