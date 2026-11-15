@@ -2,6 +2,7 @@ import { createAcquisitionContext } from "../../domain/acquisition/AcquisitionCo
 import type { SelectedVacancyContextLocator } from "./SelectedVacancyContextLocator.js";
 import { adeccoElementsWithClass as elements } from "./AdeccoSelectedVacancyContextLocator.js";
 import { randstadText as text } from "./RandstadVacancy.js";
+import { parsePromanHtml, descendants, hasClass, hiddenPromanNode, unrelatedPromanNode, promanOwnedProse, promanOwnedFields, type PromanNode } from "./PromanModalPrivacy.js";
 
 export function promanVacancyId(value: string): string | undefined {
   try {
@@ -9,25 +10,6 @@ export function promanVacancyId(value: string): string | undefined {
     return url.hostname === "mon-espace.proman-emploi.fr" && ["https:", "http:"].includes(url.protocol) && /^\/dashboard\/?$/u.test(url.pathname)
       && ids.length === 1 && /^[1-9]\d*$/u.test(ids[0]!) ? ids[0] : undefined;
   } catch { return undefined; }
-}
-function balanced(html: string, name: string, start: number) {
-  const tags = new RegExp(`<\\/?${name}\\b[^>]*>`, "giu"); tags.lastIndex = start;
-  let depth = 0;
-  for (let match = tags.exec(html); match; match = tags.exec(html)) {
-    depth += match[0].startsWith("</") ? -1 : 1;
-    if (depth === 0) return html.slice(start, tags.lastIndex);
-  }
-  return undefined;
-}
-function hidden(tag: string) { return /\s(?:hidden(?:[\s=>])|aria-hidden=["']true["'])|\bstyle=["'][^"']*display\s*:\s*none/iu.test(tag); }
-// A stale rendered dialog inside a closed container is not an active vacancy.
-function hiddenAncestor(html: string, index: number) {
-  const stack: boolean[] = [];
-  for (const match of html.slice(0, index).matchAll(/<\/?div\b[^>]*>/giu)) {
-    if (match[0].startsWith("</")) stack.pop();
-    else stack.push(hidden(match[0]) || stack.at(-1) === true);
-  }
-  return stack.at(-1) === true;
 }
 function parts(html: string, tag: string) { return [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "giu"))].map(match => match[1]!); }
 function tab(html: string, name: string) {
@@ -87,26 +69,48 @@ function vacancyHtml(facts: NonNullable<ReturnType<typeof promanFacts>>, id: str
 ${facts.experience ? `<p>Expériences requises</p><p>${escape(facts.experience)}</p>` : ""}
 <div class="card"><p>Mission proposée par</p><p class="tag">${escape(facts.agency)}</p></div>
 ${facts.date ? `<span>Publiée le ${escape(facts.date)}</span>` : ""}<span>REF ${escape(facts.reference)}</span></div>
-<div class="tab-content" x-show="activeTab === 'poste'"><p>${escape(facts.job)}</p></div>
-<div class="tab-content" x-show="activeTab === 'profil'"><p>${escape(facts.profile)}</p></div></div></div>`;
+<div class="tab-content" x-show="activeTab === 'poste'"><div class="text-body-small"><p>${escape(facts.job)}</p></div></div>
+<div class="tab-content" x-show="activeTab === 'profil'"><div class="text-body-small"><p>${escape(facts.profile)}</p></div></div></div></div>`;
 }
 export class PromanSelectedVacancyContextLocator implements SelectedVacancyContextLocator {
   locate(input: Parameters<SelectedVacancyContextLocator["locate"]>[0]) {
     const id = promanVacancyId(input.sourceUrl);
     if (input.providerKey !== "PROMAN" || !id || (input.externalId !== undefined && input.externalId !== id)) return undefined;
-    const clean = input.html.replace(/<!--[\s\S]*?-->/gu, "").replace(/<(script|style|template|noscript|form|button|textarea|select|nav|footer)\b[^>]*>[\s\S]*?<\/\1>/giu, "");
-    const dialogs = [...clean.matchAll(/<([a-z][\w-]*)\b[^>]*\brole=["']dialog["'][^>]*>/giu)]
-      .filter(match => !hidden(match[0]) && !hiddenAncestor(clean, match.index) && /\baria-modal=["']true["']/iu.test(match[0]))
-      .map(match => balanced(clean, match[1]!, match.index)).filter((value): value is string => value !== undefined)
-      .filter(dialog => elements(dialog, "panel-container").length > 0);
+    const document = parsePromanHtml(input.html);
+    if (!document) return undefined;
+    const dialogs = descendants(document).filter(node => node.attrs.get("role") === "dialog"
+      && node.attrs.get("aria-modal") === "true" && !hiddenPromanNode(node)
+      && descendants(node).some(child => hasClass(child, "panel-container")));
     if (dialogs.length !== 1) return undefined;
-    const panels = elements(dialogs[0]!, "panel-container");
-    if (panels.length !== 1 || hidden(panels[0]!.slice(0, panels[0]!.indexOf(">") + 1))) return undefined;
+    const panels = descendants(dialogs[0]!).filter(node => hasClass(node, "panel-container"));
+    if (panels.length !== 1 || panels[0]!.parent !== dialogs[0] || hiddenPromanNode(panels[0]!)) return undefined;
     const panel = panels[0]!;
-    const ids = [...panel.matchAll(/\bdata-offre-id=["']([^"']+)["']|\bwire:click=["']toggleJobFavorite\(\d+,\s*(\d+),/giu)].map(match => match[1] ?? match[2]);
-    for (const match of panel.matchAll(/\bhref=["']https:\/\/www\.proman-emploi\.fr\/mp(\d+)-[^"']+["']/giu)) ids.push(match[1]);
-    if (!ids.length || ids.some(value => value !== id)) return undefined;
-    const facts = promanFacts(panel);
+    const nodes = [panel, ...descendants(panel)];
+    // Conflicting identities still reject the whole capture, even inside excluded widgets.
+    const identifiers = nodes.flatMap(node => {
+      const ids: string[] = [];
+      if (node.attrs.has("data-offre-id")) ids.push(node.attrs.get("data-offre-id")!);
+      const favorite = /^toggleJobFavorite\(\d+,\s*(\d+),/u.exec(node.attrs.get("wire:click") ?? "");
+      if (favorite) ids.push(favorite[1]!);
+      const link = /^https:\/\/www\.proman-emploi\.fr\/mp(\d+)-/u.exec(node.attrs.get("href") ?? "");
+      if (link) ids.push(link[1]!);
+      return ids.map(value => ({ value, node }));
+    });
+    if (!identifiers.length || identifiers.some(item => item.value !== id)
+      || !identifiers.some(item => !hiddenPromanNode(item.node) && identityOwned(item.node, panel))) return undefined;
+    const headers = nodes.filter(node => hasClass(node, "popin-header-nuage"));
+    const tabs = nodes.filter(node => hasClass(node, "tab-content"));
+    if (headers.length !== 1 || !regionOwned(headers[0]!, panel) || hiddenPromanNode(headers[0]!)) return undefined;
+    const selectedTabs = ["resume", "poste", "profil"].map(name => tabs.filter(node => node.attrs.get("x-show") === `activeTab === '${name}'`));
+    if (selectedTabs.some(matches => matches.length !== 1 || hiddenPromanNode(matches[0]!) || !regionOwned(matches[0]!, panel))) return undefined;
+    const [summary, job, profile] = selectedTabs.map(matches => matches[0]!);
+    const jobHtml = promanOwnedProse(job!), profileHtml = promanOwnedProse(profile!);
+    if (jobHtml === undefined || profileHtml === undefined || !text(jobHtml) || !text(profileHtml)) return undefined;
+    const owned = promanOwnedFields(headers[0]!)
+      + `<div class="tab-content" x-show="activeTab === 'resume'">${promanOwnedFields(summary!)}</div>`
+      + `<div class="tab-content" x-show="activeTab === 'poste'">${jobHtml}</div>`
+      + `<div class="tab-content" x-show="activeTab === 'profil'">${profileHtml}</div>`;
+    const facts = promanFacts(owned);
     if (!facts) return undefined;
     const html = vacancyHtml(facts, id);
     // Agency names and contacts do not feed generic location/employer extraction.
@@ -114,4 +118,20 @@ export class PromanSelectedVacancyContextLocator implements SelectedVacancyConte
     return createAcquisitionContext({ kind: "SELECTED_VACANCY", associationMethod: "PROVIDER_LOCATOR", providerKey: "PROMAN", providerExternalId: id,
       html, text: vacancyText, associationEvidence: ["BOUNDED_JOB_DETAIL", "PROMAN_AUTHENTICATED_MODAL", "URL_EXTERNAL_ID", "PANEL_OFFER_ID", "EXPLICIT_BRANCH_LABEL"] });
   }
+}
+
+/** Regions may only sit under neutral layout divs within this panel. */
+function regionOwned(node: PromanNode, panel: PromanNode): boolean {
+  if (node.tag !== "div" || [...node.attrs.keys()].some(key => !["class", "style", "x-show"].includes(key))) return false;
+  for (let parent = node.parent; parent && parent !== panel; parent = parent.parent) {
+    if (parent.tag !== "div" || unrelatedPromanNode(parent)) return false;
+  }
+  return true;
+}
+function identityOwned(node: PromanNode, panel: PromanNode): boolean {
+  if (node === panel) return true;
+  for (let parent = node.parent; parent && parent !== panel; parent = parent.parent) {
+    if (parent.tag !== "div" || unrelatedPromanNode(parent) || hasClass(parent, "tab-content")) return false;
+  }
+  return true;
 }
