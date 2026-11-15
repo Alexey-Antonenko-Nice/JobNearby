@@ -125,12 +125,12 @@ describe("PROMAN authenticated selected vacancy", () => {
     expect(acquisition.contexts).toBeUndefined();
     expect(JSON.stringify(observation)).not.toMatch(/ACCOUNT_PERSON|SecretSessionValue|Wrong job|100000/);
   });
-  it("reconstructs an old full-page capture without mutating it or reading stale mapped facts", async () => {
+  it("fails closed on an old full-page capture without mutating it or reading stale mapped facts", async () => {
     const { observation } = capture();
     const old = { ...observation, title: "Wrong job", displayedCompanyName: "Wrong employer", salaryText: "100000 EUR / YEAR", metadata: { acquisition: { html: page() } }, rawContent: outside };
     const before = structuredClone(old), evidence = await extractor.extract(old);
-    expect(evidence.vacancyTitles[0]?.value).toBe("Technicien de deploiement informatique H/F");
-    expect(evidence.compensations[0]?.minimum).toBe(13.74); expect(old).toEqual(before);
+    expect(evidence.vacancyTitles).toEqual([]);
+    expect(evidence.compensations).toEqual([]); expect(old).toEqual(before);
   });
   it.each([
     pane.replace("mp1197787-", "mp1197788-"),
