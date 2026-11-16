@@ -1,3 +1,4 @@
+import { AIRBUS_WORKDAY_HOST } from "./AirbusWorkdayVacancy.js";
 import { DAIMLER_TRUCK_SOURCE, trustedDaimlerJobPosting } from "./DaimlerTruckVacancy.js";
 import {
   createAcquisitionPackage,
@@ -115,6 +116,7 @@ function validatePageUrl(value: string): string {
 function sourceNameFromUrl(value: string): string {
   try {
     const hostname = new URL(value).hostname.toLocaleLowerCase();
+    if (hostname === AIRBUS_WORKDAY_HOST) return hostname;
     if (isPersonioHostname(hostname)) return hostname;
     if (hostname.length === 0) return "browser";
     const withoutWww = hostname.startsWith("www.") ? hostname.slice(4) : hostname;

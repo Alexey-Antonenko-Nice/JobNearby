@@ -1,3 +1,4 @@
+import { isAirbusWorkdaySource } from "./AirbusWorkdayVacancy.js";
 import { isRenaultWorkdaySource } from "./RenaultWorkdayVacancy.js";
 import { isKellyWorkdaySource } from "./KellyWorkdayVacancy.js";
 import type { ProviderKey } from "../../domain/acquisition/ProviderKey.js";
@@ -19,6 +20,7 @@ export class HostnameAcquisitionProviderRecognizer implements AcquisitionProvide
     if (input.sourceName === "michaelpage.fr") { try { if (/^(?:www\.)?michaelpage\.fr$/u.test(new URL(input.sourceUrl).hostname)) return "MICHAEL_PAGE"; } catch { return undefined; } }
     if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return "RENAULT_WORKDAY";
     if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return "KELLY_WORKDAY";
+    if (isAirbusWorkdaySource(input.sourceName, input.sourceUrl)) return "AIRBUS_WORKDAY";
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return "PERSONIO";
     try {
       const hostname = new URL(input.sourceUrl).hostname.toLocaleLowerCase();

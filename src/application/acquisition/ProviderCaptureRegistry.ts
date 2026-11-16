@@ -1,3 +1,4 @@
+import { AirbusDirectVacancyContextLocator, airbusDirectFacts } from "./AirbusWorkdayVacancy.js";
 import { isGenericWorkdaySource, locateGenericWorkdayContext } from "./GenericWorkdayVacancy.js";
 import { StellantisSelectedVacancyContextLocator, stellantisFacts } from "./StellantisVacancy.js";
 import { ExpectraSelectedVacancyContextLocator, expectraFacts } from "./ExpectraVacancy.js";
@@ -64,6 +65,7 @@ export class ProviderCaptureRegistry {
   private readonly recognizer = new HostnameAcquisitionProviderRecognizer();
   private readonly idExtractor = new ConservativeProviderVacancyIdExtractor();
   private readonly contextLocators: Partial<Readonly<Record<ProviderKey, SelectedVacancyContextLocator>>> = {
+    AIRBUS_WORKDAY: new AirbusDirectVacancyContextLocator(),
     EXPECTRA_MONACO: new ExpectraSelectedVacancyContextLocator(),
     FRANCE_TRAVAIL: new FranceTravailSelectedVacancyContextLocator(),
     INDEED: new IndeedSelectedVacancyContextLocator(),
@@ -113,6 +115,7 @@ export class ProviderCaptureRegistry {
           providerKey, sourceUrl: input.sourceUrl,
           ...(externalId === undefined ? {} : { externalId }), html: input.html,
         });
+    const airbus = providerKey === "AIRBUS_WORKDAY" && context?.html ? airbusDirectFacts(context.html) : undefined;
     const expectra = providerKey === "EXPECTRA_MONACO" && context?.html ? expectraFacts(context.html) : undefined;
     const personioHeader = providerKey === "PERSONIO" && context?.html !== undefined
       ? extractPersonioHeaderFacts(context.html!) : undefined;
@@ -153,7 +156,7 @@ export class ProviderCaptureRegistry {
     const greenhouse = providerKey === "GREENHOUSE" && context?.html ? greenhouseFacts(context.html) : undefined;
     const stellantis = providerKey === "STELLANTIS" && context?.html ? stellantisFacts(context.html) : undefined;
     const lhh = providerKey === "LHH" && context?.html ? lhhFacts(context.html) : undefined;
-    const structuredFields = expectra ? { title: expectra.title } : lhh ? { title: lhh.title, displayedCompanyName: lhh.company, ...(lhh.location ? { locationText: lhh.location } : {}), ...(lhh.salary ? { salaryText: lhh.salary } : {}), ...(lhh.contract ? { contractText: lhh.contract } : {}) } : hays ? { title: hays.title, displayedCompanyName: hays.company, ...(hays.values.location ? { locationText: hays.values.location } : {}), ...(hays.values.salary ? { salaryText: hays.values.salary } : {}), ...(hays.values.type ? { contractText: hays.values.type } : {}) } : stellantis ? { title: stellantis.title, ...(stellantis.city ? { locationText: stellantis.city } : {}) } : greenhouse ? { title: greenhouse.title, locationText: greenhouse.location } : orano ? { title: orano.title, locationText: orano.location, ...(oranoDate ? { publishedAt: oranoDate } : {}) } : michaelPage ? { title: michaelPage.title, locationText: michaelPage.location, ...(michaelPageDate ? { publishedAt: michaelPageDate } : {}) } : renault ? { ...(renaultDate ? { publishedAt: renaultDate } : {}), title: renault.title, locationText: renault.values.locations!, ...(renault.company ? { displayedCompanyName: renault.company } : {}) } : alstom ? { title: alstom.title, displayedCompanyName: alstom.company, locationText: alstom.location, ...(alstom.publishedAt ? { publishedAt: alstom.publishedAt } : {}) } : apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
+    const structuredFields = airbus ? airbus : expectra ? { title: expectra.title } : lhh ? { title: lhh.title, displayedCompanyName: lhh.company, ...(lhh.location ? { locationText: lhh.location } : {}), ...(lhh.salary ? { salaryText: lhh.salary } : {}), ...(lhh.contract ? { contractText: lhh.contract } : {}) } : hays ? { title: hays.title, displayedCompanyName: hays.company, ...(hays.values.location ? { locationText: hays.values.location } : {}), ...(hays.values.salary ? { salaryText: hays.values.salary } : {}), ...(hays.values.type ? { contractText: hays.values.type } : {}) } : stellantis ? { title: stellantis.title, ...(stellantis.city ? { locationText: stellantis.city } : {}) } : greenhouse ? { title: greenhouse.title, locationText: greenhouse.location } : orano ? { title: orano.title, locationText: orano.location, ...(oranoDate ? { publishedAt: oranoDate } : {}) } : michaelPage ? { title: michaelPage.title, locationText: michaelPage.location, ...(michaelPageDate ? { publishedAt: michaelPageDate } : {}) } : renault ? { ...(renaultDate ? { publishedAt: renaultDate } : {}), title: renault.title, locationText: renault.values.locations!, ...(renault.company ? { displayedCompanyName: renault.company } : {}) } : alstom ? { title: alstom.title, displayedCompanyName: alstom.company, locationText: alstom.location, ...(alstom.publishedAt ? { publishedAt: alstom.publishedAt } : {}) } : apec ? { title: apec.title, ...(apec.company ? { displayedCompanyName: apec.company } : {}), ...(apec.location ? { locationText: apec.location } : {}),
         ...(apec.contract ? { contractText: apec.contract } : {}), ...(apec.salaryText ? { salaryText: apec.salaryText } : {}), ...(apecDate ? { publishedAt: apecDate } : {}) }
 : directEmploi ? { title: directEmploi.title, ...(directEmploi.company ? { displayedCompanyName: directEmploi.company } : {}), ...(directEmploi.location ? { locationText: directEmploi.location } : {}),
         ...(directEmploi.contract ? { contractText: directEmploi.contract } : {}), ...(directEmploiDate ? { publishedAt: directEmploiDate } : {}) }
@@ -179,11 +182,11 @@ export class ProviderCaptureRegistry {
       : workdayContext?.html !== undefined
       ? extractWorkdayStructuredFields(workdayContext.html, input.sourceUrl)
       : undefined;
-    const selectedExternalId = providerKey === "STELLANTIS" ? context?.providerExternalId : apecConflict || directEmploiConflict ? undefined : context?.providerExternalId ?? externalId;
+    const selectedExternalId = providerKey === "STELLANTIS" || providerKey === "AIRBUS_WORKDAY" ? context?.providerExternalId : apecConflict || directEmploiConflict ? undefined : context?.providerExternalId ?? externalId;
     return {
       ...(providerKey === undefined ? {} : { providerKey }),
       ...(selectedExternalId === undefined ? {} : { externalId: selectedExternalId }),
-      ...(providerKey === "PERSONIO" || providerKey === "EXPECTRA_MONACO" || providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" || providerKey === "HAYS" || providerKey === "LHH" || providerKey === "FRANCE_TRAVAIL" ? { requiresSelectedVacancyContext: true } : {}),
+      ...(providerKey === "AIRBUS_WORKDAY" || providerKey === "PERSONIO" || providerKey === "EXPECTRA_MONACO" || providerKey === "HELLOWORK" || providerKey === "TALENT" || providerKey === "ADECCO" || providerKey === "MANPOWER" || providerKey === "RANDSTAD" || providerKey === "SYNERGIE" || providerKey === "CRIT" || providerKey === "ACTUAL" || providerKey === "START_PEOPLE" || providerKey === "PROMAN" || providerKey === "GI_GROUP" || providerKey === "KELLY_WORKDAY" || providerKey === "RENAULT_WORKDAY" || providerKey === "STELLANTIS" || providerKey === "GREENHOUSE" || providerKey === "ORANO" || providerKey === "MICHAEL_PAGE" || providerKey === "APEC" || providerKey === "DIRECT_EMPLOI" || providerKey === "ALSTOM" || providerKey === "HAYS" || providerKey === "LHH" || providerKey === "FRANCE_TRAVAIL" ? { requiresSelectedVacancyContext: true } : {}),
       ...(providerKey === "INDEED" ? { requiresSelectedVacancyContext: requiresIndeedSelectedContext(input.sourceUrl, input.html) } : {}),
       ...(burkert ? { requiresSelectedVacancyContext: true } : {}),
       ...(genericWorkday ? { requiresSelectedVacancyContext: true } : {}),
