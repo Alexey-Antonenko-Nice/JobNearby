@@ -65,6 +65,7 @@ export function createAcquisitionContext(input: AcquisitionContext): Acquisition
     && input.providerKey !== "GREENHOUSE"
     && input.providerKey !== "ORANO"
     && input.providerKey !== "MICHAEL_PAGE"
+    && input.providerKey !== "AIRBUS_WORKDAY"
     && input.providerKey !== "RENAULT_WORKDAY"
     && input.providerKey !== "KELLY_WORKDAY"
     && input.providerKey !== "APEC"

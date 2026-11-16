@@ -1,3 +1,5 @@
+import { AIRBUS_WORKDAY_HOST } from "../acquisition/AirbusWorkdayVacancy.js";
+import { scopeAirbusWorkdayVacancyEvidence } from "./scopeAirbusWorkdayVacancyEvidence.js";
 import { DAIMLER_TRUCK_SOURCE } from "../acquisition/DaimlerTruckVacancy.js";
 import { scopeDaimlerTruckVacancyEvidence } from "./scopeDaimlerTruckVacancyEvidence.js";
 import { requiresGenericWorkdayScope } from "../acquisition/GenericWorkdayVacancy.js";
@@ -49,6 +51,7 @@ type ProviderScope = (input: VacancyEvidenceExtractionInput) => VacancyEvidenceE
  * semantics must be listed here (or be Renault/HelloWork below) rather than reach the legacy fallback.
  */
 const scopeRoutesBySourceName: ReadonlyMap<string, ProviderScope> = new Map<string, ProviderScope>([
+  [AIRBUS_WORKDAY_HOST, scopeAirbusWorkdayVacancyEvidence],
   [DAIMLER_TRUCK_SOURCE, scopeDaimlerTruckVacancyEvidence],
   ["expectra.mc", scopeExpectraVacancyEvidence],
   ["job-boards.eu.greenhouse.io", scopeGreenhouseVacancyEvidence],

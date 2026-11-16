@@ -31,6 +31,7 @@ const samples: Readonly<Record<ProviderKey, Sample>> = {
   GREENHOUSE: host("job-boards.eu.greenhouse.io"),
   ORANO: host("jobs.orano.group"),
   MICHAEL_PAGE: { sourceName: "michaelpage.fr", sourceUrl: "https://www.michaelpage.fr/job-detail/x/ref/1" },
+  AIRBUS_WORKDAY: host("ag.wd3.myworkdayjobs.com", "/Airbus/job/Toulouse/Engineer_JR123"),
   RENAULT_WORKDAY: host("alliancewd.wd3.myworkdayjobs.com", "/fr-FR/renault-group-careers/job/x_JOBREQ_1"),
   KELLY_WORKDAY: host("kellyservices.wd503.myworkdayjobs.com", "/en-US/corporatecareers-kellyservices-com/details/x_123"),
   APEC: { sourceName: "apec.fr", sourceUrl: "https://www.apec.fr/candidat/recherche-emploi.html/emploi/detail-offre/123" },

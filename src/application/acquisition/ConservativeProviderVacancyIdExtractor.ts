@@ -1,3 +1,4 @@
+import { AIRBUS_WORKDAY_HOST, airbusDirectRoute, isAirbusWorkdaySource } from "./AirbusWorkdayVacancy.js";
 import { stellantisVacancyId } from "./StellantisVacancy.js";
 import { expectraVacancyId } from "./ExpectraVacancy.js";
 import { greenhouseVacancyId } from "./GreenhouseVacancy.js";
@@ -69,6 +70,10 @@ export class ConservativeProviderVacancyIdExtractor
     if (input.sourceName === "michaelpage.fr") return michaelPageVacancyId(input.sourceUrl);
     if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return renaultVacancyId(input.sourceUrl);
     if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return kellyVacancyId(input.sourceUrl);
+    if (isAirbusWorkdaySource(input.sourceName, input.sourceUrl)) {
+      const route = airbusDirectRoute(input.sourceUrl);
+      return route && !route.suffixed ? route.requisitionId : undefined;
+    }
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return extractPersonioVacancyId(input.sourceUrl);
     if (input.sourceName.endsWith(".myworkdayjobs.com")) {
       try {
@@ -143,6 +148,7 @@ function nonEmptyParameter(url: URL, name: string): string | undefined {
 
 function normalizeHostname(hostname: string): string {
   const normalized = hostname.toLocaleLowerCase();
+  if (normalized === AIRBUS_WORKDAY_HOST) return normalized;
   const withoutWww = normalized.startsWith("www.") ? normalized.slice(4) : normalized;
   const labels = withoutWww.split(".");
   return labels.length > 2 && /^[a-z]{2}(?:-[a-z]{2})?$/u.test(labels[0] ?? "")
