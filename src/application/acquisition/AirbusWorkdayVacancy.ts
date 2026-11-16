@@ -183,3 +183,6 @@ export class AirbusDirectVacancyContextLocator implements SelectedVacancyContext
       associationEvidence: ["AIRBUS_DIRECT_JOB_ROUTE", "OWNED_DIRECT_JOB_DETAILS", "MATCHING_DOM_REQUISITION"] });
   }
 }
+
+/** Shared structural operations; selected-pane routing does not alter the direct contract. */
+export const airbusDom = { parse, children, descendants, elements, contains, hidden, ownedPath, plain, escape, automation };

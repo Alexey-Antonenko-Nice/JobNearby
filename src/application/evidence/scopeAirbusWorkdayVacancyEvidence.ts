@@ -1,9 +1,12 @@
+import { airbusDetailsRoute } from "../acquisition/AirbusSelectedPaneVacancy.js";
+import { scopeAirbusSelectedPaneVacancyEvidence } from "./scopeAirbusSelectedPaneVacancyEvidence.js";
 import type { VacancyEvidenceExtractionInput } from "../../domain/evidence/VacancyEvidenceInput.js";
 import type { AcquisitionContext } from "../../domain/acquisition/AcquisitionContext.js";
 import { AirbusDirectVacancyContextLocator, airbusDirectFacts, isAirbusWorkdaySource } from "../acquisition/AirbusWorkdayVacancy.js";
 import { buildBoundedEvidenceView } from "./buildBoundedEvidenceView.js";
 
 export function scopeAirbusWorkdayVacancyEvidence(input: VacancyEvidenceExtractionInput) {
+  if (airbusDetailsRoute(input.source.sourceUrl ?? "")) return scopeAirbusSelectedPaneVacancyEvidence(input);
   const acquisition = record(input.metadata.acquisition);
   const identity = { id: input.id, source: { sourceType: input.source.sourceType, sourceName: input.source.sourceName,
     ...(input.source.sourceUrl === undefined ? {} : { sourceUrl: input.source.sourceUrl }) }, observedAt: input.observedAt, metadata: {} };
