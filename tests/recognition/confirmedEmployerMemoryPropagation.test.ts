@@ -63,4 +63,17 @@ describe("confirmed employer memory propagation", () => {
     expect(result.outcome).toBe("CREATED_NEW_CLUSTER");
     if (result.outcome === "CREATED_NEW_CLUSTER") expect(result.employerCluster.id).toBe("new");
   });
+  it.each(["STAFFING_AGENCY", "RECRUITER", "CLIENT"] as const)("Airbus exact-name memory rejects %s contradiction without human confirmation", async (role) => {
+    const cluster = { id: "airbus-india-confirmed", status: "PROBABLY_RESOLVED" as const, displayLabel: "Airbus India Private Limited", createdAt: date(), updatedAt: date() };
+    const deps = setup(); await deps.clusters.save(cluster);
+    await deps.assignments.save(createObservationClusterAssignment({ sourceObservationId: "historical", employerClusterId: cluster.id, confidence: 1, status: "USER_CONFIRMED", algorithm: "user", algorithmVersion: "1" }, { now: date, generateId: () => "historical" }));
+    const evidence = { sourceObservationId: "later", organizations: [{ value: "Airbus India Private Limited", role: "UNKNOWN" as const, provenance: { sourceObservationId: "later", extractionMethod: "DIRECT_FIELD" as const, confidence: 1 } }, { value: "Airbus India Private Limited", role, provenance: { sourceObservationId: "later", extractionMethod: "TEXT_EXTRACTION" as const, confidence: 0.98 } }] };
+    const result = await processObservation({ ...source("later"), source: {sourceType:"JOB_BOARD",sourceName:"ag.wd3.myworkdayjobs.com",externalId:"JR10456441"},displayedCompanyName:"Airbus India Private Limited" }, { clusterRepository: deps.clusters, assignmentRepository: deps.assignments, recognitionPersistence: deps.persistence, matcher: { findBestMatch: async () => null }, policy: { automaticAssignmentThreshold: 0.9, reviewThreshold: 0.65 }, algorithm: "matcher", algorithmVersion: "1", evidenceExtractor: { extract: async () => createExtractedVacancyEvidence(evidence) }, generateClusterId: () => "new", generateAssignmentId: () => "new-assignment" });
+    expect(result.outcome).toBe("CREATED_NEW_CLUSTER");
+    const effective = await deps.assignments.findEffectiveByObservationId("later");
+    expect(effective!.status).not.toBe("USER_CONFIRMED");
+    expect(effective!.algorithm).not.toBe("confirmed-employer-memory");
+    expect((await deps.assignments.findByObservationId("historical"))[0]!.status).toBe("USER_CONFIRMED");
+    if (result.outcome === "CREATED_NEW_CLUSTER") expect(result.employerCluster.id).toBe("new");
+  });
 });
