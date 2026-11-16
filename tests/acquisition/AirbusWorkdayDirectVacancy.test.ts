@@ -45,6 +45,46 @@ async function rejected(html: string, url = aeroUrl) {
 }
 
 describe("Airbus direct Workday boundary", () => {
+  const stickyFragment = readFileSync("tests/fixtures/airbusDirectStickyHeader.html", "utf8");
+  const stickyCapture = () => change(aero, d => d.querySelector(q('job-posting-details'))!.parentElement!.insertAdjacentHTML('afterbegin', stickyFragment));
+  it("processes the real direct URL with its corroborated sticky header through the browser pipeline", async () => {
+    const html = stickyCapture();
+    const { acquisition, observation } = capture(html, aeroUrl);
+    expect(acquisition.source.sourceName).toBe(AIRBUS_WORKDAY_HOST);
+    expect(acquisition.externalId).toBe('JR10453159');
+    expect(acquisition.contexts).toHaveLength(1);
+    expect(acquisition.contexts![0]!.html).not.toContain('jobPostingStickyWrapper');
+    expect(acquisition.contexts![0]!.html).not.toContain('similarJobsCard');
+    expect(await assessBrowserVacancyCapture(observation, extractor)).toMatchObject({ captureAcceptedAsVacancy: true });
+    expect(JSON.stringify(await extractor.extract(observation))).not.toContain('OUTSIDE_');
+    expect((await extractor.extract(observation)).vacancyTitles.length).toBeGreaterThan(0);
+    const db = createDatabase(':memory:');
+    try {
+      const runtime = createCaptureProcessingRuntime(db);
+      const payload = { pageUrl: aeroUrl, pageTitle: 'OUTSIDE_TITLE', visibleText: 'OUTSIDE_RAW', html, capturedAt: '2026-11-16T06:00:00Z' };
+      expect((await runtime.captureAndProcessBrowserVacancy(payload)).processing.status).toBe('PROCESSED');
+      expect(db.prepare('SELECT provider_namespace,external_id FROM canonical_vacancy_exact_identity_claims').all())
+        .toEqual([{ provider_namespace: AIRBUS_WORKDAY_HOST, external_id: 'JR10453159' }]);
+      expect((await runtime.captureAndProcessBrowserVacancy({ ...payload, pageUrl: aeroUrl.replace('/job/Toulouse-Area/', '/details/') })).processing.status).toBe('VACANCY_NOT_DETECTED');
+    } finally { db.close(); }
+  });
+  it.each([
+    { label: 'different sticky title', edit: (d: Document) => { d.querySelector(q('jobPostingStickyWrapper') + ' h2')!.textContent = 'Unrelated vacancy title'; } },
+    { label: 'different sticky apply ID', edit: (d: Document) => { d.querySelector(q('jobPostingStickyWrapper') + ' a')!.setAttribute('href', aeroUrl.replace('JR10453159', 'JR999') + '/apply'); } },
+    { label: 'duplicate sticky region', edit: (d: Document) => { const e = d.querySelector(q('jobPostingStickyWrapper'))!; e.after(e.cloneNode(true)); } },
+    { label: 'unowned sticky region', edit: (d: Document) => d.body.appendChild(d.querySelector(q('jobPostingStickyWrapper'))!) },
+    { label: 'hidden sticky title', edit: (d: Document) => d.querySelector(q('jobPostingStickyWrapper') + ' h2')!.setAttribute('hidden', '') },
+    { label: 'nested job in sticky region', edit: (d: Document) => d.querySelector(q('jobPostingStickyWrapper'))!.insertAdjacentHTML('beforeend', '<div data-automation-id="similarJobsCard">Other job</div>') },
+    { label: 'missing sticky apply', edit: (d: Document) => d.querySelector(q('jobPostingStickyWrapper') + ' a')!.remove() },
+    { label: 'missing main header', edit: (d: Document) => d.querySelectorAll(q('jobPostingHeader'))[1]!.remove() },
+  ])("rejects $label in the direct sticky state", async ({ edit }) => rejected(change(stickyCapture(), edit)));
+  it("never extracts arbitrary prose from a corroborated sticky control", async () => {
+    const html = change(stickyCapture(), d => d.querySelector(q('jobPostingStickyWrapper'))!.insertAdjacentHTML('beforeend', '<p>Employeur : OUTSIDE_STICKY_EMPLOYER</p>'));
+    const { acquisition, observation } = capture(html);
+    expect(acquisition.contexts).toHaveLength(1);
+    expect(JSON.stringify(await extractor.extract(observation))).not.toContain('OUTSIDE_');
+  });
+
   it.each([
     { label: "Digital Board Designer", html: digital, url: digitalUrl, id: "JR10448154", title: "Digital Board Designer (f/m)" },
     { label: "Experimental aerodynamics", html: aero, url: aeroUrl, id: "JR10453159", title: "Experimental aerodynamics - Wind tunnel model designer and stress calculation (m/f)" },
