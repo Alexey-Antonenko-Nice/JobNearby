@@ -1,5 +1,6 @@
 import { getEmployerIdentityReview } from "./employerIdentityReview.js";
-import { buildOrganizationRoleReview, projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
+import { buildOrganizationRoleReview, effectiveRoleDecisions, projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
+import { deriveEmployerPresentation } from "./deriveEmployerPresentation.js";
 import type { VacancyOrganizationRoleDecisionRepository } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { getRecruitingAgencyProjection } from "./recruitingAgencyReview.js";
 import type { ConfirmedOrganizationRoleRepository } from "../../domain/organizations/ConfirmedOrganizationRole.js";
@@ -44,8 +45,16 @@ export async function getVacancyReviewView(
   const storedVacancy = await dependencies.canonicalVacancyRepository.findById(canonicalVacancyId);
   if (storedVacancy === null) throw new Error(`CanonicalVacancy "${canonicalVacancyId}" does not exist.`);
 
+  const roleDecisions = dependencies.organizationRoleDecisionRepository
+    ? await dependencies.organizationRoleDecisionRepository.listForVacancy(canonicalVacancyId)
+    : [];
+  const effectiveRoles = effectiveRoleDecisions(roleDecisions);
+  const hasHumanEmployerRoleDecision = effectiveRoles.employer !== null;
+  const confirmedEmployerName = effectiveRoles.employer === null
+    ? undefined
+    : effectiveRoles.latest.get(effectiveRoles.employer)?.organizationName;
   const agencyProjection = dependencies.organizationRoleDecisionRepository
-    ? { vacancy: projectOrganizationRoleDecisions(storedVacancy, await dependencies.organizationRoleDecisionRepository.listForVacancy(canonicalVacancyId)), context: { candidates: [], known: [], ambiguousNames: [] } }
+    ? { vacancy: projectOrganizationRoleDecisions(storedVacancy, roleDecisions), context: { candidates: [], known: [], ambiguousNames: [] } }
     : await getRecruitingAgencyProjection(storedVacancy, dependencies.agencyMemoryRepository);
   const vacancy = agencyProjection.vacancy;
   const observationIds = [...new Set(vacancy.sourceObservationIds)];
@@ -91,6 +100,15 @@ export async function getVacancyReviewView(
   const groupedOrganizations = groupOrganizations(vacancy.organizationRelationships.map(r => r.role === "EMPLOYER" && r.employerClusterId && employerClusterId ? { ...r, employerClusterId } : r));
 
   const memoryCandidates = await getEmployerMemoryReviewCandidates(vacancy, dependencies);
+  const employerDisplayState = deriveEmployerPresentation({
+    clusterStatus: employerCluster?.status ?? null,
+    assignment: confirmedAssignment,
+    hasHumanEmployerRoleDecision,
+    reviewRequired: memoryCandidates.length > 0,
+    ...(confirmedEmployerName === undefined ? {} : { confirmedEmployerName }),
+    ...(employerCluster?.displayLabel === undefined ? {} : { clusterDisplayName: employerCluster.displayLabel }),
+    organizationRelationships: vacancy.organizationRelationships,
+  });
   const namedClient = memoryCandidates.length === 0 ? await getNamedClientEmployerCandidate(vacancy, dependencies) : null;
   const aliasSelection = memoryCandidates.length === 0 ? await getEmployerAliasSelection(vacancy, dependencies) : null;
   const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : []), ...(aliasSelection ? [aliasSelection] : [])];
@@ -135,6 +153,8 @@ export async function getVacancyReviewView(
     employer: {
       employerClusterId,
       status: employerCluster?.status ?? null,
+      displayState: employerDisplayState.displayState,
+      displayName: employerDisplayState.displayName,
       resolvedEmployerId: employerCluster?.resolvedEmployerId ?? null,
       knownBefore: knownEmployer,
       previousVacancyCount: previousVacancies.length,

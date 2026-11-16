@@ -22,7 +22,7 @@ describe("ReviewPage", () => {
     render(<ReviewPage />);
     expect(await screen.findByText(qualification)).toBeInTheDocument();
     expect(screen.getByText(technical)).toBeInTheDocument();
-    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
     expect(screen.getByText("Dexory")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeInTheDocument();
   });
@@ -34,7 +34,7 @@ describe("ReviewPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm as recruiting agency" }));
     expect(await screen.findByText(/Staffing agency — Confirmed/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirm as recruiting agency" })).not.toBeInTheDocument();
-    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
     expect(screen.queryByText("private-memory-id")).not.toBeInTheDocument();
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/recruiting-agency-confirmation");
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ candidateId: "agency-candidate" });
@@ -52,7 +52,7 @@ describe("ReviewPage", () => {
     render(<ReviewPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Confirm as recruiting agency" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("no longer eligible");
-    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
   });
   it("shows earlier compensation separately from the current salary with its observation date", async () => {
     const current = review({ compensation: { minimum: 32000, maximum: 36000, currency: "EUR", period: "YEAR" } });
@@ -177,10 +177,10 @@ describe("ReviewPage", () => {
 
   it.each(["UNRESOLVED", "CONFLICTED"])("does not present authoritative history for %s", async (status) => {
     respond({ review: review({ status }) }); render(<ReviewPage />);
-    await screen.findByRole("heading", { name: "Employer memory" });
+    await screen.findByRole("region", { name: "Employer status" });
     expect(screen.queryByRole("heading", { name: "Employer history" })).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Employer context" })).not.toBeInTheDocument();
-    if (status === "CONFLICTED") expect(screen.getByText("Employer identity requires review")).toBeInTheDocument();
+    if (status === "CONFLICTED") expect(screen.getByText(/Employer needs review/)).toBeInTheDocument();
   });
 
   it("shows absent previous interaction without substituting capture date", async () => {
@@ -340,7 +340,7 @@ describe("ReviewPage", () => {
 
   it("shows an unlinked employer explicitly", async () => {
     respond({ review: review({ employerClusterId: null }) }); render(<ReviewPage />);
-    expect(await screen.findByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(await screen.findByText(/Employer not confirmed yet/)).toBeInTheDocument();
   });
 
   it("keeps ACTUA recruiter and HEUFT client visible without offering employer confirmation", async () => {
@@ -352,7 +352,7 @@ describe("ReviewPage", () => {
     expect(await screen.findByText("ACTUA SAVERNE")).toBeInTheDocument();
     expect(screen.getByText("ACTUA Saverne")).toBeInTheDocument();
     expect(screen.getByText("HEUFT France")).toBeInTheDocument();
-    expect(screen.getByText("Employer unresolved / not linked")).toBeInTheDocument();
+    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirm employer" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -360,12 +360,12 @@ describe("ReviewPage", () => {
 
   it("offers and submits a clean employer confirmation candidate", async () => {
     respond({ review: review({ confirmationCandidate: "Air Products S.A.S (FR)" }) });
-    respond({ review: review({ confirmationCandidate: null, status: "PROBABLY_RESOLVED" }) });
+    respond({ review: review({ confirmationCandidate: null, status: "PROBABLY_RESOLVED", displayState: "HUMAN_CONFIRMED" }) });
     const user = userEvent.setup(); render(<ReviewPage />);
     expect(await screen.findByText(/Employer candidate:/u)).toHaveTextContent("Air Products S.A.S (FR)");
     await user.click(screen.getByRole("button", { name: "Confirm as employer" }));
     expect(fetchMock.mock.calls[1]![0]).toContain("/employer-confirmation");
-    expect(await screen.findByText("Employer status", { exact: false })).toBeInTheDocument();
+    expect(await screen.findByText(/Confirmed by you/)).toBeInTheDocument();
   });
 
   it("renders known-employer history signals", async () => {
@@ -381,6 +381,20 @@ describe("ReviewPage", () => {
     expect(screen.getByText("Consultancy name")).toBeInTheDocument();
   });
 
+  it("shows memory reuse without claiming a vacancy-specific role confirmation", async () => {
+    const current = review({ displayState: "MEMORY_REUSED", displayName: "Airbus" });
+    respond({ review: { ...current, organizationRoleReview: [{
+      identityKey: "name:airbus", name: "Airbus", recommendedRole: "EMPLOYER", confidence: 1,
+      evidenceStrength: "EXPLICIT", reasons: [], confirmedRole: null, candidateToken: "token",
+      history: [], actions: ["EMPLOYER", "STAFFING_AGENCY", "RECRUITER", "CLIENT", "CONSULTANCY"].map((role) => ({ role, warning: null })),
+    }] } });
+    render(<ReviewPage />);
+    expect(await screen.findByText(/Airbus — Recognized from previous confirmation/)).toBeInTheDocument();
+    expect(screen.getByText(/you have not confirmed the employer role for this vacancy/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeEnabled();
+    expect(screen.queryByText("Confirmed for this vacancy: employer")).not.toBeInTheDocument();
+  });
+
   it("shows recurrence for multiple observations", async () => {
     respond({ review: review({ sameCanonicalVacancySeenBefore: true, hasMultipleSourceObservations: true }) }); render(<ReviewPage />);
     expect(await screen.findByText("Same vacancy seen before")).toBeInTheDocument();
@@ -393,7 +407,7 @@ function json(body: unknown, status = 200): Response { return new Response(JSON.
 function review(overrides: Record<string, unknown> = {}) {
   const vacancy = { canonicalVacancyId: "canonical-1", canonicalizationStatus: "CANONICAL", title: "Developer", location: "Paris", locationAlternatives: [], engagement: "FULL_TIME", workMode: "HYBRID", compensation: "50000", latestObservedAt: "2026-09-01T00:00:00.000Z", sourceObservationCount: 1, sourceLinks: [] };
   const user = { currentState: "NEW", lastInteractionAt: null, everApplied: false, everInterviewed: false, everRejected: false };
-  const employer = { employerClusterId: "cluster-1", status: "RESOLVED", resolvedEmployerId: "employer-1", knownBefore: false, previousVacancyCount: 0, previousInteractedVacancyCount: 0, everAppliedToEmployer: false, everInterviewedWithEmployer: false, everRejectedByEmployer: false };
+  const employer = { employerClusterId: "cluster-1", status: "RESOLVED", displayState: "INFERRED" as string, displayName: "Actual employer" as string | null, resolvedEmployerId: "employer-1", knownBefore: false, previousVacancyCount: 0, previousInteractedVacancyCount: 0, everAppliedToEmployer: false, everInterviewedWithEmployer: false, everRejectedByEmployer: false };
   const organizations = { employerRelationships: [{ role: "EMPLOYER", rawName: "Actual employer" }], displayedCompanies: [], recruiters: [{ role: "RECRUITER", rawName: "Recruiter name" }], consultancies: [{ role: "CONSULTANCY", rawName: "Consultancy name" }], staffingAgencies: [], clients: [], otherRelationships: [] };
   const recognition = { sameCanonicalVacancySeenBefore: false, employerSeenBefore: false, unresolvedEmployer: false };
   const reviewSignals = { isNewVacancy: true, isKnownEmployer: false, alreadyAppliedToThisVacancy: false, previouslyAppliedToEmployer: false, previouslyInterviewedWithEmployer: false, previouslyRejectedByEmployer: false, hasMultipleSourceObservations: false };
@@ -405,6 +419,10 @@ function review(overrides: Record<string, unknown> = {}) {
     else if (key in recognition) Object.assign(recognition, { [key]: value });
     else Object.assign(reviewSignals, { [key]: value });
   }
+  if (!("displayState" in overrides)) employer.displayState = employer.status === "CONFLICTED"
+    ? "REVIEW_REQUIRED"
+    : employer.status === "UNRESOLVED" || employer.employerClusterId === null ? "UNRESOLVED" : "INFERRED";
+  if (!("displayName" in overrides)) employer.displayName = employer.employerClusterId === null ? null : "Actual employer";
   return { vacancy, user, employer, organizations, recognition, reviewSignals };
 }
 function employerHistory() {

@@ -1,4 +1,7 @@
-import { projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
+import { effectiveRoleDecisions, projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
+import { deriveEmployerPresentation } from "./deriveEmployerPresentation.js";
+import { getEmployerMemoryReviewCandidates } from "./employerMemoryReview.js";
+import type { EmployerAliasEvidenceRepository } from "../../domain/recognition/EmployerAliasEvidence.js";
 import type { VacancyOrganizationRoleDecisionRepository } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { normalizeOrganizationEvidenceName } from "../../domain/evidence/OrganizationEvidence.js";
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
@@ -23,7 +26,8 @@ export async function getVacancyInbox(
     readonly canonicalVacancyRepository: Pick<CanonicalVacancyRepository, "findAll">;
     readonly sourceObservationRepository: Pick<SourceObservationRepository, "findById">;
     readonly interactionRepository: UserVacancyInteractionRepository;
-    readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById">;
+    readonly employerClusterRepository: Pick<EmployerClusterRepository, "findById"> & Partial<Pick<EmployerClusterRepository, "findCandidates">>;
+    readonly aliasRepository?: EmployerAliasEvidenceRepository;
     readonly assignmentRepository?: ObservationClusterAssignmentRepository;
     readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
     readonly employerMemoryPublicDataSource: EmployerMemoryPublicDataSource;
@@ -44,7 +48,15 @@ function validateLimit(limit: number | undefined): number {
 }
 
 async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeof getVacancyInbox>[1]): Promise<VacancyInboxItem> {
-  if (dependencies.organizationRoleDecisionRepository) vacancy = projectOrganizationRoleDecisions(vacancy, await dependencies.organizationRoleDecisionRepository.listForVacancy(vacancy.id));
+  const roleDecisions = dependencies.organizationRoleDecisionRepository
+    ? await dependencies.organizationRoleDecisionRepository.listForVacancy(vacancy.id)
+    : [];
+  const effectiveRoles = effectiveRoleDecisions(roleDecisions);
+  const hasHumanEmployerRoleDecision = effectiveRoles.employer !== null;
+  const confirmedEmployerName = effectiveRoles.employer === null
+    ? undefined
+    : effectiveRoles.latest.get(effectiveRoles.employer)?.organizationName;
+  if (dependencies.organizationRoleDecisionRepository) vacancy = projectOrganizationRoleDecisions(vacancy, roleDecisions);
   const observations = await Promise.all(vacancy.sourceObservationIds.map(async (id) => {
     const observation = await dependencies.sourceObservationRepository.findById(id);
     if (observation === null) throw new Error(`CanonicalVacancy "${vacancy.id}" references missing SourceObservation "${id}".`);
@@ -53,6 +65,19 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
   const history = await getUserVacancyHistory(vacancy.id, dependencies.interactionRepository);
   const confirmedAssignment = dependencies.assignmentRepository === undefined ? null : await latestEffectiveAssignment(vacancy.sourceObservationIds, dependencies.assignmentRepository);
   const employerClusterId = confirmedAssignment?.employerClusterId ?? effectiveEmployerClusterId(vacancy.organizationRelationships);
+  const employerCluster = employerClusterId === null
+    ? null
+    : await dependencies.employerClusterRepository.findById(employerClusterId);
+  const memoryReviewCandidates = await getEmployerMemoryReviewCandidates(vacancy, dependencies);
+  const employerPresentation = deriveEmployerPresentation({
+    clusterStatus: employerCluster?.status ?? null,
+    assignment: confirmedAssignment,
+    hasHumanEmployerRoleDecision,
+    reviewRequired: memoryReviewCandidates.length > 0,
+    ...(confirmedEmployerName === undefined ? {} : { confirmedEmployerName }),
+    ...(employerCluster?.displayLabel === undefined ? {} : { clusterDisplayName: employerCluster.displayLabel }),
+    organizationRelationships: vacancy.organizationRelationships,
+  });
   const employerMemory = employerClusterId === null ? null : await getEmployerMemoryView(employerClusterId, {
     employerClusterRepository: dependencies.employerClusterRepository, publicDataSource: dependencies.employerMemoryPublicDataSource, interactionRepository: dependencies.interactionRepository,
   });
@@ -65,7 +90,7 @@ async function itemFor(vacancy: CanonicalVacancy, dependencies: Parameters<typeo
     title: resolved(vacancy.role)?.title ?? null, location: resolved(vacancy.location), locationAlternatives: alternatives(vacancy.location), engagement: resolved(vacancy.engagement), workMode: resolved(vacancy.workMode),
     latestObservedAt: extremeDate(dates, Math.max), firstObservedAt: extremeDate(dates, Math.min), sourceObservationCount, sourceLinks: collectVacancySourceLinks(observations),
     userState: history.currentState, lastUserInteractionAt: history.events.at(-1)?.occurredAt ?? null,
-    employer: { employerClusterId, status: employerMemory?.employerCluster.status ?? null, knownBefore: previousVacancyCount > 0, unresolvedEmployer: employerClusterId === null || employerMemory?.employerCluster.status === "UNRESOLVED" },
+    employer: { employerClusterId, status: employerCluster?.status ?? null, displayState: employerPresentation.displayState, displayName: employerPresentation.displayName, knownBefore: previousVacancyCount > 0, unresolvedEmployer: employerClusterId === null || employerCluster?.status === "UNRESOLVED" },
     organizations: { employerName: organizationNames(vacancy.organizationRelationships, "EMPLOYER")[0] ?? null, displayedCompanyNames: organizationNames(vacancy.organizationRelationships, "DISPLAYED_COMPANY"), recruiterNames: organizationNames(vacancy.organizationRelationships, "RECRUITER"), consultancyNames: organizationNames(vacancy.organizationRelationships, "CONSULTANCY") },
     signals: { sameCanonicalVacancySeenBefore: sourceObservationCount > 1, hasMultipleSourceObservations: sourceObservationCount > 1, alreadyAppliedToThisVacancy: eventTypes.has("APPLIED") },
   };

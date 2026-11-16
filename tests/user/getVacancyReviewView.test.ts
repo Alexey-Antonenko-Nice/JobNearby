@@ -7,6 +7,7 @@ import type { EmployerCluster } from "../../src/domain/recognition/EmployerClust
 import type { UserVacancyInteractionEvent, UserVacancyInteractionType } from "../../src/domain/user/UserVacancyInteractionEvent.js";
 import type { CanonicalField } from "../../src/domain/vacancies/CanonicalField.js";
 import type { CanonicalVacancy, VacancyOrganizationRelationship } from "../../src/domain/vacancies/CanonicalVacancy.js";
+import type { ObservationClusterAssignmentRepository } from "../../src/domain/recognition/ObservationClusterAssignmentRepository.js";
 import { InMemoryUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/InMemoryUserVacancyInteractionRepository.js";
 
 describe("getVacancyReviewView", () => {
@@ -52,6 +53,54 @@ describe("getVacancyReviewView", () => {
     expect(view.reviewSignals).toMatchObject({
       isNewVacancy: true, isKnownEmployer: false, alreadyAppliedToThisVacancy: false,
     });
+  });
+
+  it("projects Airbus employer provenance without changing role or identity evidence", async () => {
+    const displayedOnly = canonical("current", ["source-1"], [relationship("DISPLAYED_COMPANY", "Airbus")]);
+    const unresolved = await query(displayedOnly, [], [], null);
+    expect(unresolved.employer).toMatchObject({ displayState: "UNRESOLVED", displayName: "Airbus" });
+
+    const inferredVacancy = canonical("current", ["source-1"], [employer("cluster-1")]);
+    const airbusCluster = { ...defaultCluster(), displayLabel: "Airbus" };
+    const inferred = await query(inferredVacancy, [], [memory("current")], airbusCluster);
+    expect(inferred.employer).toMatchObject({ displayState: "INFERRED", displayName: "Airbus" });
+
+    const conflicted = await query(inferredVacancy, [], [], { ...airbusCluster, status: "CONFLICTED" });
+    expect(conflicted.employer.displayState).toBe("REVIEW_REQUIRED");
+
+    const decision = {
+      id: "role-decision", canonicalVacancyId: "current", identityKey: "name:airbus",
+      organizationName: "Airbus", normalizedName: "airbus", role: "EMPLOYER" as const,
+      previousDecisionId: null, basis: {}, overrideAcknowledged: false, createdAt: new Date("2026-01-01"),
+    };
+    const humanConfirmed = await query(
+      canonical("current", ["source-1"], [relationship("DISPLAYED_COMPANY", "Airbus")]),
+      [], [], null, undefined,
+      { organizationRoleDecisionRepository: {
+        listForVacancy: async () => [decision],
+        listForIdentity: async () => [decision],
+        findById: async () => decision,
+        commit: async () => {},
+      } },
+    );
+    expect(humanConfirmed.employer).toMatchObject({ displayState: "HUMAN_CONFIRMED", displayName: "Airbus" });
+
+    const reusedAssignment = {
+      id: "memory-assignment", sourceObservationId: "source-1", employerClusterId: "cluster-1",
+      confidence: 1, status: "ACCEPTED" as const, algorithm: "confirmed-employer-memory",
+      algorithmVersion: "1", evaluatedAt: new Date("2026-01-01"),
+    };
+    const assignmentRepository: ObservationClusterAssignmentRepository = {
+      findById: async () => reusedAssignment,
+      findByObservationId: async () => [reusedAssignment],
+      findEffectiveByObservationId: async () => reusedAssignment,
+      findCurrentProposalByObservationId: async () => null,
+      save: async () => {},
+      replaceCurrentProposal: async () => {},
+    };
+    const memoryReused = await query(inferredVacancy, [], [memory("current")], airbusCluster, undefined, { assignmentRepository });
+    expect(memoryReused.employer).toMatchObject({ displayState: "MEMORY_REUSED", displayName: "Airbus" });
+    expect(memoryReused.organizationRoleReview).toBeUndefined();
   });
 
   it("separates repeated public observations from private newness", async () => {
@@ -218,10 +267,12 @@ async function query(
   publicVacancies: readonly EmployerMemoryPublicVacancy[],
   cluster: EmployerCluster | null | undefined = undefined,
   observations = vacancy.sourceObservationIds.map((id, index) => observation(id, `2026-09-0${index + 1}`)),
+  dependencyOverrides: Partial<Parameters<typeof getVacancyReviewView>[1]> = {},
 ) {
   const deps = dependencies(events, publicVacancies, cluster === undefined ? defaultCluster() : cluster, observations);
   return getVacancyReviewView(vacancy.id, {
     ...deps, canonicalVacancyRepository: { findById: async () => vacancy },
+    ...dependencyOverrides,
   });
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getVacancyInbox } from "../../src/application/user/getVacancyInbox.js";
+import type { ObservationClusterAssignmentRepository } from "../../src/domain/recognition/ObservationClusterAssignmentRepository.js";
 import { InMemoryUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/InMemoryUserVacancyInteractionRepository.js";
 
 describe("getVacancyInbox", () => {
@@ -53,6 +54,51 @@ describe("getVacancyInbox", () => {
     expect(inbox[0]!.employer).toMatchObject({ status: "UNRESOLVED", unresolvedEmployer: true });
   });
 
+  it("shows Airbus provenance consistently for inferred, reused, unresolved, and conflicted assignments", async () => {
+    const cluster = { id: "airbus-cluster", status: "PROBABLY_RESOLVED" as const, displayLabel: "Airbus", createdAt: new Date("2026-01-01"), updatedAt: new Date("2026-01-01") };
+    const inferred = await query([vacancy("inferred", ["one"], [{ role: "EMPLOYER", employerClusterId: cluster.id }])], undefined, undefined, {}, cluster);
+    expect(inferred[0]!.employer).toMatchObject({ displayState: "INFERRED", displayName: "Airbus" });
+
+    const assignment = {
+      id: "memory-assignment", sourceObservationId: "one", employerClusterId: cluster.id,
+      confidence: 1, status: "ACCEPTED" as const, algorithm: "confirmed-employer-memory",
+      algorithmVersion: "1", evaluatedAt: new Date("2026-01-01"),
+    };
+    const assignmentRepository: ObservationClusterAssignmentRepository = {
+      findById: async () => assignment,
+      findByObservationId: async () => [assignment],
+      findEffectiveByObservationId: async () => assignment,
+      findCurrentProposalByObservationId: async () => null,
+      save: async () => {},
+      replaceCurrentProposal: async () => {},
+    };
+    const reused = await query([vacancy("reused", ["one"], [{ role: "EMPLOYER", employerClusterId: cluster.id }])], undefined, undefined, {}, cluster, { assignmentRepository });
+    expect(reused[0]!.employer).toMatchObject({ displayState: "MEMORY_REUSED", displayName: "Airbus" });
+
+    const displayedOnly = await query([vacancy("displayed", ["one"], [{ role: "DISPLAYED_COMPANY", rawName: "Airbus" }])]);
+    expect(displayedOnly[0]!.employer).toMatchObject({ displayState: "UNRESOLVED", displayName: "Airbus" });
+
+    const decision = {
+      id: "role-decision", canonicalVacancyId: "human", identityKey: "name:airbus",
+      organizationName: "Airbus", normalizedName: "airbus", role: "EMPLOYER" as const,
+      previousDecisionId: null, basis: {}, overrideAcknowledged: false, createdAt: new Date("2026-01-01"),
+    };
+    const humanConfirmed = await query(
+      [vacancy("human", ["one"], [{ role: "DISPLAYED_COMPANY", rawName: "Airbus" }])],
+      undefined, undefined, {}, null,
+      { organizationRoleDecisionRepository: {
+        listForVacancy: async () => [decision],
+        listForIdentity: async () => [decision],
+        findById: async () => decision,
+        commit: async () => {},
+      } },
+    );
+    expect(humanConfirmed[0]!.employer).toMatchObject({ displayState: "HUMAN_CONFIRMED", displayName: "Airbus" });
+
+    const conflicted = await query([vacancy("conflicted", ["one"], [{ role: "EMPLOYER", employerClusterId: cluster.id }])], undefined, undefined, {}, { ...cluster, status: "CONFLICTED" });
+    expect(conflicted[0]!.employer.displayState).toBe("REVIEW_REQUIRED");
+  });
+
   it("returns null for unknown fields and honors a limit", async () => {
     const inbox = await query([vacancy("a", ["one"]), vacancy("b", ["two"])], undefined, 1);
     expect(inbox).toHaveLength(1);
@@ -76,7 +122,7 @@ describe("getVacancyInbox", () => {
   });
 });
 
-async function query(vacancies: any[], interactions = new InMemoryUserVacancyInteractionRepository(), limit?: number, observations: Record<string, any> = {}, cluster: any = null) {
+async function query(vacancies: any[], interactions = new InMemoryUserVacancyInteractionRepository(), limit?: number, observations: Record<string, any> = {}, cluster: any = null, dependencyOverrides: Partial<Parameters<typeof getVacancyInbox>[1]> = {}) {
   const dates: Record<string, Date> = { one: new Date("2026-09-01"), two: new Date("2026-09-01"), three: new Date("2026-09-03") };
   return getVacancyInbox(limit === undefined ? {} : { limit }, {
     canonicalVacancyRepository: { findAll: async () => vacancies },
@@ -84,6 +130,7 @@ async function query(vacancies: any[], interactions = new InMemoryUserVacancyInt
     interactionRepository: interactions,
     employerClusterRepository: { findById: async () => cluster },
     employerMemoryPublicDataSource: { findByEmployerClusterId: async () => [] },
+    ...dependencyOverrides,
   });
 }
 
