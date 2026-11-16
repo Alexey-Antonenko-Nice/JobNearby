@@ -21,21 +21,59 @@ function serialize(node: Node): string {
   const inner = node.children.map(child => typeof child === "string" ? child : serialize(child)).join("");
   return `<${node.tag}${attrs}>${inner}${/^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/u.test(node.tag) ? "" : `</${node.tag}>`}`;
 }
-function descriptionCompany(description: Node): { value?: string } | undefined {
-  const labels = dom.descendants(description).filter(node => node.tag === "p" && /^company\s*:/iu.test(dom.plain(node)));
-  if (labels.length > 1) return undefined;
-  const label = labels[0];
-  if (!label) return {};
-  const text = dom.plain(label);
-  let value = /^company\s*:\s*(.+)$/iu.exec(text)?.[1]?.trim();
-  if (!value && label.parent) {
-    const siblings = dom.children(label.parent), index = siblings.indexOf(label);
-    const next = siblings.slice(index + 1).find(node => node.tag === "p" && dom.plain(node));
-    const candidate = next ? dom.plain(next) : "";
-    if (candidate && !/^(?:company|employment type|experience level|job family)\s*:/iu.test(candidate)) value = candidate;
+export interface AirbusSelectedPaneOwnedFields {
+  readonly company?: string;
+  readonly employmentType?: string;
+  readonly experienceLevel?: string;
+  readonly jobFamily?: string;
+}
+const descriptionLabels = ["Company", "Employment Type", "Experience Level", "Job Family"] as const;
+function plainText(value: string): string {
+  return dom.plain({ tag: "span", attrs: new Map(), children: [value] });
+}
+function descriptionField(description: Node, label: typeof descriptionLabels[number]): string | undefined | null {
+  const expression = new RegExp(`^${label}\\s*:\\s*(.*)$`, "iu");
+  const matches = dom.descendants(description).filter(node => node.tag === "p" && dom.ownedPath(node, description)
+    && expression.test(dom.plain(node).replace(/\s+/gu, " ").trim()));
+  if (matches.length > 1) return null;
+  const node = matches[0];
+  if (!node) return undefined;
+  let value = expression.exec(dom.plain(node).replace(/\s+/gu, " ").trim())?.[1]?.trim() ?? "";
+  if (!value && node.parent) {
+    const siblings = node.parent.children, index = siblings.indexOf(node);
+    const textParts: string[] = [];
+    for (const sibling of siblings.slice(index + 1)) {
+      if (typeof sibling === "string") {
+        const text = plainText(sibling).trim();
+        if (text) textParts.push(text);
+        continue;
+      }
+      if (!dom.ownedPath(sibling, description)) break;
+      if (sibling.tag === "p") break;
+      const text = dom.plain(sibling).replace(/\s+/gu, " ").trim();
+      if (text) textParts.push(text);
+    }
+    if (textParts.length > 1) return null;
+    if (textParts.length) value = textParts[0]!.trim();
   }
-  if (value && (value.length > 250 || /^(?:company|employment type|experience level|job family)\s*:/iu.test(value))) return undefined;
-  return value ? { value } : {};
+  if (!value || value.length > 250 || descriptionLabels.some(name => new RegExp(`^${name}\\s*:`, "iu").test(value))) return undefined;
+  return value;
+}
+function descriptionFields(description: Node): AirbusSelectedPaneOwnedFields | undefined {
+  const fields: Record<string, string> = {};
+  for (const label of descriptionLabels) {
+    const value = descriptionField(description, label);
+    if (value === null) return undefined;
+    if (value) fields[label === "Company" ? "company" : label === "Employment Type" ? "employmentType"
+      : label === "Experience Level" ? "experienceLevel" : "jobFamily"] = value;
+  }
+  return fields;
+}
+export function airbusSelectedPaneOwnedFields(html: string): AirbusSelectedPaneOwnedFields | undefined {
+  const root = dom.parse(html);
+  if (!root || dom.elements(root, "jobPostingPage").length !== 1) return undefined;
+  const descriptions = dom.elements(root, "jobPostingDescription");
+  return descriptions.length === 1 ? descriptionFields(descriptions[0]!) : undefined;
 }
 const directUrl = (id: string) => `https://${AIRBUS_WORKDAY_HOST}/Airbus/job/selected/selected_${id}`;
 function selectedContext(context: AcquisitionContext, route: NonNullable<ReturnType<typeof airbusDetailsRoute>>): AcquisitionContext {
@@ -92,8 +130,8 @@ export class AirbusSelectedPaneContextLocator implements SelectedVacancyContextL
     if (!core || !dom.ownedPath(core, branches[1]!) || !dom.ownedPath(header, branches[0]!)) return undefined;
     const regions = dom.children(core);
     if (regions.length < 2 || !dom.contains(regions[0]!, requisitions[0]!) || !dom.contains(regions[1]!, description)) return undefined;
-    const company = descriptionCompany(description);
-    if (!company) return undefined;
+    const ownedFields = descriptionFields(description);
+    if (!ownedFields) return undefined;
     // Only the field block and description block are vacancy-owned. These observed siblings are excluded wholesale.
     const excluded = regions.slice(2);
     if (excluded.some(node => !(node.tag === "section" && dom.elements(node, "similar-jobs-heading").length === 1)
@@ -122,9 +160,9 @@ export class AirbusSelectedPaneContextLocator implements SelectedVacancyContextL
     let context = locator.locate(inputFor(makeHtml()));
     if (!context) return undefined;
     const existingCompany = airbusDirectFacts(context.html!)?.displayedCompanyName;
-    if (company.value) {
-      if (existingCompany && existingCompany.replace(/\s+/gu, " ").trim().toLowerCase() !== company.value.replace(/\s+/gu, " ").trim().toLowerCase()) return undefined;
-      if (!existingCompany) context = locator.locate(inputFor(makeHtml(company.value)));
+    if (ownedFields.company) {
+      if (existingCompany && existingCompany.replace(/\s+/gu, " ").trim().toLowerCase() !== ownedFields.company.replace(/\s+/gu, " ").trim().toLowerCase()) return undefined;
+      if (!existingCompany) context = locator.locate(inputFor(makeHtml(ownedFields.company)));
     }
     return context ? selectedContext(context, route) : undefined;
   }
