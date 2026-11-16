@@ -1,6 +1,7 @@
 import { VacancyCleanupSection } from "./VacancyCleanupSection";
 import { EmployerIdentitySection } from "./EmployerIdentitySection";
 import { OrganizationRoleSection } from "./OrganizationRoleSection";
+import { EmployerAssignmentStatus } from "./EmployerAssignmentStatus";
 import { RecruitingAgencySection } from "./RecruitingAgencySection";
 import { PublicationCampaignContextSection } from "./PublicationCampaignContextSection";
 import { useEffect, useState } from "react";
@@ -101,11 +102,13 @@ export function ReviewPage(): React.JSX.Element {
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>
     <EmployerIdentitySection review={review} onConfirmed={setReview} disabled={pending} />
-    {review.employerHistory ? <EmployerHistorySection history={review.employerHistory} context={review.employerActionContext} organizations={review.organizations} /> :
-      <section><h2>Employer memory</h2>{review.employer.employerClusterId !== null && (review.employer.status === "RESOLVED" || review.employer.status === "PROBABLY_RESOLVED")
-        ? <Details values={[["Employer status", review.employer.status], ["Previous vacancies from this employer", review.employer.previousVacancyCount],
-          ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)]]} />
-        : <p>{review.employer.status === "CONFLICTED" ? "Employer identity requires review" : "Employer unresolved / not linked"}</p>}</section>}
+    <EmployerAssignmentStatus state={review.employer.displayState} name={review.employer.displayName} />
+    {review.employerHistory
+      ? <EmployerHistorySection history={review.employerHistory} context={review.employerActionContext} organizations={review.organizations} />
+      : (review.employer.status === "RESOLVED" || review.employer.status === "PROBABLY_RESOLVED") && <section><h2>Employer memory</h2><Details values={[
+        ["Previous vacancies from this employer", review.employer.previousVacancyCount],
+        ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)],
+      ]} /></section>}
     {review.organizationRoleReview === undefined && review.employer.confirmationCandidate != null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}
     {review.organizationRoleReview === undefined && review.employerReview?.candidates.filter((candidate) => candidate.type === "ALIAS_SELECTION").map((candidate) => <section key={candidate.candidateId}>
       <h2>Same as a known employer?</h2><p>Current name: <strong>{candidate.name}</strong></p><p>{candidate.explanation}</p>

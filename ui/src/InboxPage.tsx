@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getVacancyInbox, type VacancyInboxItem } from "./api";
+import { EmployerAssignmentStatus } from "./EmployerAssignmentStatus";
 import { formatEngagement, formatLocation, formatWorkMode } from "./formatVacancyFacts";
 
 export function InboxPage(): React.JSX.Element {
@@ -18,7 +19,7 @@ function InboxItem({ vacancy }: { readonly vacancy: VacancyInboxItem }): React.J
   return <article className="inbox-item"><div className="inbox-heading"><h2>{text(vacancy.title)}</h2><strong>{vacancy.userState}</strong></div>
     <p>{locationText(vacancy.location, vacancy.locationAlternatives)} {vacancy.engagement === null ? "" : `| ${formatEngagement(vacancy.engagement)}`} {vacancy.workMode === null ? "" : `| ${formatWorkMode(vacancy.workMode)}`}</p>
     {organizations.filter(([, names]) => names !== null && names.length > 0).map(([label, names]) => <p key={label}><strong>{label}:</strong> {names?.join(", ")}</p>)}
-    <p><strong>Employer status:</strong> {vacancy.employer.unresolvedEmployer ? "Unresolved" : text(vacancy.employer.status)}</p>
+    <EmployerAssignmentStatus state={vacancy.employer.displayState} name={vacancy.employer.displayName} compact />
     <p>Latest observed: {date(vacancy.latestObservedAt)} | Source observations: {vacancy.sourceObservationCount}{vacancy.signals.hasMultipleSourceObservations ? " | Seen before" : ""}</p>
     {vacancy.sourceLinks.length > 0 && <p><a href={vacancy.sourceLinks[0]!.url} target="_blank" rel="noreferrer">Open source vacancy</a>{vacancy.sourceLinks.length > 1 ? ` (${vacancy.sourceLinks.length} sources)` : ""}</p>}
     <a href={`/review/${encodeURIComponent(vacancy.canonicalVacancyId)}`}>Open review</a>

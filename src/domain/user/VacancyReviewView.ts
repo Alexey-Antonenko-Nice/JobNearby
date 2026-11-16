@@ -11,6 +11,7 @@ import type {
 } from "../vacancies/CanonicalVacancy.js";
 import type { UserVacancyState } from "./UserVacancyInteractionEvent.js";
 import type { VacancySourceLink } from "./VacancySourceLink.js";
+import type { EmployerDisplayState } from "./EmployerDisplayState.js";
 
 export interface VacancyReviewOrganizationRelationship {
   readonly organizationId?: string;
@@ -56,6 +57,8 @@ export interface VacancyReviewView {
     readonly aliasEvidence?: readonly import("../recognition/EmployerAliasEvidence.js").EmployerAliasEvidence[];
     readonly employerClusterId: EmployerClusterId | null;
     readonly status: EmployerClusterStatus | null;
+    readonly displayState: EmployerDisplayState;
+    readonly displayName: string | null;
     readonly resolvedEmployerId: string | null;
     readonly knownBefore: boolean;
     readonly previousVacancyCount: number;

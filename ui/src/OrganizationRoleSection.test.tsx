@@ -11,6 +11,10 @@ function review(role: HumanOrganizationRole = "EMPLOYER"): ReviewView {
   return { vacancy:{canonicalVacancyId:"vacancy"}, organizationRoleReview:[{identityKey:"name:kelly",name:"Kelly",recommendedRole:role,confidence:.98,evidenceStrength:"CONTEXTUAL",reasons:["Corporate-careers tenant","First-person employer wording"],confirmedRole:null,candidateToken:"a".repeat(64),history:[],actions}] } as ReviewView;
 }
 describe("organization role controls", () => {
+  it("explains when no organization information was found", () => {
+    render(<OrganizationRoleSection review={{ ...review(), organizationRoleReview: [] }} onConfirmed={vi.fn()} disabled={false}/>);
+    expect(screen.getByText("No organization information was found for this vacancy.")).toBeVisible();
+  });
   it("shows employer recommendation and every alternative without sending any automatic decision", () => {
     render(<OrganizationRoleSection review={review()} onConfirmed={vi.fn()} disabled={false}/>);
     expect(screen.getByRole("button",{name:"Confirm as employer"})).toBeVisible();

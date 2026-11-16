@@ -24,6 +24,7 @@ export function OrganizationRoleSection({ review, onConfirmed, disabled }: {
   }
   return <section aria-label="Organization roles"><h2>Organization roles</h2>
     <p>Choose each organization’s role for this vacancy. Its role can differ in other vacancies.</p>
+    {!review.organizationRoleReview?.length && <p>No organization information was found for this vacancy.</p>}
     {error && <p role="alert">{error}</p>}
     {review.organizationRoleReview?.map(card => <article key={card.identityKey} aria-label={card.name}>
       <h3>{card.name}</h3>

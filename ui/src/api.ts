@@ -1,4 +1,5 @@
 import type { PublicationCampaignContext as DomainPublicationCampaignContext } from "../../src/domain/user/PublicationCampaignContext.js";
+import type { EmployerDisplayState } from "../../src/domain/user/EmployerDisplayState.js";
 
 type Serialized<T> = T extends Date ? string : T extends readonly (infer V)[] ? readonly Serialized<V>[] : T extends object ? { [K in keyof T]: Serialized<T[K]> } : T;
 export type PublicationCampaignContext = Serialized<DomainPublicationCampaignContext>;
@@ -119,7 +120,7 @@ export interface ReviewView {
     readonly sourceLinks: readonly VacancySourceLink[];
   };
   readonly user: { readonly currentState: string; readonly lastInteractionAt: string | null; readonly everApplied: boolean; readonly everInterviewed: boolean; readonly everRejected: boolean };
-  readonly employer: { readonly aliasEvidence?: readonly { aliasName: string; explanation: string; sourceType: string; createdAt: string }[]; readonly employerClusterId: string | null; readonly status: string | null; readonly resolvedEmployerId: string | null; readonly knownBefore: boolean; readonly previousVacancyCount: number; readonly previousInteractedVacancyCount: number; readonly everAppliedToEmployer: boolean; readonly everInterviewedWithEmployer: boolean; readonly everRejectedByEmployer: boolean; readonly confirmationCandidate?: string | null };
+  readonly employer: { readonly aliasEvidence?: readonly { aliasName: string; explanation: string; sourceType: string; createdAt: string }[]; readonly employerClusterId: string | null; readonly status: string | null; readonly displayState: EmployerDisplayState; readonly displayName: string | null; readonly resolvedEmployerId: string | null; readonly knownBefore: boolean; readonly previousVacancyCount: number; readonly previousInteractedVacancyCount: number; readonly everAppliedToEmployer: boolean; readonly everInterviewedWithEmployer: boolean; readonly everRejectedByEmployer: boolean; readonly confirmationCandidate?: string | null };
   readonly organizations: Record<string, readonly OrganizationRelationship[]>;
   readonly recognition: { readonly sameCanonicalVacancySeenBefore: boolean; readonly employerSeenBefore: boolean; readonly unresolvedEmployer: boolean };
   readonly reviewSignals: { readonly isNewVacancy: boolean; readonly isKnownEmployer: boolean; readonly alreadyAppliedToThisVacancy: boolean; readonly previouslyAppliedToEmployer: boolean; readonly previouslyInterviewedWithEmployer: boolean; readonly previouslyRejectedByEmployer: boolean; readonly hasMultipleSourceObservations: boolean };
@@ -162,7 +163,7 @@ export interface VacancyInboxItem {
   readonly sourceObservationCount: number;
   readonly sourceLinks: readonly VacancySourceLink[];
   readonly userState: string;
-  readonly employer: { readonly status: string | null; readonly unresolvedEmployer: boolean };
+  readonly employer: { readonly status: string | null; readonly displayState: EmployerDisplayState; readonly displayName: string | null; readonly unresolvedEmployer: boolean };
   readonly organizations: { readonly employerName: string | null; readonly displayedCompanyNames: readonly string[]; readonly recruiterNames: readonly string[]; readonly consultancyNames: readonly string[] };
   readonly signals: { readonly sameCanonicalVacancySeenBefore: boolean; readonly hasMultipleSourceObservations: boolean; readonly alreadyAppliedToThisVacancy: boolean };
 }
