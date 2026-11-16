@@ -99,13 +99,27 @@ function field(details: Node, id: string): string | undefined {
   return values.length === 1 && ownedPath(values[0]!, details) ? plain(values[0]!) || undefined : undefined;
 }
 function facts(root: Node) {
-  const pages = elements(root, "jobPostingPage"), headers = elements(root, "jobPostingHeader"), regions = elements(root, "job-posting-details");
+  const pages = elements(root, "jobPostingPage"), allHeaders = elements(root, "jobPostingHeader"), regions = elements(root, "job-posting-details");
+  // Workday may render a sticky duplicate of the direct page header after scrolling.
+  // It is a corroborating UI clone, never an additional vacancy evidence source.
+  const stickyRegions = elements(root, "jobPostingStickyWrapper");
+  if (stickyRegions.length > 1) return undefined;
+  const sticky = stickyRegions[0];
+  const headers = allHeaders.filter(header => !sticky || !contains(sticky, header));
   if (pages.length !== 1 || headers.length !== 1 || regions.length !== 1
     || ["jobSearchPage", "jobResults", "jobDetails"].some(id => elements(root, id).length)) return undefined;
   const page = pages[0]!, header = headers[0]!, details = regions[0]!, owner = details.parent;
   if (!owner || owner === page || !contains(page, owner) || !contains(owner, header)
     || !ownedPath(header, page) || !ownedPath(details, page) || !/^h[12]$/u.test(header.tag)) return undefined;
-  const branches = children(owner);
+  if (sticky) {
+    const clones = elements(sticky, "jobPostingHeader");
+    if (sticky.parent !== owner || children(owner)[0] !== sticky || !ownedPath(sticky, page)
+      || clones.length !== 1 || !/^h[12]$/u.test(clones[0]!.tag) || hidden(clones[0]!)
+      || plain(clones[0]!) !== plain(header) || elements(sticky, "adventureButton").length !== 1
+      || descendants(sticky).some(node => automation(node) !== undefined
+        && !["jobPostingHeader", "adventureButton"].includes(automation(node)!))) return undefined;
+  }
+  const branches = children(owner).filter(node => node !== sticky);
   if (branches.length !== 2 || branches[1] !== details || !contains(branches[0]!, header)) return undefined;
   const title = plain(header), requisitionId = field(details, "requisitionId"), locationText = field(details, "locations"), contractText = field(details, "time");
   const descriptions = elements(details, "jobPostingDescription");
@@ -118,12 +132,12 @@ function facts(root: Node) {
   const displayedCompanyName = companies.length ? field(details, "company") : undefined;
   if (companies.length && !displayedCompanyName) return undefined;
   return { title, requisitionId: requisitionId!, locationText, contractText, description, descriptionHtml,
-    ...(displayedCompanyName === undefined ? {} : { displayedCompanyName }), owner };
+    ...(displayedCompanyName === undefined ? {} : { displayedCompanyName }), owner, sticky };
 }
 export function airbusDirectFacts(html: string) {
   const root = parse(html), found = root && facts(root);
   if (!found) return undefined;
-  const { owner: _owner, descriptionHtml: _html, requisitionId: _id, ...projection } = found;
+  const { owner: _owner, sticky: _sticky, descriptionHtml: _html, requisitionId: _id, ...projection } = found;
   return projection;
 }
 export class AirbusDirectVacancyContextLocator implements SelectedVacancyContextLocator {
@@ -145,8 +159,8 @@ export class AirbusDirectVacancyContextLocator implements SelectedVacancyContext
         ? (posting.identifier as Record<string, unknown>).value : posting.identifier;
       if (posting.identifier !== undefined && identifier !== route.requisitionId) return undefined;
     }
-    const actions = elements(selected.owner, "adventureButton");
-    if (actions.length > 1) return undefined;
+    const actions = elements(selected.owner, "adventureButton").filter(node => !selected.sticky || !contains(selected.sticky, node));
+    if (actions.length > 1 || selected.sticky && actions.length !== 1) return undefined;
     for (const node of descendants(selected.owner)) {
       const href = node.attrs.get("href");
       if (automation(node) === "adventureButton" && (!href || hidden(node))) return undefined;
