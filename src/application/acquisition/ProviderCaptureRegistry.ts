@@ -1,3 +1,4 @@
+import { AirbusSelectedPaneContextLocator, airbusDetailsRoute } from "./AirbusSelectedPaneVacancy.js";
 import { AirbusDirectVacancyContextLocator, airbusDirectFacts } from "./AirbusWorkdayVacancy.js";
 import { isGenericWorkdaySource, locateGenericWorkdayContext } from "./GenericWorkdayVacancy.js";
 import { StellantisSelectedVacancyContextLocator, stellantisFacts } from "./StellantisVacancy.js";
@@ -65,7 +66,8 @@ export class ProviderCaptureRegistry {
   private readonly recognizer = new HostnameAcquisitionProviderRecognizer();
   private readonly idExtractor = new ConservativeProviderVacancyIdExtractor();
   private readonly contextLocators: Partial<Readonly<Record<ProviderKey, SelectedVacancyContextLocator>>> = {
-    AIRBUS_WORKDAY: new AirbusDirectVacancyContextLocator(),
+    AIRBUS_WORKDAY: { locate: input => airbusDetailsRoute(input.sourceUrl)
+      ? new AirbusSelectedPaneContextLocator().locate(input) : new AirbusDirectVacancyContextLocator().locate(input) },
     EXPECTRA_MONACO: new ExpectraSelectedVacancyContextLocator(),
     FRANCE_TRAVAIL: new FranceTravailSelectedVacancyContextLocator(),
     INDEED: new IndeedSelectedVacancyContextLocator(),

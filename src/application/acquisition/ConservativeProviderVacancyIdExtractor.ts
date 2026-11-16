@@ -1,3 +1,4 @@
+import { airbusDetailsRoute } from "./AirbusSelectedPaneVacancy.js";
 import { AIRBUS_WORKDAY_HOST, airbusDirectRoute, isAirbusWorkdaySource } from "./AirbusWorkdayVacancy.js";
 import { stellantisVacancyId } from "./StellantisVacancy.js";
 import { expectraVacancyId } from "./ExpectraVacancy.js";
@@ -71,7 +72,7 @@ export class ConservativeProviderVacancyIdExtractor
     if (isRenaultWorkdaySource(input.sourceName, input.sourceUrl)) return renaultVacancyId(input.sourceUrl);
     if (isKellyWorkdaySource(input.sourceName, input.sourceUrl)) return kellyVacancyId(input.sourceUrl);
     if (isAirbusWorkdaySource(input.sourceName, input.sourceUrl)) {
-      const route = airbusDirectRoute(input.sourceUrl);
+      const route = airbusDirectRoute(input.sourceUrl) ?? airbusDetailsRoute(input.sourceUrl);
       return route && !route.suffixed ? route.requisitionId : undefined;
     }
     if (isPersonioSource(input.sourceName, input.sourceUrl)) return extractPersonioVacancyId(input.sourceUrl);
