@@ -10,6 +10,8 @@ import {
 } from "../../domain/evidence/ExtractedVacancyEvidence.js";
 import { directEmployerOrganizationNames } from "./TrustedDirectEmployerSource.js";
 import type { VacancyEngagementEvidence } from "../../domain/evidence/VacancyEngagementEvidence.js";
+import { AIRBUS_WORKDAY_HOST } from "../acquisition/AirbusWorkdayVacancy.js";
+import { airbusDetailsRoute, airbusSelectedPaneOwnedFields } from "../acquisition/AirbusSelectedPaneVacancy.js";
 
 export class DirectFieldVacancyEvidenceExtractor
   implements VacancyEvidenceExtractor
@@ -23,15 +25,25 @@ export class DirectFieldVacancyEvidenceExtractor
       extractionMethod: "DIRECT_FIELD" as const,
       confidence: 1,
     };
+    const selectedPane = observation.source.sourceName === AIRBUS_WORKDAY_HOST
+      && airbusDetailsRoute(observation.source.sourceUrl ?? "") !== undefined
+      && observation.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
+      && observation.evidenceContent.context.providerKey === "AIRBUS_WORKDAY";
+    const selectedPaneProvenance = { ...provenance, contentOrigin: "SELECTED_VACANCY_CONTEXT" as const };
+    const ownedFields = selectedPane && observation.evidenceContent.kind === "SELECTED_VACANCY_CONTEXT"
+      ? airbusSelectedPaneOwnedFields(observation.evidenceContent.context.html ?? "")
+      : undefined;
+    const companyName = ownedFields?.company ?? observation.displayedCompanyName;
+    const employmentType = selectedPane ? ownedFields?.employmentType : undefined;
 
     return createExtractedVacancyEvidence({
       sourceObservationId: observation.id,
       vacancyTitles: observation.title === undefined ? [] : [{ value: observation.title, provenance }],
       organizations: [
-        ...(observation.displayedCompanyName === undefined ? [] : [{
-          value: observation.displayedCompanyName,
-          role: "UNKNOWN" as const,
-          provenance,
+        ...(companyName === undefined ? [] : [{
+          value: companyName,
+          role: selectedPane ? "DISPLAYED_COMPANY" as const : "UNKNOWN" as const,
+          provenance: selectedPane ? selectedPaneProvenance : provenance,
         }]),
         ...directEmployerOrganizationNames(observation).map((value) => ({
           value,
@@ -49,7 +61,12 @@ export class DirectFieldVacancyEvidenceExtractor
                 provenance,
               },
             ],
-      engagements: directEngagement(observation.contractText, provenance),
+      engagements: [
+        ...directEngagement(observation.contractText, provenance),
+        ...(employmentType !== undefined && /^fixed\s+term$/iu.test(employmentType.trim())
+          ? [{ rawTerms: [employmentType], normalizedTerms: ["FIXED_TERM"], provenance: selectedPaneProvenance }]
+          : []),
+      ],
       externalIdentifiers:
         observation.source.externalId === undefined
           ? []

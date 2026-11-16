@@ -13,12 +13,18 @@ const q = (id: string) => `[data-automation-id="${id}"]`;
 const selected = q('jobResults') + ' ' + q('jobTitle') + '[aria-current="true"]';
 const pane = q('jobDetails');
 const cases = [
-  { name: 'Manufacturing', id: 'JR10457309', url: 'https://ag.wd3.myworkdayjobs.com/en-US/Airbus/details/Manufacturing-Engineer-II--Process-Engineer-_JR10457309' },
+  { name: 'Manufacturing', id: 'JR10457309', company: 'Airbus Americas, Inc.', url: 'https://ag.wd3.myworkdayjobs.com/en-US/Airbus/details/Manufacturing-Engineer-II--Process-Engineer-_JR10457309' },
   { name: 'Internship', id: 'JR10447012', url: 'https://ag.wd3.myworkdayjobs.com/fr-FR/Airbus/details/STAGE-2027---Controle-de-Gestion-Industriel_JR10447012?locationCountry=54c5b6971ffb4bf0b116fe7651ec789a' },
-  { name: 'Painter', id: 'JR10439155', url: 'https://ag.wd3.myworkdayjobs.com/en-US/Airbus/details/Aircraft-painter_JR10439155-1' },
+  { name: 'Painter', id: 'JR10439155', company: 'Airbus (Tianjin) Final Assembly Company Limited', url: 'https://ag.wd3.myworkdayjobs.com/en-US/Airbus/details/Aircraft-painter_JR10439155-1' },
 ].map(c => ({ ...c, html: readFileSync(`tests/fixtures/airbusSelected${c.name}.html`, 'utf8') }));
 const painter = cases[2]!, extractor = createVacancyEvidenceExtractor();
 function change(html: string, edit: (doc: Document) => void) { const dom = new JSDOM(html); try { edit(dom.window.document); return dom.serialize(); } finally { dom.window.close(); } }
+function removeOwnedFieldValue(doc: Document, label: string) {
+  const paragraph = [...doc.querySelectorAll(pane + ' ' + q('jobPostingDescription') + ' p')].find(p => p.textContent?.trim() === `${label}:`)!;
+  let sibling = paragraph.nextSibling;
+  while (sibling?.nodeType === 3 && !sibling.textContent?.trim()) sibling = sibling.nextSibling;
+  if (sibling?.nodeType === 3) sibling.remove();
+}
 function capture(html = painter.html, url = painter.url) {
   const acquisition = new BrowserCaptureAcquisitionAdapter().toAcquisitionPackage({ pageUrl: url, pageTitle: 'OUTSIDE_TITLE', visibleText: 'Employeur : OUTSIDE_RAW', html, capturedAt: '2026-11-16T07:00:00Z' }, 'a');
   return { acquisition, observation: new DeterministicAcquisitionCaptureMapper().toSourceObservation(acquisition, 'o') };
@@ -39,7 +45,7 @@ describe('Airbus selected details boundary', () => {
     expect(acquisition.contexts).toHaveLength(1);
     expect(acquisition.contexts![0]!.associationEvidence).toContain('ARIA_CURRENT_RESULT_CARD');
     expect(acquisition.contexts![0]!.html).not.toMatch(/jobResults|similar-jobs-heading|sidebar|jobSearchPage/);
-    expect(observation.displayedCompanyName).toBeUndefined();
+    expect(observation.displayedCompanyName).toBe(c.company);
     const acceptance = await assessBrowserVacancyCapture(observation, extractor);
     expect(acceptance.captureAcceptedAsVacancy).toBe(true); expect(acceptance).not.toHaveProperty('partialRecaptureIdentity');
     expect((await extractor.extract(observation)).vacancyTitles.length).toBeGreaterThan(0);
@@ -48,6 +54,12 @@ describe('Airbus selected details boundary', () => {
       const result = await createCaptureProcessingRuntime(db).captureAndProcessBrowserVacancy({ pageUrl: c.url, html: c.html, pageTitle: 'OUTSIDE_TITLE', visibleText: 'OUTSIDE_RAW', capturedAt: '2026-11-16T07:00:00Z' });
       expect(result.processing.status).toBe('PROCESSED');
       expect(db.prepare('SELECT provider_namespace,external_id FROM canonical_vacancy_exact_identity_claims').all()).toEqual([{ provider_namespace: 'ag.wd3.myworkdayjobs.com', external_id: c.id }]);
+      if (result.processing.status !== 'PROCESSED') throw new Error('Expected accepted Airbus vacancy to be processed.');
+      if (c.id === painter.id) {
+        const engagement = db.prepare("SELECT value_json FROM canonical_vacancy_fields WHERE canonical_vacancy_id = ? AND field_name = 'engagement'")
+          .get(result.processing.canonicalVacancyId) as { value_json: string };
+        expect(JSON.parse(engagement.value_json).normalizedTerms).toEqual(expect.arrayContaining(['FULL_TIME', 'FIXED_TERM']));
+      }
     } finally { db.close(); }
   });
   it.each([
@@ -89,6 +101,7 @@ describe('Airbus selected details boundary', () => {
     const { acquisition, observation } = capture(html);
     expect(acquisition.externalId).toBe(painter.id);
     expect(await assessBrowserVacancyCapture(observation, extractor)).toMatchObject({ captureAcceptedAsVacancy: true });
+    expect(observation.displayedCompanyName).toBe(painter.company);
     expect(JSON.stringify(acquisition.contexts)).not.toMatch(/OUTSIDE_|JR999|JR888|99 years/);
     expect(JSON.stringify(await extractor.extract(observation))).not.toMatch(/OUTSIDE_|JR999|JR888|99 years/);
   });
@@ -100,28 +113,59 @@ describe('Airbus selected details boundary', () => {
     expect(scopeAirbusSelectedPaneVacancyEvidence(poisoned).title).toBe('Aircraft painter');
   });
   it('uses an explicitly owned company field only', () => {
-    const html = change(painter.html, d => d.querySelector(q('requisitionId'))!.parentElement!.insertAdjacentHTML('beforeend', '<div data-automation-id="company"><dl><dd>OWNED_COMPANY</dd></dl></div>'));
-    expect(capture(html).observation.displayedCompanyName).toBe('OWNED_COMPANY');
+    const html = change(painter.html, d => d.querySelector(pane + ' ' + q('requisitionId'))!.parentElement!.insertAdjacentHTML('beforeend', `<div data-automation-id="company"><dl><dd>${painter.company}</dd></dl></div>`));
+    expect(capture(html).observation.displayedCompanyName).toBe(painter.company);
   });
   it('uses the selected description Company label and excludes sidebar company poison', async () => {
-    const company = 'Airbus (Tianjin) Final Assembly Company Limited';
+    const company = painter.company!;
     const html = change(painter.html, d => {
-      const label = [...d.querySelectorAll(pane + ' ' + q('jobPostingDescription') + ' p')].find(p => p.textContent?.trim() === 'Company:')!;
-      label.innerHTML = `<span><b>Company:</b> ${company}</span>`;
       d.querySelector(q('sidebar'))!.insertAdjacentHTML('beforeend', '<div data-automation-id="company"><dl><dd>SIDEBAR_COMPANY_POISON</dd></dl></div>');
+      d.querySelector(q('similar-jobs-heading'))!.closest('section')!.insertAdjacentHTML('beforeend', '<div data-automation-id="company"><dl><dd>RECOMMENDATION_COMPANY_POISON</dd></dl></div>');
+      [...d.querySelectorAll(q('jobResults') + ' li')].find(li => !li.querySelector('[aria-current="true"]'))!
+        .insertAdjacentHTML('beforeend', '<div data-automation-id="company"><dl><dd>RESULT_COMPANY_POISON</dd></dl></div>');
     });
     const { acquisition, observation } = capture(html);
     expect(observation.displayedCompanyName).toBe(company);
-    expect(JSON.stringify(acquisition.contexts)).not.toContain('SIDEBAR_COMPANY_POISON');
+    expect(JSON.stringify(acquisition.contexts)).not.toMatch(/SIDEBAR_COMPANY_POISON|RECOMMENDATION_COMPANY_POISON|RESULT_COMPANY_POISON/);
     const evidence = await extractor.extract(observation);
-    expect(evidence.organizations).toContainEqual(expect.objectContaining({ value: company, role: 'UNKNOWN' }));
-    expect(JSON.stringify(evidence)).not.toContain('SIDEBAR_COMPANY_POISON');
+    expect(evidence.organizations).toContainEqual(expect.objectContaining({
+      value: company, role: 'DISPLAYED_COMPANY', provenance: expect.objectContaining({ contentOrigin: 'SELECTED_VACANCY_CONTEXT' }),
+    }));
+    expect(evidence.organizations).not.toContainEqual(expect.objectContaining({ value: company, role: 'EMPLOYER' }));
+    expect(JSON.stringify(evidence)).not.toMatch(/SIDEBAR_COMPANY_POISON|RECOMMENDATION_COMPANY_POISON|RESULT_COMPANY_POISON/);
+    expect(evidence.engagements).toContainEqual(expect.objectContaining({
+      rawTerms: ['Fixed term'], normalizedTerms: ['FIXED_TERM'],
+      provenance: expect.objectContaining({ contentOrigin: 'SELECTED_VACANCY_CONTEXT' }),
+    }));
+    expect(evidence.engagements).toContainEqual(expect.objectContaining({ rawTerms: ['Full time'], normalizedTerms: ['FULL_TIME'] }));
+    expect(evidence.experienceRequirements).toEqual([]);
+    expect(evidence.vacancyTitles.map(item => item.value)).not.toContain('Painter <JF-MA-PA>');
+    expect(evidence.skillRequirements ?? []).not.toContainEqual(expect.objectContaining({ skill: 'Painter <JF-MA-PA>' }));
   });
-  it('does not use a sidebar Company field when the selected description has no value', () => {
-    const html = change(painter.html, d => d.querySelector(q('sidebar'))!.insertAdjacentHTML('beforeend', '<div data-automation-id="company"><dl><dd>SIDEBAR_COMPANY_POISON</dd></dl></div>'));
+  it('does not use a sidebar Company field when the selected description has no value', async () => {
+    const html = change(painter.html, d => {
+      removeOwnedFieldValue(d, 'Company');
+      d.querySelector(q('sidebar'))!.insertAdjacentHTML('beforeend', '<div data-automation-id="company"><dl><dd>SIDEBAR_COMPANY_POISON</dd></dl></div>');
+    });
     const { acquisition, observation } = capture(html);
+    expect(acquisition.contexts).toHaveLength(1);
+    expect(await assessBrowserVacancyCapture(observation, extractor)).toMatchObject({ captureAcceptedAsVacancy: true });
     expect(observation.displayedCompanyName).toBeUndefined();
     expect(JSON.stringify(acquisition.contexts)).not.toContain('SIDEBAR_COMPANY_POISON');
+    const evidence = await extractor.extract(observation);
+    expect(evidence.organizations).not.toContainEqual(expect.objectContaining({ value: 'SIDEBAR_COMPANY_POISON' }));
+    expect(evidence.organizations.filter(item => item.role === 'DISPLAYED_COMPANY')).toEqual([]);
+  });
+  it('rejects duplicate or conflicting owned Company values', async () => {
+    const duplicate = change(painter.html, d => {
+      const label = [...d.querySelectorAll(pane + ' ' + q('jobPostingDescription') + ' p')].find(p => p.textContent?.trim() === 'Company:')!;
+      label.after(label.cloneNode(true));
+    });
+    await rejected(duplicate);
+    const conflict = change(painter.html, d => {
+      d.querySelector(pane + ' ' + q('requisitionId'))!.parentElement!.insertAdjacentHTML('beforeend', '<div data-automation-id="company"><dl><dd>CONFLICTING_OWNED_COMPANY</dd></dl></div>');
+    });
+    await rejected(conflict);
   });
   it('rejects stale context and is immutable and idempotent', () => {
     const { observation } = capture(), before = structuredClone(observation);
