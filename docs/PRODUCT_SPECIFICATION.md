@@ -114,6 +114,12 @@ and delivery state belong to the alert mechanism. Upcoming and overdue follow-up
 must be visible even when a notification was missed. Scheduling must eventually
 address time zones, application restart/sleep and completed/cancelled tasks.
 
+M18.4 provides Review-first tracking: create multiple actions, optionally set due
+times, complete/cancel, reschedule, and set/dismiss a separate reminder. History is
+retained. Reminder status updates on reading or refreshing Review; no notification
+is delivered while the application is closed. Description editing and the daily
+work queue remain future work.
+
 ## 9. Daily work queue and search
 
 The daily view should answer what to do today, which applications need follow-up,
@@ -235,7 +241,8 @@ Audited from code at the baseline above, without opening the live database:
 | Notes and priority | Implemented in Review (M18.2): private priority and append-only chronological notes, preserved across recapture and archive/restore |
 | Application preparation and richer activity timeline | Future workflows; notes remain distinct from interaction events |
 | CV/letter library, versioning and usage associations | Missing |
-| Tasks/reminders and daily work queue | Missing |
+| Next actions/reminders | Implemented in Review (M18.4): multiple actions, due times, completion/cancellation and reminder history; due signals calculated on read, no background notifications |
+| Daily work queue | Future work |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
 | Backup/restore/export and desktop installer | Missing ordinary-user workflows |
 | Public open-source release readiness | Intent documented; license, contribution and release work remain |

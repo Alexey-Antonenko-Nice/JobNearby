@@ -12,6 +12,12 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly createVacancyNextAction?: VacancyReviewWorkflow["createVacancyNextAction"];
+  readonly completeVacancyNextAction?: VacancyReviewWorkflow["completeVacancyNextAction"];
+  readonly cancelVacancyNextAction?: VacancyReviewWorkflow["cancelVacancyNextAction"];
+  readonly rescheduleVacancyNextAction?: VacancyReviewWorkflow["rescheduleVacancyNextAction"];
+  readonly setVacancyActionReminder?: VacancyReviewWorkflow["setVacancyActionReminder"];
+  readonly dismissVacancyActionReminder?: VacancyReviewWorkflow["dismissVacancyActionReminder"];
   readonly setVacancyPriority?: VacancyReviewWorkflow["setVacancyPriority"];
   readonly addVacancyNote?: VacancyReviewWorkflow["addVacancyNote"];
   readonly setVacancyProcessState?: VacancyReviewWorkflow["setVacancyProcessState"];
@@ -57,6 +63,39 @@ export function createBrowserCaptureServer(
         const result = await dependencies.captureAndProcessBrowserVacancy(payload);
         sendJson(response, 201, captureResponseDto(result));
         return;
+      }
+      const actionMatch = /^\/vacancies\/([^/]+)\/crm\/actions(?:\/([^/]+)\/(complete|cancel|reschedule|reminder|dismiss-reminder))?$/u.exec(path);
+      if(request.method === "POST" && actionMatch) {
+        operation="review";
+        const canonicalVacancyId=decodePathId(actionMatch[1]!);
+        const body=await readJsonBody(request,"Next action");
+        if(!isRecord(body) || typeof body.requestId!=="string") throw new InvalidRequestError("An action request ID is required.");
+        const operationName=actionMatch[3] ?? "create";
+        const fields:Record<string,string[]> = {
+          create:["requestId","description","dueAt"], complete:["requestId"], cancel:["requestId"],
+          reschedule:["requestId","dueAt"], reminder:["requestId","remindAt"], "dismiss-reminder":["requestId","reminderId"]
+        };
+        if(Object.keys(body).some(key=>!fields[operationName]!.includes(key))) throw new InvalidRequestError("Unexpected action field.");
+        const dueAt=body.dueAt ?? null;
+        if(dueAt!==null && typeof dueAt!=="string") throw new InvalidRequestError("Invalid due time.");
+        const target={canonicalVacancyId,requestId:body.requestId,actionId:actionMatch[2] ? decodePathId(actionMatch[2]) : body.requestId};
+        let review;
+        if(operationName==="create" && dependencies.createVacancyNextAction) {
+          if(typeof body.description!=="string") throw new InvalidRequestError("An action description is required.");
+          review=await dependencies.createVacancyNextAction({...target,description:body.description,dueAt});
+        } else if(operationName==="complete" && dependencies.completeVacancyNextAction) review=await dependencies.completeVacancyNextAction(target);
+        else if(operationName==="cancel" && dependencies.cancelVacancyNextAction) review=await dependencies.cancelVacancyNextAction(target);
+        else if(operationName==="reschedule" && dependencies.rescheduleVacancyNextAction) {
+          if(!("dueAt" in body)) throw new InvalidRequestError("Specify a due time or null to remove it.");
+          review=await dependencies.rescheduleVacancyNextAction({...target,dueAt});
+        } else if(operationName==="reminder" && dependencies.setVacancyActionReminder) {
+          if(typeof body.remindAt!=="string") throw new InvalidRequestError("A reminder time is required.");
+          review=await dependencies.setVacancyActionReminder({...target,remindAt:body.remindAt});
+        } else if(operationName==="dismiss-reminder" && dependencies.dismissVacancyActionReminder) {
+          if(typeof body.reminderId!=="string") throw new InvalidRequestError("A reminder ID is required.");
+          review=await dependencies.dismissVacancyActionReminder({...target,reminderId:body.reminderId});
+        }
+        if(review) {sendJson(response,operationName==="create"?201:200,{review});return;}
       }
       const crmMatch = /^\/vacancies\/([^/]+)\/crm\/(priority|notes|process-state)$/u.exec(path);
       if (request.method === "POST" && crmMatch) {

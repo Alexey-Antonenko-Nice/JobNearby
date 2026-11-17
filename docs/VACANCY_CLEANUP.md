@@ -50,3 +50,12 @@ with the canonical vacancy. Adding a note or changing priority invalidates an
 earlier cleanup token. Note deletion is allowed only within the existing guarded
 whole-vacancy cleanup transaction; there is no standalone note deletion action.
 Application/interview history acknowledgement requirements remain unchanged.
+
+## Next actions and reminders (M18.4)
+
+Archive/restore and single-capture deletion retain action records and their complete
+lifecycle/reminder history. Whole-vacancy deletion previews include next-action
+counts and action/reminder-history counts, then remove both through guarded
+foreign-key cascades. Every appended scheduling/lifecycle command invalidates a
+previous cleanup approval. Time passing alone changes derived due flags, not stored
+history or cleanup tokens. Existing application/interview acknowledgement remains.

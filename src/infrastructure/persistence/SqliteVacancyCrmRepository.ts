@@ -1,7 +1,14 @@
+import { readNextActions, changeNextAction } from "./sqliteVacancyNextActions.js";
 import type Database from "better-sqlite3";
 import { VacancyCrmError, validateNote, validatePriority, validateProcessStateChange, type VacancyCrmRepository, type VacancyCrmState, type VacancyNote, type VacancyPriority } from "../../domain/user/VacancyCrm.js";
 export class SqliteVacancyCrmRepository implements VacancyCrmRepository {
   constructor(private readonly db: Database.Database) {}
+  async getNextActions(id: string) {
+    return this.db.transaction(()=>readNextActions(this.db,id)).deferred();
+  }
+  async changeNextAction(input: Parameters<VacancyCrmRepository["changeNextAction"]>[0], at: Date): Promise<void> {
+    changeNextAction(this.db,input,at);
+  }
   private requireVacancy(id: string): void {
     if (!this.db.prepare("SELECT 1 FROM canonical_vacancies WHERE id=?").get(id)) throw new VacancyCrmError("Vacancy no longer exists.", 404);
   }

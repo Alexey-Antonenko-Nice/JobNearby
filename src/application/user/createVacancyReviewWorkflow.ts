@@ -1,3 +1,4 @@
+import type { ActionRequest } from "../../domain/user/VacancyNextAction.js";
 import { setVacancyPriority, addVacancyNote, setVacancyProcessState } from "./vacancyCrm.js";
 import type { VacancyCrmRepository, VacancyPriority, VacancyProcessState } from "../../domain/user/VacancyCrm.js";
 import { decideEmployerIdentity, searchEmployerIdentityCandidates } from "./employerIdentityReview.js";
@@ -52,6 +53,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.now ? {now:dependencies.now} : {}),
     ...(dependencies.crmRepository ? {crmRepository:dependencies.crmRepository} : {}),
     ...(dependencies.employerIdentityDecisionStore ? { employerIdentityDecisionStore: dependencies.employerIdentityDecisionStore } : {}),
     ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository } : {}),
@@ -65,7 +67,20 @@ export function createVacancyReviewWorkflow(
     employerMemoryPublicDataSource: dependencies.employerMemoryPublicDataSource,
     ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
+  async function actionCommand(input: ActionRequest) {
+    if(!dependencies.crmRepository) throw new Error("CRM is unavailable.");
+    await dependencies.crmRepository.changeNextAction(input, dependencies.now?.() ?? new Date());
+    return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
+  }
+  type ActionTarget = {canonicalVacancyId:string;actionId:string;requestId:string};
   return {
+    createVacancyNextAction: (input:{canonicalVacancyId:string;requestId:string;description:string;dueAt:string|null}) =>
+      actionCommand({...input,actionId:input.requestId,kind:"CREATE"}),
+    completeVacancyNextAction: (input:ActionTarget) => actionCommand({...input,kind:"COMPLETE"}),
+    cancelVacancyNextAction: (input:ActionTarget) => actionCommand({...input,kind:"CANCEL"}),
+    rescheduleVacancyNextAction: (input:ActionTarget & {dueAt:string|null}) => actionCommand({...input,kind:"RESCHEDULE"}),
+    setVacancyActionReminder: (input:ActionTarget & {remindAt:string}) => actionCommand({...input,kind:"SET_REMINDER"}),
+    dismissVacancyActionReminder: (input:ActionTarget & {reminderId:string}) => actionCommand({...input,kind:"DISMISS_REMINDER"}),
     setVacancyPriority: async (input: {canonicalVacancyId:string;priority:VacancyPriority}) => {
       if(!dependencies.crmRepository) throw new Error("CRM is unavailable.");
       await setVacancyPriority(input,{...dependencies,crmRepository:dependencies.crmRepository});

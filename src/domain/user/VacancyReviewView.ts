@@ -21,6 +21,7 @@ export interface VacancyReviewOrganizationRelationship {
 }
 
 export interface VacancyReviewView {
+  readonly nextActions?: import("./VacancyNextAction.js").NextActionsView;
   readonly crm?: import("./VacancyCrm.js").VacancyCrmState;
   readonly employerIdentityReview?: import("./EmployerIdentityReview.js").EmployerIdentityReview | null;
   readonly organizationRoleReview?: readonly import("../organizations/VacancyOrganizationRoleDecision.js").OrganizationRoleReviewItem[];

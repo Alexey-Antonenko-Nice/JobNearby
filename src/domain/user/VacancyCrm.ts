@@ -28,6 +28,8 @@ export interface VacancyCrmState {
   readonly processTransitions: readonly VacancyProcessTransition[];
 }
 export interface VacancyCrmRepository {
+  getNextActions(canonicalVacancyId: string): Promise<readonly import("./VacancyNextAction.js").VacancyNextAction[]>;
+  changeNextAction(input: import("./VacancyNextAction.js").ActionRequest, createdAt: Date): Promise<void>;
   get(canonicalVacancyId: string): Promise<VacancyCrmState>;
   setPriority(canonicalVacancyId: string, priority: VacancyPriority): Promise<void>;
   addNote(note: VacancyNote): Promise<void>;
