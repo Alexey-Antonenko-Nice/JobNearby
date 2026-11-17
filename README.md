@@ -1,54 +1,63 @@
 # Job Nearby
 
-Job Nearby is a free and open-source company-first job-search intelligence application.
+Job Nearby is intended to be a completely free, open-source desktop CRM for job
+seekers, with employer-recognition capabilities. Its source is intended to be public
+on GitHub for community inspection and contribution. License selection is pending;
+this is a product direction, not a claim that a license or end-user release exists.
 
-It processes vacancy publications from multiple sources, recognizes the real employers behind them, remembers previously encountered employers and gradually builds a structured view of the local labor market.
+The opportunity is the central CRM record: discover and understand a vacancy,
+prepare an application, track the CV and motivation-letter versions used, maintain
+contacts and interaction history, follow up, progress through interviews, and keep
+outcomes/history. Recognition of the likely original employer behind agency
+publications supports that workflow while preserving uncertainty.
 
-## Core idea
+## Current status
 
-Job Nearby treats vacancy publications as evidence rather than as unique vacancies.
+Implemented: supported browser capture, canonical vacancies and source identity,
+employer recognition and vacancy-specific role decisions, React Inbox/Review,
+append-only interaction events and derived history, archive/restore and guarded
+deletion. Application tracking is currently a latest-interaction projection, not a
+complete CRM pipeline.
 
-The project distinguishes:
+Planned: priority and private notes, richer pipeline/activity tracking, CV/letter
+library with historical version associations, contacts, tasks/reminders, daily work
+queue, broader search, backup/restore/export, and ordinary-user desktop installation.
+See [the implementation roadmap](docs/ARCHITECTURE.md#91-crm-implementation-roadmap).
 
-- source publications;
-- publication families;
-- employer clusters;
-- resolved employers;
-- recruitment campaigns;
-- private job-seeker interaction history.
+## Desktop and privacy direction
 
-An employer cluster may exist even when the employer's actual name is still unknown.
+The finished distribution must install/bundle necessary components. Ordinary users
+must not need Git, Node.js/Python installation, development dependencies, npm commands
+or manual database configuration. No installer/download release is currently provided,
+and no desktop shell has been chosen. Many independent installations do not imply
+multi-tenant SaaS or a shared database.
 
-## Status
-
-Early architecture and domain-design phase.
-
-The initial implementation will focus on:
-
-1. immutable source observation capture;
-2. employer-cluster recognition;
-3. employer identity resolution;
-4. recognition explanations and human correction;
-5. job-seeker interaction history.
+Current data is stored in local SQLite. Private CRM use must not require a central
+Job Nearby cloud service. Public source does not make CVs, letters, contacts, notes,
+application history or captured personal material public. Do not contribute personal
+databases, backups or application documents. Backup/restore and portable export are
+required future product workflows; no cloud sync is assumed.
 
 ## Documentation
 
-- `docs/PRODUCT_SPECIFICATION.md`
-- `docs/RECOGNITION_MODEL.md`
-- `docs/DATA_MODEL.md`
-- `docs/ARCHITECTURE.md`
+- [Product specification](docs/PRODUCT_SPECIFICATION.md)
+- [Data model and CRM gaps](docs/DATA_MODEL.md#78-crm-core-gap-analysis-m181)
+- [Architecture, packaging gaps and roadmap](docs/ARCHITECTURE.md)
+- [Recognition model](docs/RECOGNITION_MODEL.md)
 
-## Technology
+## Current development technology
 
-Initial direction:
+TypeScript, Node.js, React/Vite, SQLite via native better-sqlite3,
+Zod validation, and Vitest/jsdom for testing. Browser capture uses the repository's Manifest V3 extension
+as a client of the local API. No Python service is part of the application runtime.
 
-- TypeScript
-- Node.js
-- Vitest
-- SQLite
-- React later for the web interface
+The commands below describe developer operation of an existing checkout with Node/npm
+and dependencies installed. They are not an ordinary-user installation guide. Supported
+runtime/platform versions, native dependency setup and contribution instructions still
+need a tested development guide. Starting the API applies migrations to its configured
+local database; use a disposable working directory/data store for development checks.
 
-## Local vacancy review UI
+## Developer-run local vacancy review UI
 
 Start the API server in one terminal:
 
@@ -73,6 +82,14 @@ See [Vacancy cleanup](docs/VACANCY_CLEANUP.md) for safeguards, shared evidence r
 and migration 011. Starting the server applies pending migrations; implementation
 verification used isolated databases and did not start it against the live database.
 
-## License
+## License and public release
 
-To be decided before public release.
+**Open-source license selection required before public release.** No LICENSE file
+is currently tracked. Public GitHub source alone is not sufficient for legally clear
+open-source reuse or redistribution. A separate license/dependency audit is required;
+this document does not select a license or assert dependency compatibility.
+
+Release readiness also requires contribution guidance, installer/download and upgrade
+instructions, supported platforms, reproducible build/release procedures and a privacy
+review of source history, fixtures and release artifacts. See architecture sections
+68, 90 and 91. No release automation or installer is implemented by this documentation.
