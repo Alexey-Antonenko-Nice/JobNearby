@@ -60,7 +60,9 @@ describe("employer memory review persistence and HTTP", () => {
     const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/vacancies/${id}`;
     const post = (body: object) => fetch(`${url}/employer-memory-review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     try {
-      expect((await (await fetch(`${url}/review`)).json()).review.employerMemoryReview.candidates).toHaveLength(2);
+      const initialReview = await (await fetch(`${url}/review`)).json();
+      expect(initialReview.review.employerMemoryReview.candidates).toHaveLength(2);
+      expect(await new SqliteObservationClusterAssignmentRepository(db).findEffectiveByObservationId("current")).toBeNull();
       expect((await post({ employerClusterId: "a", decision: "INVALID" })).status).toBe(400);
       expect((await post({ employerClusterId: "a", decision: "CONFIRM", unexpected: true })).status).toBe(400);
       expect((await post({ employerClusterId: "non-candidate", decision: "CONFIRM" })).status).toBe(409);

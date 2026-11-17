@@ -17,6 +17,8 @@ import { SqliteVacancyOrganizationRoleDecisionRepository } from "../../src/infra
 import type { HumanOrganizationRole } from "../../src/domain/organizations/VacancyOrganizationRoleDecision.js";
 import { buildOrganizationRoleReview } from "../../src/application/user/vacancyOrganizationRoles.js";
 import { SqliteEmployerAliasEvidenceRepository } from "../../src/infrastructure/persistence/SqliteEmployerAliasEvidenceRepository.js";
+import { createEmployerCluster } from "../../src/application/recognition/createEmployerCluster.js";
+import { EMPLOYER_IDENTITY_ALGORITHM } from "../../src/domain/user/EmployerIdentityReview.js";
 const kellyUrl = "https://kellyservices.wd503.myworkdayjobs.com/en-US/corporatecareers-kellyservices-com/details/Supervisor-Site_JR100451";
 const kelly = readFileSync("tests/fixtures/kellyWorkdaySelectedVacancy.html", "utf8");
 function fixture() {
@@ -239,6 +241,71 @@ describe("vacancy-specific human organization roles", () => {
       })]);
       expect(view.organizationRoleReview![0]!.actions.map(a => a.role)).toEqual(["EMPLOYER", "STAFFING_AGENCY", "RECRUITER", "CLIENT", "CONSULTANCY"]);
       expect(view.employer.status).toBe("UNRESOLVED");
+      expect(f.rows("vacancy_organization_role_decisions")).toHaveLength(0);
+    } finally {
+      f.db.close();
+    }
+  });
+  it("requires an explicit vacancy-specific decision after automatic employer recognition", async () => {
+    const f = fixture();
+    try {
+      const { id, capture } = await f.capture();
+      const current = await f.deps.assignmentRepository.findEffectiveByObservationId(capture.observationId);
+      expect(current).not.toBeNull();
+      const cluster = createEmployerCluster({ status: "PROBABLY_RESOLVED", displayLabel: "Kelly" }, {
+        now: () => new Date("2026-10-23T10:00:00Z"),
+        generateId: () => "automatic-kelly",
+      });
+      await f.deps.employerClusterRepository.save(cluster);
+      f.db.prepare("UPDATE observation_cluster_assignments SET employer_cluster_id=?,status='ACCEPTED',algorithm='automatic-employer-recognition' WHERE id=?")
+        .run(cluster.id, current!.id);
+
+      const initial = await f.workflow.getVacancyReview(id);
+      const card = initial.organizationRoleReview!.find(candidate => candidate.name === "Kelly")!;
+      expect(initial.employer.displayState).toBe("INFERRED");
+      expect(card.confirmedRole).toBeNull();
+      expect(f.rows("vacancy_organization_role_decisions")).toHaveLength(0);
+
+      const confirmed = await f.workflow.decideVacancyOrganizationRole({
+        canonicalVacancyId: id, requestId: "confirm-recognized-employer",
+        identityKey: card.identityKey, role: "EMPLOYER", candidateToken: card.candidateToken,
+        acknowledgeContradiction: false,
+      });
+      expect(confirmed.employer.displayState).toBe("HUMAN_CONFIRMED");
+      expect(confirmed.organizationRoleReview!.find(candidate => candidate.identityKey === card.identityKey)?.confirmedRole).toBe("EMPLOYER");
+      expect(await f.deps.assignmentRepository.findEffectiveByObservationId(capture.observationId))
+        .toMatchObject({ status: "USER_CONFIRMED", algorithm: "user-vacancy-organization-role" });
+      expect(f.rows("vacancy_organization_role_decisions")).toHaveLength(1);
+    } finally {
+      f.db.close();
+    }
+  });
+  it("does not promote identity-only cluster membership or aliases to an employer role", async () => {
+    const f = fixture();
+    try {
+      const { id, capture } = await f.capture();
+      const current = await f.deps.assignmentRepository.findEffectiveByObservationId(capture.observationId);
+      expect(current).not.toBeNull();
+      const cluster = createEmployerCluster({ status: "PROBABLY_RESOLVED", displayLabel: "Kelly Services" }, {
+        now: () => new Date("2026-10-23T10:00:00Z"),
+        generateId: () => "identity-only-kelly",
+      });
+      await f.deps.employerClusterRepository.save(cluster);
+      f.db.prepare("UPDATE observation_cluster_assignments SET employer_cluster_id=?,status='USER_CONFIRMED',algorithm=? WHERE id=?")
+        .run(cluster.id, EMPLOYER_IDENTITY_ALGORITHM, current!.id);
+      await f.deps.aliasRepository.save({
+        id: "identity-only-kelly-alias", aliasName: "Kelly", normalizedAliasName: "kelly",
+        employerClusterId: cluster.id, sourceType: "USER_CONFIRMED_ALIAS",
+        sourceAssignmentId: current!.id, createdAt: new Date("2026-10-23T10:01:00Z"),
+        explanation: "Identity link only; not a vacancy role decision.",
+      });
+
+      const view = await f.workflow.getVacancyReview(id);
+      const card = view.organizationRoleReview!.find(candidate => candidate.name === "Kelly")!;
+      expect(view.employer.displayState).toBe("INFERRED");
+      expect(card.confirmedRole).toBeNull();
+      expect(card.actions.find(action => action.role === "EMPLOYER")?.warning).toBeNull();
+      expect(view.employerIdentityReview).toBeUndefined();
       expect(f.rows("vacancy_organization_role_decisions")).toHaveLength(0);
     } finally {
       f.db.close();

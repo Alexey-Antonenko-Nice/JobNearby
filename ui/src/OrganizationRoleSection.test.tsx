@@ -14,6 +14,7 @@ describe("organization role controls", () => {
   it("explains when no organization information was found", () => {
     render(<OrganizationRoleSection review={{ ...review(), organizationRoleReview: [] }} onConfirmed={vi.fn()} disabled={false}/>);
     expect(screen.getByText("No organization information was found for this vacancy.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /employer/i })).not.toBeInTheDocument();
   });
   it("shows employer recommendation and every alternative without sending any automatic decision", () => {
     render(<OrganizationRoleSection review={review()} onConfirmed={vi.fn()} disabled={false}/>);
@@ -53,6 +54,15 @@ describe("organization role controls", () => {
     render(<OrganizationRoleSection review={{...initial,organizationRoleReview:[{...card,confirmedRole:"EMPLOYER",history:[{role:"EMPLOYER",vacancyId:"other1",recordedAt:"2026-10-22"},{role:"STAFFING_AGENCY",vacancyId:"other2",recordedAt:"2026-10-22"}]}]}} onConfirmed={vi.fn()} disabled={false}/>);
     expect(screen.getByText(/Previously confirmed roles: employer, staffing agency/)).toBeVisible();
     expect(screen.getByRole("button",{name:"Mark as staffing agency"})).toBeEnabled();
+  });
+  it("shows an existing human employer decision without offering a redundant confirmation", () => {
+    const initial = review();
+    const card = initial.organizationRoleReview![0]!;
+    render(<OrganizationRoleSection review={{ ...initial, organizationRoleReview: [{ ...card, confirmedRole: "EMPLOYER" }] }} onConfirmed={vi.fn()} disabled={false}/>);
+    expect(screen.getByText("Confirmed for this vacancy: employer")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Confirmed as employer" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark as staffing agency" })).toBeEnabled();
   });
   it("refreshes stale evidence and displays the error without retrying the decision", async () => {
     vi.mocked(decideOrganizationRole).mockRejectedValue(Object.assign(Error("Review is stale. Refresh the vacancy."),{status:409}));
