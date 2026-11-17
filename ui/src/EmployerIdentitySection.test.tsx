@@ -24,7 +24,7 @@ describe("separate employer identity controls",()=>{
     await userEvent.click(screen.getByRole("button",{name:"Cancel"}));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button",{name:"Use this existing identity"}));
-    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button",{name:"Confirm existing identity"}));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button",{name:"Link existing identity"}));
     expect(decideEmployerIdentity).toHaveBeenCalledWith("french",expect.objectContaining({decision:"USE_EXISTING",employerClusterId:"known",candidateToken:"a".repeat(64)}));
     expect(updated).toHaveBeenCalled();
   });
@@ -50,12 +50,12 @@ describe("separate employer identity controls",()=>{
   });
   it("lists no confirmed employer by default and shows searched identities only after an explicit search",async()=>{
     const r=review();const identity=r.employerIdentityReview!;
-    vi.mocked(searchEmployerIdentities).mockResolvedValue({...identity,candidates:[{...identity.candidates[0]!,employerClusterId:"other",displayLabel:"Siemens Mobility",advisoryReasons:["Previously confirmed employer identity. Confirm that it is the same employer before using it."]}]});
+    vi.mocked(searchEmployerIdentities).mockResolvedValue({...identity,candidates:[{...identity.candidates[0]!,employerClusterId:"other",displayLabel:"Siemens Mobility",advisoryReasons:["Existing organization identity identity. Confirm that it is the same employer before using it."]}]});
     render(<EmployerIdentitySection review={{...r,employerIdentityReview:{...identity,candidates:[]}}} onConfirmed={vi.fn()} disabled={false}/>);
     expect(screen.getByText(/No suggested identities/)).toBeVisible();
     expect(screen.queryByRole("button",{name:"Use this existing identity"})).not.toBeInTheDocument();
     expect(screen.getByRole("button",{name:"Search identities"})).toBeDisabled();
-    await userEvent.type(screen.getByLabelText(/Search another confirmed identity/),"siemens");
+    await userEvent.type(screen.getByLabelText(/Search existing organization identities/),"siemens");
     await userEvent.click(screen.getByRole("button",{name:"Search identities"}));
     expect(searchEmployerIdentities).toHaveBeenCalledWith("french","siemens");
     expect(await screen.findByRole("article",{name:"Existing identity: Siemens Mobility"})).toBeVisible();
@@ -67,4 +67,13 @@ describe("separate employer identity controls",()=>{
     expect(screen.getByRole("button",{name:"Use this existing identity"})).toBeDisabled();
     expect(screen.getByRole("button",{name:"Keep separate"})).toBeDisabled();
   });
+});
+
+it.each(["INFERRED", "MEMORY_REUSED"] as const)("does not claim vacancy confirmation for %s identity review", state => {
+  const current = {...review(),employer:{displayState:state}} as ReviewView;
+  render(<EmployerIdentitySection review={current} onConfirmed={vi.fn()} disabled={false}/>);
+  expect(screen.getByText(/Employer role and organization identity are separate/)).toBeVisible();
+  expect(screen.getByText(/Identity linking does not confirm the employer role/)).toBeVisible();
+  expect(screen.queryByText(/is confirmed as employer for this vacancy/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/: Confirmed for this vacancy/)).not.toBeInTheDocument();
 });

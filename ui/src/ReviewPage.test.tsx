@@ -22,9 +22,9 @@ describe("ReviewPage", () => {
     render(<ReviewPage />);
     expect(await screen.findByText(qualification)).toBeInTheDocument();
     expect(screen.getByText(technical)).toBeInTheDocument();
-    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Employer not identified/)).toBeInTheDocument();
     expect(screen.getByText("Dexory")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm as employer for this vacancy" })).toBeInTheDocument();
   });
   it("confirms an agency through its dedicated action while leaving the employer unresolved", async () => {
     const initial = { ...review({ status: "UNRESOLVED" }), agencyContext: { candidates: [{ candidateId: "agency-candidate", name: "Crit", role: "STAFFING_AGENCY" }], known: [], ambiguousNames: [] } };
@@ -34,7 +34,7 @@ describe("ReviewPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Confirm as recruiting agency" }));
     expect(await screen.findByText(/Staffing agency — Confirmed/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Confirm as recruiting agency" })).not.toBeInTheDocument();
-    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Employer not identified/)).toBeInTheDocument();
     expect(screen.queryByText("private-memory-id")).not.toBeInTheDocument();
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/recruiting-agency-confirmation");
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ candidateId: "agency-candidate" });
@@ -52,7 +52,7 @@ describe("ReviewPage", () => {
     render(<ReviewPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Confirm as recruiting agency" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("no longer eligible");
-    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Employer not identified/)).toBeInTheDocument();
   });
   it("shows earlier compensation separately from the current salary with its observation date", async () => {
     const current = review({ compensation: { minimum: 32000, maximum: 36000, currency: "EUR", period: "YEAR" } });
@@ -71,7 +71,7 @@ describe("ReviewPage", () => {
     const section = await screen.findByRole("region", { name: "Employer history" });
     expect(within(section).getAllByText("Elite Robots").length).toBeGreaterThan(0);
     expect(within(section).getByRole("link", { name: "Technicien itinérant" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm as employer for this vacancy" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Employer candidate:/)).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -124,7 +124,7 @@ describe("ReviewPage", () => {
     expect(within(section).getByText("Withdrawn before").nextElementSibling).toHaveTextContent("No");
     expect(within(section).getByText("Last application").nextElementSibling).toHaveTextContent(new Date("2026-08-01T00:00:00Z").toLocaleDateString());
     expect(within(section).getByText("Last interaction").nextElementSibling).toHaveTextContent(`Rejected · ${new Date("2026-08-18T00:00:00Z").toLocaleDateString()}`);
-    expect(screen.getByRole("heading", { name: "Previous roles" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Previous vacancies" })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -156,7 +156,7 @@ describe("ReviewPage", () => {
     const section = await screen.findByRole("region", { name: "Employer history" });
     expect(within(section).getByRole("heading", { name: "HEUFT" })).toBeInTheDocument();
     expect(within(section).getByText("Applications").nextElementSibling).toHaveTextContent("1");
-    expect(within(section).getByText("Previous vacancies").nextElementSibling).toHaveTextContent("3");
+    expect(within(section).getByText("Previous vacancies", {selector:"dt"}).nextElementSibling).toHaveTextContent("3");
     expect(within(section).getByRole("link", { name: "Technicien itinérant" })).toHaveAttribute("href", "/review/previous-1");
     expect(within(section).getByText(/Applied · Interviewed · Rejected/)).toBeInTheDocument();
     expect(within(section).getByText(/Strasbourg — Indeed — Rejected/)).toBeInTheDocument();
@@ -190,14 +190,15 @@ describe("ReviewPage", () => {
     expect(await screen.findByText("Last interaction: No previous interactions")).toBeInTheDocument();
   });
 
-  it.each([["Confirm employer", "CONFIRM"], ["Not the employer", "REJECT"]])("reviews HEUFT named client with %s while ACTUA is not offered", async (label, decision) => {
+  it.each([["Confirm as employer for this vacancy", "CONFIRM"], ["Not the employer", "REJECT"]])("reviews HEUFT named client with %s while ACTUA is not offered", async (label, decision) => {
     const base = review({ employerClusterId: null, status: "UNRESOLVED", confirmationCandidate: null, organizations: { employerRelationships: [], displayedCompanies: [{ role: "DISPLAYED_COMPANY", rawName: "ACTUA SAVERNE" }], recruiters: [{ role: "RECRUITER", rawName: "ACTUA Saverne" }], clients: [{ role: "CLIENT", rawName: "HEUFT France" }] } });
     respond({ review: { ...base, employerReview: { required: true, candidates: [{ type: "NAMED_CLIENT", candidateId: "client-token", name: "HEUFT France", sourceRelationship: "CLIENT", employerClusterId: null, priorConfirmationCount: 0, explanation: "ACTUA Saverne is recruiting for the named client HEUFT France." }] } } });
     respond({ review: base });
     const user = userEvent.setup(); render(<ReviewPage />);
     expect(await screen.findByRole("heading", { name: "Possible employer" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "HEUFT France" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Confirm as employer for this vacancy" })).toHaveLength(1);
+    expect(screen.queryByText(/Employer candidate:/)).not.toBeInTheDocument();
     expect(screen.getByText("Source relationship: Client named in vacancy")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: label }));
     expect(fetchMock.mock.calls[1]![0]).toContain("/employer-review");
@@ -206,12 +207,12 @@ describe("ReviewPage", () => {
     expect(screen.getByText("HEUFT France")).toBeInTheDocument();
   });
 
-  it.each([ ["Confirm employer", "CONFIRM"], ["Not this employer", "REJECT"] ])("reviews a remembered employer using %s", async (label, decision) => {
+  it.each([ ["Confirm as employer for this vacancy", "CONFIRM"], ["Not this employer", "REJECT"] ])("reviews a remembered employer using %s", async (label, decision) => {
     respond({ review: { ...review(), employerMemoryReview: { required: true, candidates: [{ employerClusterId: "memory-a", displayLabel: "ACME", status: "PROBABLY_RESOLVED", priorConfirmationCount: 2, explanation: "Multiple confirmed clusters match." }] } } });
     respond({ review: review() });
     const user = userEvent.setup(); render(<ReviewPage />);
     expect(await screen.findByText("Possible known employer")).toBeInTheDocument();
-    expect(screen.getByText("Previously confirmed in 2 observations")).toBeInTheDocument();
+    expect(screen.getByText("Prior confirmation history: 2 observations. This does not confirm the employer role for this vacancy.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: label }));
     expect(fetchMock.mock.calls[1]![0]).toContain("/employer-memory-review");
     expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toEqual({ employerClusterId: "memory-a", decision });
@@ -340,7 +341,7 @@ describe("ReviewPage", () => {
 
   it("shows an unlinked employer explicitly", async () => {
     respond({ review: review({ employerClusterId: null }) }); render(<ReviewPage />);
-    expect(await screen.findByText(/Employer not confirmed yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/Employer not identified/)).toBeInTheDocument();
   });
 
   it("keeps ACTUA recruiter and HEUFT client visible without offering employer confirmation", async () => {
@@ -352,9 +353,8 @@ describe("ReviewPage", () => {
     expect(await screen.findByText("ACTUA SAVERNE")).toBeInTheDocument();
     expect(screen.getByText("ACTUA Saverne")).toBeInTheDocument();
     expect(screen.getByText("HEUFT France")).toBeInTheDocument();
-    expect(screen.getByText(/Employer not confirmed yet/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirm employer" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Employer not identified/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm as employer for this vacancy" })).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -363,14 +363,14 @@ describe("ReviewPage", () => {
     respond({ review: review({ confirmationCandidate: null, status: "PROBABLY_RESOLVED", displayState: "HUMAN_CONFIRMED" }) });
     const user = userEvent.setup(); render(<ReviewPage />);
     expect(await screen.findByText(/Employer candidate:/u)).toHaveTextContent("Air Products S.A.S (FR)");
-    await user.click(screen.getByRole("button", { name: "Confirm as employer" }));
+    await user.click(screen.getByRole("button", { name: "Confirm as employer for this vacancy" }));
     expect(fetchMock.mock.calls[1]![0]).toContain("/employer-confirmation");
-    expect(await screen.findByText(/Confirmed by you/)).toBeInTheDocument();
+    expect(await screen.findByText(/Confirmed for this vacancy/)).toBeInTheDocument();
   });
 
   it("renders known-employer history signals", async () => {
     respond({ review: review({ isKnownEmployer: true, previouslyAppliedToEmployer: true }) }); render(<ReviewPage />);
-    expect(await screen.findByText("Known employer")).toBeInTheDocument();
+    expect(await screen.findByText("Prior employer history available")).toBeInTheDocument();
     expect(screen.getAllByText("Previously applied to employer")).toHaveLength(2);
   });
 
@@ -398,11 +398,11 @@ describe("ReviewPage", () => {
     respond({ review: updated });
     const user = userEvent.setup();
     render(<ReviewPage />);
-    expect(await screen.findByText(/Airbus — Recognized from previous confirmation/)).toBeInTheDocument();
-    expect(screen.getByText(/you have not confirmed the employer role for this vacancy/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeEnabled();
+    expect(await screen.findByText(/Airbus — Recognized from prior employer knowledge/)).toBeInTheDocument();
+    expect(screen.getByText(/Not yet confirmed for this vacancy/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm as employer for this vacancy" })).toBeEnabled();
     expect(screen.queryByText("Confirmed for this vacancy: employer")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Confirm as employer" }));
+    await user.click(screen.getByRole("button", { name: "Confirm as employer for this vacancy" }));
     expect(await screen.findByText("Confirmed for this vacancy: employer")).toBeInTheDocument();
     expect(fetchMock.mock.calls[1]?.[0]).toContain("/organization-role-decisions");
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual(expect.objectContaining({
@@ -419,8 +419,8 @@ describe("ReviewPage", () => {
     }] } });
     render(<ReviewPage />);
     expect(await screen.findByText(/Airbus — Automatically recognized/)).toBeInTheDocument();
-    expect(screen.getByText(/not confirmed by you/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeEnabled();
+    expect(screen.getByText(/Not yet confirmed for this vacancy/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm as employer for this vacancy" })).toBeEnabled();
     expect(screen.queryByText("Confirmed for this vacancy: employer")).not.toBeInTheDocument();
   });
 
@@ -433,9 +433,9 @@ describe("ReviewPage", () => {
     }] } });
     render(<ReviewPage />);
     expect(await screen.findByText("Employer needs review")).toBeInTheDocument();
-    expect(screen.getByText("The employer assignment has conflicting or ambiguous evidence.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mark as employer" })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(screen.getByText("Employer candidates need review; no candidate is selected here.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm as employer for this vacancy" })).toBeEnabled();
+    expect(screen.queryByText("Confirmed for this vacancy: employer")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

@@ -1,3 +1,4 @@
+import { employerRoleAction } from "./EmployerAssignmentStatus";
 import { useState } from "react";
 import { decideOrganizationRole, getReview, type ReviewView } from "./api";
 import type { OrganizationRoleReviewItem, HumanOrganizationRole } from "../../src/domain/organizations/VacancyOrganizationRoleDecision.js";
@@ -31,15 +32,15 @@ export function OrganizationRoleSection({ review, onConfirmed, disabled }: {
       <p>Recommended: <strong>{label(card.recommendedRole)}</strong> ({Math.round(card.confidence * 100)}% confidence)</p>
       <ul>{card.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>
       {card.confirmedRole && <p>Confirmed for this vacancy: {label(card.confirmedRole)}</p>}
-      {card.history.length > 0 && <p>Previously confirmed roles: {[...new Set(card.history.map(h => label(h.role)))].join(", ")}. These roles may coexist.</p>}
+      {card.history.length > 0 && <p>Role confirmation history: {[...new Set(card.history.map(h => label(h.role)))].join(", ")}. Historical roles do not confirm a role for this vacancy.</p>}
       <div>{card.actions.map(action => <button key={action.role} type="button" disabled={disabled || pending || card.confirmedRole === action.role} onClick={() => {
         if (action.warning) setOverride({ card, role: action.role, warning: action.warning });
         else void save(card, action.role, false);
-      }}>{card.confirmedRole === action.role ? `Confirmed as ${label(action.role)}` : `${card.recommendedRole === action.role ? "Confirm as" : "Mark as"} ${label(action.role)}`}</button>)}</div>
+      }}>{card.confirmedRole === action.role ? `Confirmed as ${label(action.role)}` : action.role === "EMPLOYER" ? employerRoleAction(review.employer?.displayState, card.name) : `${card.confirmedRole ? "Change role to" : card.recommendedRole === action.role ? "Confirm as" : "Mark as"} ${label(action.role)}`}</button>)}</div>
     </article>)}
     {override && <div role="dialog" aria-modal="true" aria-label="Confirm organization role override">
-      <h3>Confirm role for {override.card.name}</h3><p>{override.warning}</p>
-      <button type="button" disabled={pending} onClick={() => void save(override.card, override.role, true)}>Confirm override as {label(override.role)}</button>
+      <h3>{override.role === "EMPLOYER" ? employerRoleAction(review.employer?.displayState, override.card.name) : `${override.card.confirmedRole ? "Change role to" : "Confirm role as"} ${label(override.role)} for ${override.card.name}`}</h3><p>{override.warning}</p>
+      <button type="button" disabled={pending} onClick={() => void save(override.card, override.role, true)}>{override.role === "EMPLOYER" ? employerRoleAction(review.employer?.displayState, override.card.name) : `Confirm override as ${label(override.role)}`}</button>
       <button type="button" disabled={pending} onClick={() => setOverride(null)}>Cancel</button>
     </div>}
   </section>;

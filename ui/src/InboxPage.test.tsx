@@ -63,3 +63,26 @@ it("shows an empty archive and allows returning to the active inbox", async () =
  await userEvent.click(screen.getByText("Show active vacancies"));
  expect(await screen.findByText("Developer")).toBeInTheDocument();
 });
+
+it.each([
+  ["HUMAN_CONFIRMED", "Confirmed for this vacancy"],
+  ["INFERRED", "Automatically recognized"],
+  ["MEMORY_REUSED", "Recognized from prior employer knowledge"],
+  ["REVIEW_REQUIRED", "Employer needs review"],
+  ["UNRESOLVED", "Employer not identified"],
+])("uses identical Inbox and Review status vocabulary for %s", async (state, label) => {
+  const employer = {...item().employer,displayState:state,displayName:state==="UNRESOLVED"?null:"Airbus India Private Limited"};
+  fetchMock.mockResolvedValueOnce(response({vacancies:[item({employer})]}));
+  const inbox = render(<InboxPage/>);
+  const inboxStatus = await screen.findByText(new RegExp(label));
+  const summary = inboxStatus.textContent;
+  if(state!=="HUMAN_CONFIRMED") expect(summary).not.toContain("Confirmed for this vacancy");
+  if(state==="REVIEW_REQUIRED") expect(summary).toContain("Candidate:");
+  inbox.unmount();
+  window.history.pushState({},"","/review/canonical-1");
+  fetchMock.mockResolvedValueOnce(response({review:{...review(),employer:{...review().employer,...employer}}}));
+  render(<ReviewPage/>);
+  expect((await screen.findByText(new RegExp(label),{selector:"strong"})).textContent).toBe(summary);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(([,options])=>!options?.method || options.method==="GET")).toBe(true);
+});

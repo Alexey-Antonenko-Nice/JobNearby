@@ -15,7 +15,7 @@ export function InboxPage(): React.JSX.Element {
 }
 
 function InboxItem({ vacancy }: { readonly vacancy: VacancyInboxItem }): React.JSX.Element {
-  const organizations = [["Employer", vacancy.organizations.employerName === null ? null : [vacancy.organizations.employerName]], ["Displayed company", vacancy.organizations.displayedCompanyNames], ["Recruiter", vacancy.organizations.recruiterNames], ["Consultancy", vacancy.organizations.consultancyNames]] as const;
+  const organizations = [["Employer evidence", vacancy.organizations.employerName === null ? null : [vacancy.organizations.employerName]], ["Displayed company", vacancy.organizations.displayedCompanyNames], ["Recruiter", vacancy.organizations.recruiterNames], ["Consultancy", vacancy.organizations.consultancyNames]] as const;
   return <article className="inbox-item"><div className="inbox-heading"><h2>{text(vacancy.title)}</h2><strong>{vacancy.userState}</strong></div>
     <p>{locationText(vacancy.location, vacancy.locationAlternatives)} {vacancy.engagement === null ? "" : `| ${formatEngagement(vacancy.engagement)}`} {vacancy.workMode === null ? "" : `| ${formatWorkMode(vacancy.workMode)}`}</p>
     {organizations.filter(([, names]) => names !== null && names.length > 0).map(([label, names]) => <p key={label}><strong>{label}:</strong> {names?.join(", ")}</p>)}
