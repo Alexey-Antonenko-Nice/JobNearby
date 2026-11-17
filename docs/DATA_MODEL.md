@@ -167,6 +167,10 @@ metadata
 
 The precise source payload may vary.
 
+`displayedCompanyName` is the company's source-provided text, not a resolved
+`Employer` reference. It is observed evidence only; it does not establish
+recognition, organization identity, or the employer role for a vacancy.
+
 ---
 
 # 6. SourceObservation Mutability
@@ -273,6 +277,9 @@ Examples:
 type = EMPLOYER_NAME
 value = "Blue Paper"
 
+type = DISPLAYED_COMPANY_NAME
+value = "Blue Paper"
+
 type = LOCATION_CITY
 value = "Strasbourg"
 
@@ -306,6 +313,10 @@ EMPLOYEE_COUNT_APPROX = 160
 ```
 
 The extracted evidence may later be recalculated without changing the original observation.
+
+Observed company text must remain distinguishable from normalized employer
+identity. Extracting a company name does not itself assign an employer cluster or
+decide an organization role.
 
 ---
 
@@ -430,7 +441,10 @@ All contact details should retain provenance.
 
 `EmployerCluster` is the core recognition-memory entity.
 
-It represents observations believed to concern the same real employer/location, whether or not the real identity is known.
+It groups observations believed to concern the same practical hiring
+employer/location identity, whether or not the legal or canonical identity is
+known. It represents recognition/identity grouping, not a vacancy's organization
+role.
 
 Conceptual structure:
 
@@ -487,9 +501,11 @@ The cluster remains the same Job Nearby entity throughout this evolution.
 
 # 18. ObservationClusterAssignment
 
-The relationship between a source observation and an employer cluster is itself an inference.
-
-It should therefore be represented explicitly.
+The relationship between a source observation and an employer cluster is a
+recognition/identity relationship and should be represented explicitly. It may
+result from automatic recognition or an explicit identity-linkage decision.
+Neither outcome establishes that the cluster's organization is the employer for
+the vacancy.
 
 Conceptually:
 
@@ -518,6 +534,11 @@ ACCEPTED
 REJECTED
 USER_CONFIRMED
 ```
+
+`USER_CONFIRMED` describes the observation-to-cluster identity relationship only.
+It must not be interpreted as a human-confirmed organization role for any vacancy.
+Employer-memory reuse may add conservative recognition or cluster membership to a
+new vacancy without creating a `VacancyOrganizationRoleDecision` for it.
 
 ---
 
@@ -621,33 +642,30 @@ Observed and changing facts should remain evidence-backed.
 
 ---
 
-# 23. Employer Alias
+# 23. Employer Alias Evidence
 
-Companies may appear under multiple names.
+An organization may be observed under multiple names. Alias evidence records an
+identity linkage from an observed name to a known employer cluster.
 
 Conceptually:
 
 ```text
-EmployerAlias
+EmployerAliasEvidence
 
 id
-employerId
-name
-normalizedName
-sourceReference?
-status
+aliasName
+normalizedAliasName
+employerClusterId
+sourceAssignmentId
+sourceType
+createdAt
+explanation
 ```
 
-Potential statuses:
-
-```text
-OBSERVED
-CONFIRMED
-REJECTED
-HISTORICAL
-```
-
-Aliases assist future employer recognition.
+The evidence is backed by an identity assignment and may be active only while
+that supporting assignment remains effective. Historical evidence is retained
+for audit. Alias evidence assists future employer recognition but does not
+decide the organization's role for any vacancy.
 
 ---
 
@@ -821,9 +839,11 @@ confidence
 algorithm
 algorithmVersion
 evaluatedAt
-
-confirmedByUser?
 ```
+
+This is an identity conclusion, not an organization-role decision. A reviewer
+may separately accept an identity link or alias; that human decision remains
+distinct from deciding which organization plays the employer role on a vacancy.
 
 Possible status values:
 
@@ -1476,43 +1496,53 @@ Observation assignments are then updated through new assignment records rather t
 
 ---
 
-# 53. ConfirmationRecord
+# 53. VacancyOrganizationRoleDecision
 
-Human confirmations and rejections should be explicit.
+`VacancyOrganizationRoleDecision` is the authoritative, human-authored decision
+about an organization's role on one `CanonicalVacancy`. It is not a general
+confirmation of the organization identity or cluster membership.
 
 Conceptually:
 
 ```text
-ConfirmationRecord
+VacancyOrganizationRoleDecision
 
 id
-userId
-
-targetType
-targetId
-
-decision
+canonicalVacancyId
+identityKey
+organizationName
+normalizedName
+role
+previousDecisionId?
+basis
+overrideAcknowledged
 createdAt
-
-notes?
 ```
 
-Possible decisions:
+Possible roles include:
 
 ```text
-CONFIRMED
-REJECTED
-CORRECTED
+EMPLOYER
+STAFFING_AGENCY
+RECRUITER
+CLIENT
+CONSULTANCY
 ```
 
-Targets may include:
+Each decision belongs to one vacancy and one organization identity key. A
+decision for one vacancy does not transfer to another because of a matching name,
+cluster, source tenant, prior employer knowledge, or alias. A changed role is an
+explicit new decision linked to the prior decision; source recapture alone does
+not replace it.
 
-```text
-EmployerCandidate
-ObservationClusterAssignment
-PublicationFamilyMembership
-RecruitmentCampaignMembership
-```
+The decision is separate from:
+
+* source-observed company text and extracted organization evidence;
+* employer identity resolution and alias evidence;
+* observation-to-cluster assignment and employer-memory reuse.
+
+Do not use a generic confirmation record or an identity assignment as a
+substitute for this vacancy-specific decision.
 
 ---
 
@@ -1575,6 +1605,7 @@ PRIVATE USER DOMAIN
 
 UserEmployerInteraction
 UserNote
+VacancyOrganizationRoleDecision
 application-related metadata
 personal recruiter notes
 ```
@@ -1592,10 +1623,13 @@ SourceObservation
 owns no inference
 
 EmployerCluster
-owns recognition context
+owns recognition/identity grouping, not vacancy organization roles
 
 Employer
 owns canonical resolved identity
+
+VacancyOrganizationRoleDecision
+belongs to one CanonicalVacancy and records a human role decision
 
 RecruitmentCampaign
 belongs to EmployerCluster
@@ -1640,7 +1674,7 @@ Entities that should normally be immutable after creation include:
 
 ```text
 SourceObservation
-historical ConfirmationRecord
+historical VacancyOrganizationRoleDecision
 historical MergeRecord
 historical SplitRecord
 historical recognition evaluation
@@ -1723,7 +1757,7 @@ EmployerCluster
 ObservationClusterAssignment
 
 Employer
-EmployerAlias
+EmployerAliasEvidence
 EmployerLocation
 
 EmployerCandidate
@@ -1736,7 +1770,7 @@ PublicationFamilyMembership
 
 UserEmployerInteraction
 
-ConfirmationRecord
+VacancyOrganizationRoleDecision
 ```
 
 The following can initially remain simplified or deferred:
@@ -1787,6 +1821,11 @@ SourceObservation
       │      EmployerLocation
       │
       └──────────────► Recruiter / Contact evidence
+
+CanonicalVacancy
+      │
+      └──────────────► VacancyOrganizationRoleDecision
+                         (human-authored, vacancy-specific)
 ```
 
 ---
@@ -1812,8 +1851,8 @@ many EmployerCandidates
 Employer
 1 → many EmployerLocations
 
-Employer
-1 → many EmployerAliases
+EmployerCluster
+1 → many EmployerAliasEvidence records
 
 PublicationFamily
 1 → many publication observations
@@ -2029,6 +2068,18 @@ This is a projection, not a source-of-truth entity.
 
 It should be reconstructable from underlying domain data.
 
+Prior employer knowledge/memory may be derived from earlier assignments and
+identity evidence. Conservative reuse may inform recognition or cluster
+membership for another vacancy; it does not create that vacancy's
+`VacancyOrganizationRoleDecision`.
+
+Inbox and Review may expose the same read-only employer presentation derived from
+source evidence, recognition and identity relationships, prior employer knowledge,
+and any vacancy-specific role decision. This presentation creates or mutates none
+of those records. Do not persist a separate employer-display state or use it as
+an authoritative domain decision; the underlying evidence and decisions remain
+the source of truth.
+
 ---
 
 # 71. Current User Status Projection
@@ -2121,6 +2172,22 @@ Initial validation rules should include:
 
 **D10 — Private user data must remain separable from public labor-market evidence.**
 
+**D11 — Displayed company text is source evidence, not resolved employer identity.**
+
+**D12 — Observation-to-cluster membership records recognition/identity grouping, not an organization role.**
+
+**D13 — Alias evidence links organization identities and does not assign vacancy roles.**
+
+**D14 — Reusing employer memory does not create a human organization-role decision for another vacancy.**
+
+**D15 — `VacancyOrganizationRoleDecision` is the authoritative human role decision for one vacancy.**
+
+**D16 — Role decisions survive source recapture; changing a role requires an explicit new decision.**
+
+**D17 — Ambiguous employer candidates remain alternatives until a person makes a decision.**
+
+**D18 — Employer presentation in Inbox and Review is derived and read-only, not persisted domain state.**
+
 ---
 
 # 75. Foundational Data Model Rules
@@ -2137,7 +2204,7 @@ The following rules are established by Data Model v0.1.
 
 **DM5 — `Employer` represents resolved real-world identity, not anonymous hiring activity.**
 
-**DM6 — Observation-to-cluster membership is an inference relationship with confidence.**
+**DM6 — Observation-to-cluster membership is a recognition/identity relationship with confidence and provenance, not an organization role.**
 
 **DM7 — Employer candidates and identity resolutions preserve alternative hypotheses and history.**
 
@@ -2157,6 +2224,18 @@ The following rules are established by Data Model v0.1.
 
 **DM15 — Provider-specific identifiers and schemas belong at the source boundary, not in the core domain.**
 
+**DM16 — Displayed company evidence, organization identity, cluster membership, and vacancy role are separate concepts.**
+
+**DM17 — Identity and alias linkage cannot serve as a vacancy-specific organization-role decision.**
+
+**DM18 — Prior employer-memory reuse may inform recognition but does not confirm the role on a new vacancy.**
+
+**DM19 — `VacancyOrganizationRoleDecision` is human-authored, vacancy-specific, and independent of cluster membership.**
+
+**DM20 — Only an explicit new role decision changes a previously decided vacancy role; recapture alone does not.**
+
+**DM21 — Derived employer presentation is read-only and has no persisted state entity.**
+
 ---
 
 # 76. Recommended MVP Domain Boundary
@@ -2175,13 +2254,15 @@ recognition/
   IdentityResolution
   PublicationFamily
   PublicationFamilyMembership
-  ConfirmationRecord
 
 employers/
   Employer
-  EmployerAlias
+  EmployerAliasEvidence
   EmployerLocation
   Recruiter
+
+organizations/
+  VacancyOrganizationRoleDecision
 
 user-history/
   UserEmployerInteraction
