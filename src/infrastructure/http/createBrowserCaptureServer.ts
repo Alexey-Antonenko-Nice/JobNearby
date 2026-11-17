@@ -1,3 +1,4 @@
+import { VacancyCrmError, validatePriority } from "../../domain/user/VacancyCrm.js";
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
 import { humanOrganizationRoles, type HumanOrganizationRole } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -11,6 +12,8 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly setVacancyPriority?: VacancyReviewWorkflow["setVacancyPriority"];
+  readonly addVacancyNote?: VacancyReviewWorkflow["addVacancyNote"];
   readonly vacancyCleanup?: VacancyCleanup;
   readonly decideEmployerIdentity?: VacancyReviewWorkflow["decideEmployerIdentity"];
   readonly searchEmployerIdentities?: VacancyReviewWorkflow["searchEmployerIdentities"];
@@ -53,6 +56,24 @@ export function createBrowserCaptureServer(
         const result = await dependencies.captureAndProcessBrowserVacancy(payload);
         sendJson(response, 201, captureResponseDto(result));
         return;
+      }
+      const crmMatch = /^\/vacancies\/([^/]+)\/crm\/(priority|notes)$/u.exec(path);
+      if (request.method === "POST" && crmMatch) {
+        operation = "review";
+        const canonicalVacancyId = decodePathId(crmMatch[1]!);
+        const body = await readJsonBody(request, "Private CRM");
+        if (!isRecord(body)) throw new InvalidRequestError("Invalid CRM payload.");
+        if (crmMatch[2] === "priority" && dependencies.setVacancyPriority) {
+          if(Object.keys(body).some(key=>key!=="priority")) throw new InvalidRequestError("Invalid priority payload.");
+          validatePriority(body.priority);
+          sendJson(response,200,{review:await dependencies.setVacancyPriority({canonicalVacancyId,priority:body.priority})});
+          return;
+        }
+        if (crmMatch[2] === "notes" && dependencies.addVacancyNote) {
+          if(typeof body.requestId!=="string" || typeof body.text!=="string" || Object.keys(body).some(key=>!["requestId","text"].includes(key))) throw new InvalidRequestError("Invalid note payload.");
+          sendJson(response,201,{review:await dependencies.addVacancyNote({canonicalVacancyId,requestId:body.requestId,text:body.text})});
+          return;
+        }
       }
       const cleanupMatch = /^\/vacancies\/([^/]+)\/(cleanup|archive|deletion-preview|deletion)$/u.exec(path);
       if (cleanupMatch && dependencies.vacancyCleanup) {
@@ -160,7 +181,7 @@ export function createBrowserCaptureServer(
       sendJson(response, 404, { success: false, error: "Not found." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Browser capture failed.";
-      const status = error instanceof VacancyCleanupError ? error.status : errorStatus(message, operation, error);
+      const status = error instanceof VacancyCleanupError || error instanceof VacancyCrmError ? error.status : errorStatus(message, operation, error);
       sendJson(response, status, { success: false, error: message });
     }
   });

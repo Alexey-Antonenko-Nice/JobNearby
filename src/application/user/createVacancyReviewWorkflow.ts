@@ -1,3 +1,5 @@
+import { setVacancyPriority, addVacancyNote } from "./vacancyCrm.js";
+import type { VacancyCrmRepository, VacancyPriority } from "../../domain/user/VacancyCrm.js";
 import { decideEmployerIdentity, searchEmployerIdentityCandidates } from "./employerIdentityReview.js";
 import type { EmployerIdentityDecisionInput, EmployerIdentityDecisionStore } from "../../domain/user/EmployerIdentityReview.js";
 import { decideVacancyOrganizationRole, type OrganizationRoleDecisionInput } from "./decideVacancyOrganizationRole.js";
@@ -28,6 +30,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly crmRepository?: VacancyCrmRepository;
   readonly employerIdentityDecisionStore?: EmployerIdentityDecisionStore;
   readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
   readonly agencyMemoryRepository?: ConfirmedOrganizationRoleRepository;
@@ -49,6 +52,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.crmRepository ? {crmRepository:dependencies.crmRepository} : {}),
     ...(dependencies.employerIdentityDecisionStore ? { employerIdentityDecisionStore: dependencies.employerIdentityDecisionStore } : {}),
     ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository } : {}),
     ...(dependencies.agencyMemoryRepository ? { agencyMemoryRepository: dependencies.agencyMemoryRepository } : {}),
@@ -62,6 +66,16 @@ export function createVacancyReviewWorkflow(
     ...(dependencies.assignmentRepository === undefined ? {} : { assignmentRepository: dependencies.assignmentRepository }),
   };
   return {
+    setVacancyPriority: async (input: {canonicalVacancyId:string;priority:VacancyPriority}) => {
+      if(!dependencies.crmRepository) throw new Error("CRM is unavailable.");
+      await setVacancyPriority(input,{...dependencies,crmRepository:dependencies.crmRepository});
+      return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
+    },
+    addVacancyNote: async (input: {canonicalVacancyId:string;requestId:string;text:string}) => {
+      if(!dependencies.crmRepository) throw new Error("CRM is unavailable.");
+      await addVacancyNote(input,{...dependencies,crmRepository:dependencies.crmRepository});
+      return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
+    },
     searchEmployerIdentities: async (input: { readonly canonicalVacancyId: string; readonly query: string }) => {
       if (!dependencies.organizationRoleDecisionRepository) throw Error("Employer identity review is unavailable.");
       return searchEmployerIdentityCandidates(input.canonicalVacancyId, input.query, {...dependencies, organizationRoleDecisionRepository:dependencies.organizationRoleDecisionRepository});

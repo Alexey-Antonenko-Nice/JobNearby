@@ -2332,9 +2332,9 @@ Concept names below describe responsibility; they do not prescribe new tables.
 | Task / NextAction | Missing | Private intended work with optional due time/contact, completion and notes; decide durable identity/ownership before adding reminder delivery |
 | Reminder | Missing | Separate notification schedule/delivery state referring to task or event, not the task itself |
 | Interview/process event | Partial | INTERVIEW event supports stage; no scheduled/completed distinction, calendar time, participant or assignment tracking. Assess activity extension before adding a separate interview aggregate |
-| Notes | Documented only; implementation missing | UserNote concept exists; current event metadata does not accept arbitrary notes. Support opportunity scope and auditable edits |
+| Notes | Implemented (M18.2) | Dedicated append-only VacancyNote records, exposed in Review; no editing or interaction-state side effects |
 | Outcome | Partial | OFFER/REJECTED/WITHDRAWN/CLOSED events; richer outcome detail and reason are not implemented |
-| Priority | Missing | Private user preference, independent of recognition confidence |
+| Priority | Implemented (M18.2) | Private canonical-vacancy preference: NONE, LOW, NORMAL, HIGH; independent of recognition confidence |
 | Archive/restore | Adequately represented for current workflow | Migration 011 and cleanup service; archive is not an application outcome, and source recapture must not silently reopen it |
 
 Current event types are REVIEWED, INTERESTED, APPLIED, CONTACTED, INTERVIEW, OFFER,
@@ -2354,6 +2354,34 @@ buttons and derived history summaries do not constitute the full future CRM time
 - Private notes and user contact details are never silently promoted into shared recognition evidence. Public GitHub source does not publish local records.
 - Existing cleanup safeguards must be extended before introducing new dependent records; document/contact deletion must not silently break application history. User-directed privacy deletion remains possible.
 
-No new entity, enum, table or schema migration is introduced here. The next private
+The M18.1 gap audit itself introduced no entity, enum, table or schema migration. The next private
 tracking increment and later pipeline decisions should reuse the current repository
 and application boundaries rather than replacing evidence-backed canonical records.
+
+
+# 79. Private opportunity priority and notes (M18.2)
+
+VacancyCrmState is a private read model keyed by canonical vacancy ID, separate
+from CanonicalVacancy market facts and SourceObservation. It contains current
+priority and chronological notes. It is not application/process state, recognition
+confidence, archive state, a next action, or interaction history.
+
+Migration 012 adds:
+- vacancy_crm_priority: one optional row per canonical vacancy; priority is NONE,
+  LOW, NORMAL or HIGH. Missing row reads as NONE without a write.
+- vacancy_notes: id, canonical_vacancy_id, text and server-recorded created_at.
+  Notes are append-only; corrections are new notes. Text must be nonblank and at
+  most 10,000 characters. Ordering is created_at then insertion order for ties.
+
+A note request ID provides retry idempotence: the same vacancy/text returns the
+existing note without changing its timestamp; reuse for different content is rejected.
+There is no note edit or standalone delete command in this increment.
+setVacancyPriority and addVacancyNote are explicit application commands; Review
+reads CRM state through the existing workflow. Neither command writes captured
+evidence, employer assignments or interaction events.
+
+Recapture/reprojection and archive/restore preserve both tables. Single-capture
+cleanup retains them. Guarded whole-vacancy deletion removes them by foreign-key
+cascade, with a scoped cleanup guard permitting note deletion. Preview counts
+include private CRM rows; changing priority or adding a note invalidates a prior
+cleanup token. Priority is current mutable intent; note history is auditable.

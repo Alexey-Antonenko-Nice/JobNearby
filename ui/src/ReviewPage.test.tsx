@@ -12,6 +12,45 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  it("retains a failed note draft and reuses its request identity on retry", async () => {
+    const initial={...review({status:"UNRESOLVED"}),crm:{priority:"NONE",notes:[]}};
+    respond({review:initial});
+    fetchMock.mockRejectedValueOnce(new Error("Connection interrupted"));
+    respond({review:{...initial,crm:{priority:"NONE",notes:[
+      {id:"saved",canonicalVacancyId:"canonical-1",text:"<script>private</script>",createdAt:"2026-11-17T12:00:00Z"}
+    ]}}});
+    render(<ReviewPage/>);
+    await userEvent.type(await screen.findByLabelText("New note"),"<script>private</script>");
+    await userEvent.click(screen.getByRole("button",{name:"Add note"}));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Connection interrupted");
+    expect(screen.getByLabelText("New note")).toHaveValue("<script>private</script>");
+    await userEvent.click(screen.getByRole("button",{name:"Add note"}));
+    expect(await screen.findByText("<script>private</script>")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toEqual(fetchMock.mock.calls[2]?.[1]?.body);
+    expect(document.querySelector("script")).toBeNull();
+  });
+
+  it("changes private priority and adds chronological notes through Review commands", async () => {
+    const initial={...review({status:"UNRESOLVED"}),crm:{priority:"NONE",notes:[]}};
+    const prioritized={...initial,crm:{priority:"HIGH",notes:[]}};
+    const noted={...prioritized,crm:{priority:"HIGH",notes:[
+      {id:"one",canonicalVacancyId:"canonical-1",text:"Mention commissioning experience",createdAt:"2026-11-17T12:00:00Z"}
+    ]}};
+    respond({review:initial});respond({review:prioritized});respond({review:noted});
+    render(<ReviewPage/>);
+    expect(await screen.findByLabelText("Priority")).toHaveValue("NONE");
+    await userEvent.selectOptions(screen.getByLabelText("Priority"),"HIGH");
+    await userEvent.click(screen.getByRole("button",{name:"Save priority"}));
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/crm/priority");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({priority:"HIGH"});
+    await userEvent.type(screen.getByLabelText("New note"),"Mention commissioning experience");
+    await userEvent.click(screen.getByRole("button",{name:"Add note"}));
+    expect(await screen.findByText("Mention commissioning experience")).toBeInTheDocument();
+    expect(screen.getByLabelText("New note")).toHaveValue("");
+    expect(fetchMock.mock.calls[2]?.[0]).toContain("/crm/notes");
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({requestId:expect.any(String),text:"Mention commissioning experience"});
+  });
+
   it("shows saved Dexory qualifications without losing alternatives or optionality", async () => {
     const doc = new DOMParser().parseFromString(readFileSync("tests/fixtures/greenhouseDexory.html", "utf8"), "text/html");
     const lines = [...doc.querySelectorAll(".job__description li")].map(e => e.textContent!.trim());

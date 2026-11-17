@@ -90,6 +90,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly crm?: Serialized<import("../../src/domain/user/VacancyCrm.js").VacancyCrmState>;
   readonly employerIdentityReview?: import("../../src/domain/user/EmployerIdentityReview").EmployerIdentityReview | null;
   readonly organizationRoleReview?: readonly import("../../src/domain/organizations/VacancyOrganizationRoleDecision.js").OrganizationRoleReviewItem[];
   readonly agencyContext?: {
@@ -245,4 +246,11 @@ export async function cleanupRequest<T>(id: string, action: string, body?: unkno
   const response = await fetch(API_ORIGIN + "/vacancies/" + encodeURIComponent(id) + "/" + action, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) throw await apiError(response);
   return await response.json() as T;
+}
+
+export async function setVacancyPriority(id: string, priority: import("../../src/domain/user/VacancyCrm.js").VacancyPriority): Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/priority",{priority})).review;
+}
+export async function addVacancyNote(id: string, requestId: string, text: string): Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/notes",{requestId,text})).review;
 }

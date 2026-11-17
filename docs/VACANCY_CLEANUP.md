@@ -40,3 +40,13 @@ No live database migration or cleanup was executed during implementation. The se
 The archived inbox sends `GET /vacancies?archived=true`. The inbox query allowlist must accept both `limit` and `archived`; otherwise it returns HTTP 400 (`Unsupported query parameter "archived".`) before the route can apply its archive filter. Only `true` and `false` are valid archive values. Unknown parameters and invalid limits remain rejected.
 
 `tests/infrastructure/archivedInboxHttp.test.ts` exercises the actual HTTP route, review workflow and SQLite repositories using an in-memory database: populated archive, empty archive, active-list exclusion, combined limit/filter, restore into the active list, and deletion protection after restore. The UI also covers the empty-archive state. This repair requires no migration; an already-running API must reload the rebuilt server code.
+
+
+## Private CRM state (M18.2)
+
+Priority and append-only notes survive archive/restore and single-capture deletion.
+Whole-vacancy deletion includes their row counts in its preview and removes them
+with the canonical vacancy. Adding a note or changing priority invalidates an
+earlier cleanup token. Note deletion is allowed only within the existing guarded
+whole-vacancy cleanup transaction; there is no standalone note deletion action.
+Application/interview history acknowledgement requirements remain unchanged.

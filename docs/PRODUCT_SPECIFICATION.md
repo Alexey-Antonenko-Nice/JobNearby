@@ -232,7 +232,8 @@ Audited from code at the baseline above, without opening the live database:
 | Inbox/Review, source/history context, archive/restore, guarded deletion | Implemented |
 | Interaction history and application state | Partial: append-only vacancy events and latest-event state, not a full pipeline |
 | Contacts and interviews | Partial evidence/event metadata only; no contact library or interview schedule |
-| Notes, priority, preparation and richer activity timeline | Missing product workflows; notes had conceptual documentation only |
+| Notes and priority | Implemented in Review (M18.2): private priority and append-only chronological notes, preserved across recapture and archive/restore |
+| Application preparation and richer activity timeline | Future workflows; notes remain distinct from interaction events |
 | CV/letter library, versioning and usage associations | Missing |
 | Tasks/reminders and daily work queue | Missing |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
