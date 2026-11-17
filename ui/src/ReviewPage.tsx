@@ -1,7 +1,7 @@
 import { VacancyCleanupSection } from "./VacancyCleanupSection";
 import { EmployerIdentitySection } from "./EmployerIdentitySection";
 import { OrganizationRoleSection } from "./OrganizationRoleSection";
-import { EmployerAssignmentStatus } from "./EmployerAssignmentStatus";
+import { EmployerAssignmentStatus, employerRoleAction } from "./EmployerAssignmentStatus";
 import { RecruitingAgencySection } from "./RecruitingAgencySection";
 import { PublicationCampaignContextSection } from "./PublicationCampaignContextSection";
 import { useEffect, useState } from "react";
@@ -11,7 +11,7 @@ import { formatCompensation, formatEngagement, formatLanguageRequirement, format
 
 const actions = ["REVIEWED", "INTERESTED", "APPLIED", "CONTACTED", "INTERVIEW", "OFFER", "REJECTED", "WITHDRAWN", "CLOSED"];
 const organizationGroups = [
-  ["Employer", "employerRelationships"], ["Displayed company", "displayedCompanies"],
+  ["Employer evidence", "employerRelationships"], ["Displayed company", "displayedCompanies"],
   ["Recruiter", "recruiters"], ["Consultancy", "consultancies"],
   ["Staffing agency", "staffingAgencies"], ["Client", "clients"],
 ] as const;
@@ -109,24 +109,24 @@ export function ReviewPage(): React.JSX.Element {
         ["Previous vacancies from this employer", review.employer.previousVacancyCount],
         ["Previously applied to employer", yesNo(review.employer.everAppliedToEmployer)],
       ]} /></section>}
-    {review.organizationRoleReview === undefined && review.employer.confirmationCandidate != null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>Confirm as employer</button></p>}
+    {review.organizationRoleReview === undefined && review.employer.confirmationCandidate != null && <p>Employer candidate: <strong>{review.employer.confirmationCandidate}</strong> <button type="button" disabled={pending} onClick={() => void confirmEmployerCandidate()}>{employerRoleAction(review.employer.displayState)}</button></p>}
     {review.organizationRoleReview === undefined && review.employerReview?.candidates.filter((candidate) => candidate.type === "ALIAS_SELECTION").map((candidate) => <section key={candidate.candidateId}>
-      <h2>Same as a known employer?</h2><p>Current name: <strong>{candidate.name}</strong></p><p>{candidate.explanation}</p>
-      <label>Previously confirmed employer <select value={candidate.options.some((o) => o.employerClusterId === selectedAliasCluster) ? selectedAliasCluster : ""} disabled={pending} onChange={(event) => setSelectedAliasCluster(event.target.value)}>
-        <option value="">Select an employer</option>{candidate.options.map((option) => <option key={option.employerClusterId} value={option.employerClusterId}>{option.displayLabel}</option>)}
+      <h2>Link to an existing organization identity?</h2><p>Identity linking is separate from confirming the employer role for this vacancy.</p><p>Current name: <strong>{candidate.name}</strong></p><p>{candidate.explanation}</p>
+      <label>Existing organization identity <select value={candidate.options.some((o) => o.employerClusterId === selectedAliasCluster) ? selectedAliasCluster : ""} disabled={pending} onChange={(event) => setSelectedAliasCluster(event.target.value)}>
+        <option value="">Select an identity</option>{candidate.options.map((option) => <option key={option.employerClusterId} value={option.employerClusterId}>{option.displayLabel}</option>)}
       </select></label>{" "}
-      <button type="button" disabled={pending || !candidate.options.some((o) => o.employerClusterId === selectedAliasCluster)} onClick={() => void reviewAlias(candidate.candidateId, "CONFIRM")}>Same employer</button>{" "}
+      <button type="button" disabled={pending || !candidate.options.some((o) => o.employerClusterId === selectedAliasCluster)} onClick={() => void reviewAlias(candidate.candidateId, "CONFIRM")}>Link existing identity</button>{" "}
       <button type="button" disabled={pending || !candidate.options.some((o) => o.employerClusterId === selectedAliasCluster)} onClick={() => void reviewAlias(candidate.candidateId, "REJECT")}>Keep separate</button>
     </section>)}
     {review.organizationRoleReview === undefined && review.employerReview?.candidates.filter((candidate) => candidate.type === "NAMED_CLIENT").map((candidate) => <section key={candidate.candidateId}>
       <h2>Possible employer</h2><h3>{candidate.name}</h3><p>Source relationship: Client named in vacancy</p><p>{candidate.explanation}</p>
-      {candidate.priorConfirmationCount > 0 && <p>Previously confirmed in {candidate.priorConfirmationCount} observations</p>}
-      <button type="button" disabled={pending} onClick={() => void reviewNamedClient(candidate.candidateId, "CONFIRM")}>Confirm employer</button>{" "}
+      {candidate.priorConfirmationCount > 0 && <p>Prior confirmation history: {candidate.priorConfirmationCount} observations. This does not confirm the employer role for this vacancy.</p>}
+      <button type="button" disabled={pending} onClick={() => void reviewNamedClient(candidate.candidateId, "CONFIRM")}>{employerRoleAction(review.employer.displayState)}</button>{" "}
       <button type="button" disabled={pending} onClick={() => void reviewNamedClient(candidate.candidateId, "REJECT")}>Not the employer</button>
     </section>)}
     {review.organizationRoleReview === undefined && review.employerMemoryReview?.required && <section><h2>Possible known employer</h2>{review.employerMemoryReview.candidates.map((candidate) => <article key={candidate.employerClusterId}>
-      <h3>{candidate.displayLabel}</h3><p>Status: {candidate.status}</p><p>Previously confirmed in {candidate.priorConfirmationCount} observations</p><p>{candidate.explanation}</p>
-      <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "CONFIRM")}>Confirm employer</button>{" "}
+      <h3>{candidate.displayLabel}</h3><p>Candidate from prior employer knowledge; not selected for this vacancy.</p><p>Prior confirmation history: {candidate.priorConfirmationCount} observations. This does not confirm the employer role for this vacancy.</p><p>{candidate.explanation}</p>
+      <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "CONFIRM")}>{employerRoleAction(review.employer.displayState)}</button>{" "}
       <button type="button" disabled={pending} onClick={() => void reviewMemory(candidate.employerClusterId, "REJECT")}>Not this employer</button>
     </article>)}</section>}
     {review.organizationRoleReview !== undefined ? <OrganizationRoleSection review={review} onConfirmed={setReview} disabled={pending} /> : <RecruitingAgencySection review={review} onConfirmed={setReview} disabled={pending} />}
@@ -149,11 +149,11 @@ function EmployerHistorySection({ history, context, organizations }: {
     <h3>{history.employerCluster.displayLabel ?? "Employer"}</h3>
     {context && <EmployerContext context={context} />}
     {summary.vacancyCount === 0 ? <p>No previous vacancies with this employer.</p> : <>
-      <p>Known employer</p>
+      <p>Prior employer history available</p>
       {context ? <p>{summary.vacancyCount} previous vacancies</p> : <Details values={[["Previous vacancies", summary.vacancyCount], ["Applications", summary.everAppliedCount],
         ["Interviews", summary.everInterviewedCount], ["Offers", summary.everOfferedCount], ["Rejections", summary.everRejectedCount]]} />}
       {!context && <p>Last interaction: {summary.latestUserInteractionAt === null ? "No previous interactions" : date(summary.latestUserInteractionAt)}</p>}
-      <h4>Previous roles</h4><ul>{history.vacancies.map((vacancy) => <li key={vacancy.canonicalVacancyId}>
+      <h4>Previous vacancies</h4><ul>{history.vacancies.map((vacancy) => <li key={vacancy.canonicalVacancyId}>
         <a href={`/review/${encodeURIComponent(vacancy.canonicalVacancyId)}`}>{vacancy.title ?? "Untitled vacancy"}</a>
         {vacancy.location !== null && ` — ${formatLocation(vacancy.location)}`}
         {Boolean(vacancy.sources?.length) && ` — ${vacancy.sources!.join(", ")}`}
@@ -193,7 +193,7 @@ function interactionLabel(state: string): string {
 
 function Details({ values }: { readonly values: readonly [string, unknown][] }): React.JSX.Element { return <dl>{values.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{text(value)}</dd></div>)}</dl>; }
 function Organizations({ label, values, required }: { readonly label: string; readonly values: readonly OrganizationRelationship[]; readonly required: boolean }): React.JSX.Element | null { if (!required && values.length === 0) return null; return <div className="organization"><h3>{label}</h3><p>{values.length === 0 ? "Unknown" : values.map((value) => value.rawName ?? value.organizationId ?? value.employerClusterId ?? "Unknown").join(", ")}</p></div>; }
-function signals(review: ReviewView): string[] { const entries: [boolean, string][] = [[review.reviewSignals.isNewVacancy, "New vacancy"], [review.reviewSignals.isKnownEmployer, "Known employer"], [review.recognition.sameCanonicalVacancySeenBefore, "Same vacancy seen before"], [review.reviewSignals.hasMultipleSourceObservations, "Multiple source observations"], [review.reviewSignals.alreadyAppliedToThisVacancy, "Already applied to this vacancy"], [review.reviewSignals.previouslyAppliedToEmployer, "Previously applied to employer"], [review.reviewSignals.previouslyInterviewedWithEmployer, "Previously interviewed with employer"], [review.reviewSignals.previouslyRejectedByEmployer, "Previously rejected by employer"]]; return entries.filter(([visible]) => visible).map(([, label]) => label); }
+function signals(review: ReviewView): string[] { const entries: [boolean, string][] = [[review.reviewSignals.isNewVacancy, "New vacancy"], [review.reviewSignals.isKnownEmployer, "Prior employer history available"], [review.recognition.sameCanonicalVacancySeenBefore, "Same vacancy seen before"], [review.reviewSignals.hasMultipleSourceObservations, "Multiple source observations"], [review.reviewSignals.alreadyAppliedToThisVacancy, "Already applied to this vacancy"], [review.reviewSignals.previouslyAppliedToEmployer, "Previously applied to employer"], [review.reviewSignals.previouslyInterviewedWithEmployer, "Previously interviewed with employer"], [review.reviewSignals.previouslyRejectedByEmployer, "Previously rejected by employer"]]; return entries.filter(([visible]) => visible).map(([, label]) => label); }
 function text(value: unknown): string { if (value === null || value === undefined || value === "") return "Unknown"; return String(value); }
 function yesNo(value: boolean): string { return value ? "yes" : "no"; }
 function date(value: string | null): string { return value === null ? "Unknown" : new Date(value).toLocaleDateString(); }

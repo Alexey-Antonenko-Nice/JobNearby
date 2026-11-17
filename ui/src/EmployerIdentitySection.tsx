@@ -35,7 +35,7 @@ export function EmployerIdentitySection({review,onConfirmed,disabled}: {
     } finally {setPending(false);}
   }
   return <section aria-label="Employer identity"><h2>Employer identity</h2>
-    <p>{identity.employerName} is confirmed as employer for this vacancy. Separately, choose whether it is the same employer as a previously confirmed identity.</p>
+    <p>{identity.employerName}: choose whether to link this organization to an existing identity. Employer role and organization identity are separate. Identity linking does not confirm the employer role.</p>
     <p>Matching names and careers domains are clues only. Different employers can share a brand or careers site. No identity is selected automatically.</p>
     {error && <p role="alert">{error}</p>}
     {!identity.candidates.length && <p>No suggested identities: nothing in the confirmed history matches this employer by name, known alias or careers domain.</p>}
@@ -48,14 +48,14 @@ export function EmployerIdentitySection({review,onConfirmed,disabled}: {
       <button type="button" disabled={disabled||pending||candidate.keptSeparate} onClick={()=>void save(candidate.employerClusterId,"KEEP_SEPARATE")}>Keep separate</button>
     </article>)}
     <form role="search" aria-label="Search employer identities" onSubmit={event=>{event.preventDefault();void search();}}>
-      <label>Search another confirmed identity by name <input value={query} onChange={event=>setQuery(event.target.value)} maxLength={200}/></label>
+      <label>Search existing organization identities by name <input value={query} onChange={event=>setQuery(event.target.value)} maxLength={200}/></label>
       <button type="submit" disabled={disabled||pending||query.trim().length<2}>Search identities</button>
     </form>
-    {results && !searched.length && <p>No other confirmed identity matches that name.</p>}
+    {results && !searched.length && <p>No other existing organization identity matches that name.</p>}
     {selected && <div role="dialog" aria-modal="true" aria-label="Confirm employer identity">
       <h3>Use {known.find(c=>c.employerClusterId===selected)?.displayLabel}?</h3>
       <p>Use this employer identity for this vacancy and include its employer history? Other vacancies and earlier decisions will stay unchanged.</p>
-      <button type="button" disabled={disabled||pending} onClick={()=>void save(selected,"USE_EXISTING")}>Confirm existing identity</button>
+      <button type="button" disabled={disabled||pending} onClick={()=>void save(selected,"USE_EXISTING")}>Link existing identity</button>
       <button type="button" disabled={pending} onClick={()=>setSelected(null)}>Cancel</button>
     </div>}
   </section>;

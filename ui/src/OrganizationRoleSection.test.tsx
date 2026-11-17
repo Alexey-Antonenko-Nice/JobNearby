@@ -18,7 +18,7 @@ describe("organization role controls", () => {
   });
   it("shows employer recommendation and every alternative without sending any automatic decision", () => {
     render(<OrganizationRoleSection review={review()} onConfirmed={vi.fn()} disabled={false}/>);
-    expect(screen.getByRole("button",{name:"Confirm as employer"})).toBeVisible();
+    expect(screen.getByRole("button",{name:"Confirm as employer for this vacancy"})).toBeVisible();
     expect(screen.getByRole("button",{name:"Mark as staffing agency"})).toBeVisible();
     expect(screen.getByRole("button",{name:"Mark as recruiter"})).toBeVisible();
     expect(screen.getByRole("button",{name:"Mark as client"})).toBeVisible();
@@ -29,13 +29,13 @@ describe("organization role controls", () => {
   it("keeps the employer alternative visible for a staffing recommendation", () => {
     render(<OrganizationRoleSection review={review("STAFFING_AGENCY")} onConfirmed={vi.fn()} disabled={false}/>);
     expect(screen.getByRole("button",{name:"Confirm as staffing agency"})).toBeVisible();
-    expect(screen.getByRole("button",{name:"Mark as employer"})).toBeVisible();
+    expect(screen.getByRole("button",{name:"Confirm as employer for this vacancy"})).toBeVisible();
   });
   it("saves a recommended role with the current token and refreshes the displayed review", async () => {
     const initial=review(), updated={...initial,organizationRoleReview:initial.organizationRoleReview!.map(c=>({...c,confirmedRole:"EMPLOYER" as const}))}, onConfirmed=vi.fn();
     vi.mocked(decideOrganizationRole).mockResolvedValue(updated);
     render(<OrganizationRoleSection review={initial} onConfirmed={onConfirmed} disabled={false}/>);
-    await userEvent.click(screen.getByRole("button",{name:"Confirm as employer"}));
+    await userEvent.click(screen.getByRole("button",{name:"Confirm as employer for this vacancy"}));
     expect(decideOrganizationRole).toHaveBeenCalledWith("vacancy",expect.objectContaining({identityKey:"name:kelly",candidateToken:"a".repeat(64),role:"EMPLOYER",acknowledgeContradiction:false,requestId:expect.any(String)}));
     expect(onConfirmed).toHaveBeenCalledWith(updated);
   });
@@ -52,8 +52,8 @@ describe("organization role controls", () => {
   it("shows coexisting histories while leaving all alternative actions available", () => {
     const initial=review(); const card=initial.organizationRoleReview![0]!;
     render(<OrganizationRoleSection review={{...initial,organizationRoleReview:[{...card,confirmedRole:"EMPLOYER",history:[{role:"EMPLOYER",vacancyId:"other1",recordedAt:"2026-10-22"},{role:"STAFFING_AGENCY",vacancyId:"other2",recordedAt:"2026-10-22"}]}]}} onConfirmed={vi.fn()} disabled={false}/>);
-    expect(screen.getByText(/Previously confirmed roles: employer, staffing agency/)).toBeVisible();
-    expect(screen.getByRole("button",{name:"Mark as staffing agency"})).toBeEnabled();
+    expect(screen.getByText(/Role confirmation history: employer, staffing agency/)).toBeVisible();
+    expect(screen.getByRole("button",{name:"Change role to staffing agency"})).toBeEnabled();
   });
   it("shows an existing human employer decision without offering a redundant confirmation", () => {
     const initial = review();
@@ -61,15 +61,30 @@ describe("organization role controls", () => {
     render(<OrganizationRoleSection review={{ ...initial, organizationRoleReview: [{ ...card, confirmedRole: "EMPLOYER" }] }} onConfirmed={vi.fn()} disabled={false}/>);
     expect(screen.getByText("Confirmed for this vacancy: employer")).toBeVisible();
     expect(screen.getByRole("button", { name: "Confirmed as employer" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Mark as staffing agency" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Confirm as employer for this vacancy" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change role to staffing agency" })).toBeEnabled();
   });
   it("refreshes stale evidence and displays the error without retrying the decision", async () => {
     vi.mocked(decideOrganizationRole).mockRejectedValue(Object.assign(Error("Review is stale. Refresh the vacancy."),{status:409}));
     vi.mocked(getReview).mockResolvedValue(review()); const updated=vi.fn();
     render(<OrganizationRoleSection review={review()} onConfirmed={updated} disabled={false}/>);
-    await userEvent.click(screen.getByRole("button",{name:"Confirm as employer"}));
+    await userEvent.click(screen.getByRole("button",{name:"Confirm as employer for this vacancy"}));
     expect(await screen.findByRole("alert")).toHaveTextContent("stale"); expect(getReview).toHaveBeenCalledWith("vacancy");
     expect(decideOrganizationRole).toHaveBeenCalledTimes(1); expect(updated).toHaveBeenCalled();
   });
 });
+
+  it("uses change wording for employer reassignment and preserves the warning and decision payload", async () => {
+    const initial = review();
+    const card = {...initial.organizationRoleReview![0]!, name:"Airbus India Private Limited", identityKey:"name:airbus india private limited", actions:[{role:"EMPLOYER" as const,warning:"This replaces the currently confirmed employer for this vacancy."}]};
+    const current = {...initial, employer:{displayState:"HUMAN_CONFIRMED"},organizationRoleReview:[card]} as ReviewView;
+    vi.mocked(decideOrganizationRole).mockResolvedValue(current);
+    render(<OrganizationRoleSection review={current} onConfirmed={vi.fn()} disabled={false}/>);
+    await userEvent.click(screen.getByRole("button",{name:"Change employer to Airbus India Private Limited"}));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("replaces the currently confirmed employer");
+    expect(screen.queryByRole("button",{name:"Confirm as employer for this vacancy"})).not.toBeInTheDocument();
+    expect(decideOrganizationRole).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole("button",{name:"Change employer to Airbus India Private Limited"}));
+    expect(decideOrganizationRole).toHaveBeenCalledWith("vacancy",expect.objectContaining({role:"EMPLOYER",identityKey:card.identityKey,acknowledgeContradiction:true}));
+  });
