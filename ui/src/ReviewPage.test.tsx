@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -558,3 +558,78 @@ function vacancyContext(): import("./api").VacancyContext {
     withdrawnBefore: false, closedBefore: false, latestInteractionType: null, latestInteractionAt: null,
     appliedViaProvider: null, appliedViaSourceObservationId: null };
 }
+
+describe("Review next actions",()=>{
+  const instant="2026-11-17T12:00:00.000Z";
+  function action(status:"ACTIVE"|"COMPLETED"|"CANCELLED"="ACTIVE") {
+    return {id:"action",canonicalVacancyId:"canonical-1",description:"Send follow-up",createdAt:instant,
+      dueAt:"2026-11-16T12:00:00.000Z",completedAt:status==="COMPLETED"?instant:null,cancelledAt:status==="CANCELLED"?instant:null,
+      status,dueState:status==="ACTIVE"?"OVERDUE":"INACTIVE",reminderDue:status==="ACTIVE",
+      reminders:[{id:"r",actionId:"action",createdAt:instant,remindAt:"2026-11-16T09:00:00.000Z",dismissedAt:null,supersededAt:null}],
+      changes:[{id:"action",kind:"CREATE",createdAt:instant,dueAt:null,remindAt:null,reminderId:null}]};
+  }
+  function view(actions:ReturnType<typeof action>[] = []) {
+    return {...review({status:"UNRESOLVED"}),nextActions:{evaluatedAt:instant,actions,overdueCount:actions.filter(a=>a.dueState==="OVERDUE").length}};
+  }
+  it("creates an action with optional due time and completes it while retaining history",async()=>{
+    respond({review:view()});respond({review:view([action()])});respond({review:view([action("COMPLETED")])});
+    render(<ReviewPage/>);
+    await userEvent.type(await screen.findByLabelText("Next action description"),"Send follow-up");
+    await userEvent.click(screen.getByRole("button",{name:"Create action"}));
+    expect(await screen.findByRole("article",{name:"Send follow-up"})).toBeInTheDocument();
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({description:"Send follow-up",dueAt:null,requestId:expect.any(String)});
+    await userEvent.click(screen.getByRole("button",{name:"Complete action"}));
+    expect(await screen.findByText("Completed",{exact:true})).toBeInTheDocument();
+    expect(screen.queryByRole("button",{name:"Complete action"})).not.toBeInTheDocument();
+    expect(screen.getByRole("article",{name:"Send follow-up"})).toBeInTheDocument();
+    expect(fetchMock.mock.calls[2]?.[0]).toContain("/actions/action/complete");
+  });
+  it("cancels an action into visible history",async()=>{
+    respond({review:view([action()])});respond({review:view([action("CANCELLED")])});
+    render(<ReviewPage/>);
+    await userEvent.click(await screen.findByRole("button",{name:"Cancel action"}));
+    expect(await screen.findByText("Cancelled",{exact:true})).toBeInTheDocument();
+    expect(screen.queryByRole("button",{name:"Cancel action"})).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/actions/action/cancel");
+  });
+  it("uses server-derived overdue/reminder states and supports explicit refresh",async()=>{
+    respond({review:view([action()])});
+    const fresh={...action(),dueState:"UPCOMING",reminderDue:false};
+    respond({review:view([fresh])});
+    render(<ReviewPage/>);
+    expect(await screen.findByText(/Active — Overdue/)).toBeInTheDocument();
+    expect(screen.getByText(/^Reminder due:/)).toBeInTheDocument();
+    expect(screen.getByText(/No desktop notifications/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button",{name:"Refresh action status"}));
+    expect(await screen.findByText(/Active — Upcoming/)).toBeInTheDocument();
+    expect(screen.getByText(/^Reminder scheduled:/)).toBeInTheDocument();
+  });
+  it("reschedules and sets/dismisses a separate reminder using UTC instants",async()=>{
+    const initial=view([action()]);
+    respond({review:initial});respond({review:initial});respond({review:initial});
+    const dismissed={...action(),reminderDue:false,reminders:action().reminders.map(r=>({...r,dismissedAt:instant}))};
+    respond({review:view([dismissed])});
+    render(<ReviewPage/>);
+    await userEvent.click(await screen.findByText("Due date and reminder",{exact:true}));
+    fireEvent.change(screen.getByLabelText("New due date and time"),{target:{value:"2026-11-20T09:00"}});
+    await userEvent.click(screen.getByRole("button",{name:"Reschedule action"}));
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)).dueAt).toBe(new Date("2026-11-20T09:00").toISOString());
+    fireEvent.change(screen.getByLabelText("Reminder date and time"),{target:{value:"2026-11-19T09:00"}});
+    await userEvent.click(screen.getByRole("button",{name:"Set reminder"}));
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).remindAt).toBe(new Date("2026-11-19T09:00").toISOString());
+    await userEvent.click(screen.getByRole("button",{name:"Dismiss reminder"}));
+    expect(await screen.findByText(/^Reminder dismissed:/)).toBeInTheDocument();
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)).reminderId).toBe("r");
+  });
+  it("retains failed drafts and reuses creation request IDs on retry",async()=>{
+    respond({review:view()});fetchMock.mockRejectedValueOnce(new Error("Offline"));respond({review:view([action()])});
+    render(<ReviewPage/>);
+    await userEvent.type(await screen.findByLabelText("Next action description"),"Send follow-up");
+    await userEvent.click(screen.getByRole("button",{name:"Create action"}));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Offline");
+    expect(screen.getByLabelText("Next action description")).toHaveValue("Send follow-up");
+    await userEvent.click(screen.getByRole("button",{name:"Create action"}));
+    expect(await screen.findByRole("article",{name:"Send follow-up"})).toBeInTheDocument();
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toEqual(fetchMock.mock.calls[2]?.[1]?.body);
+  });
+});

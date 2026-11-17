@@ -91,6 +91,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly nextActions?: Serialized<import("../../src/domain/user/VacancyNextAction.js").NextActionsView>;
   readonly crm?: Serialized<import("../../src/domain/user/VacancyCrm.js").VacancyCrmState>;
   readonly employerIdentityReview?: import("../../src/domain/user/EmployerIdentityReview").EmployerIdentityReview | null;
   readonly organizationRoleReview?: readonly import("../../src/domain/organizations/VacancyOrganizationRoleDecision.js").OrganizationRoleReviewItem[];
@@ -257,4 +258,23 @@ export async function addVacancyNote(id: string, requestId: string, text: string
 }
 export async function setVacancyProcessState(id: string, requestId: string, state: VacancyProcessState): Promise<ReviewView> {
   return (await cleanupRequest<{review:ReviewView}>(id,"crm/process-state",{requestId,state})).review;
+}
+
+export async function createVacancyNextAction(id:string,requestId:string,description:string,dueAt:string|null):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions",{requestId,description,dueAt})).review;
+}
+export async function completeVacancyNextAction(id:string,actionId:string,requestId:string):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions/"+encodeURIComponent(actionId)+"/complete",{requestId})).review;
+}
+export async function cancelVacancyNextAction(id:string,actionId:string,requestId:string):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions/"+encodeURIComponent(actionId)+"/cancel",{requestId})).review;
+}
+export async function rescheduleVacancyNextAction(id:string,actionId:string,requestId:string,dueAt:string|null):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions/"+encodeURIComponent(actionId)+"/reschedule",{requestId,dueAt})).review;
+}
+export async function setVacancyActionReminder(id:string,actionId:string,requestId:string,remindAt:string):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions/"+encodeURIComponent(actionId)+"/reminder",{requestId,remindAt})).review;
+}
+export async function dismissVacancyActionReminder(id:string,actionId:string,requestId:string,reminderId:string):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions/"+encodeURIComponent(actionId)+"/dismiss-reminder",{requestId,reminderId})).review;
 }

@@ -27,7 +27,7 @@ export class SqliteVacancyCleanup implements VacancyCleanup {
     const vacancy = this.db.prepare("SELECT * FROM canonical_vacancies WHERE id=?").get(id);
     if (!vacancy) throw new VacancyCleanupError("Vacancy no longer exists.", 404);
     const ids = JSON.stringify(this.members(id));
-    const tables = ["canonical_vacancies", "canonical_vacancy_observation_claims", "canonical_vacancy_source_observations", "canonical_vacancy_exact_identity_claims", "vacancy_organization_role_decisions", "user_vacancy_interaction_events", "vacancy_cleanup_state", "vacancy_crm_priority", "vacancy_notes", "vacancy_crm_process_state", "vacancy_process_transitions"];
+    const tables = ["canonical_vacancies", "canonical_vacancy_observation_claims", "canonical_vacancy_source_observations", "canonical_vacancy_exact_identity_claims", "vacancy_organization_role_decisions", "user_vacancy_interaction_events", "vacancy_cleanup_state", "vacancy_crm_priority", "vacancy_notes", "vacancy_crm_process_state", "vacancy_process_transitions", "vacancy_next_actions", "vacancy_action_changes"];
     const owned = tables.map(table => [table, this.db.prepare(`SELECT * FROM ${table} WHERE ${table === "canonical_vacancies" ? "id" : "canonical_vacancy_id"}=? ORDER BY rowid`).all(id)]);
     const sources = ["source_observations", "capture_occurrences", "observation_cluster_assignments", "publication_family_memberships", "recruitment_campaign_memberships"].map(table => [table, this.db.prepare(`SELECT * FROM ${table} WHERE ${table === "source_observations" ? "id" : "source_observation_id"} IN (SELECT value FROM json_each(?)) ORDER BY rowid`).all(ids)]);
     // Shared-memory or effective-employer changes can alter retention/reprojection.
@@ -77,6 +77,8 @@ export class SqliteVacancyCleanup implements VacancyCleanup {
         { label: "Private CRM notes removed", count: observationId ? 0 : count("vacancy_notes", "canonical_vacancy_id", [id]) },
         { label: "Private CRM process-state records removed", count: observationId ? 0 : count("vacancy_crm_process_state", "canonical_vacancy_id", [id]) },
         { label: "Private CRM process transitions removed", count: observationId ? 0 : count("vacancy_process_transitions", "canonical_vacancy_id", [id]) },
+        { label: "Private CRM next actions removed", count: observationId ? 0 : count("vacancy_next_actions", "canonical_vacancy_id", [id]) },
+        { label: "Private CRM action/reminder history removed", count: observationId ? 0 : count("vacancy_action_changes", "canonical_vacancy_id", [id]) },
         { label: "Vacancy interactions removed", count: observationId ? 0 : count("user_vacancy_interaction_events", "canonical_vacancy_id", [id]) },
         { label: "Publication/campaign memberships removed", count: count("publication_family_memberships", "source_observation_id", ids) + count("recruitment_campaign_memberships", "source_observation_id", ids) },
         { label: "Employer assignment history removed", count: (this.db.prepare(`SELECT count(*) AS n FROM observation_cluster_assignments WHERE source_observation_id IN (SELECT value FROM json_each(?)) AND id NOT IN (SELECT source_assignment_id FROM employer_alias_evidence)`).get(JSON.stringify(ids)) as { n: number }).n },

@@ -42,6 +42,12 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
 const server = createBrowserCaptureServer({
+  createVacancyNextAction: reviewWorkflow.createVacancyNextAction,
+  completeVacancyNextAction: reviewWorkflow.completeVacancyNextAction,
+  cancelVacancyNextAction: reviewWorkflow.cancelVacancyNextAction,
+  rescheduleVacancyNextAction: reviewWorkflow.rescheduleVacancyNextAction,
+  setVacancyActionReminder: reviewWorkflow.setVacancyActionReminder,
+  dismissVacancyActionReminder: reviewWorkflow.dismissVacancyActionReminder,
   setVacancyPriority: reviewWorkflow.setVacancyPriority,
   addVacancyNote: reviewWorkflow.addVacancyNote,
   setVacancyProcessState: reviewWorkflow.setVacancyProcessState,

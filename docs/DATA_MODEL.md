@@ -2329,8 +2329,8 @@ Concept names below describe responsibility; they do not prescribe new tables.
 | Contact | Partial conceptual coverage; missing CRM implementation | RecruitmentContact/ContactPoint were documented; person/contact evidence extraction is not an editable contact library |
 | VacancyContact relationship | Missing | Many-to-many private links with context/role; do not require one contact to belong to one vacancy |
 | Interaction / Activity | Partial | Append-only vacancy events with occurredAt/recordedAt and typed metadata; extend deliberately for communication, documents, notes and links without losing historical events |
-| Task / NextAction | Missing | Private intended work with optional due time/contact, completion and notes; decide durable identity/ownership before adding reminder delivery |
-| Reminder | Missing | Separate notification schedule/delivery state referring to task or event, not the task itself |
+| Task / NextAction | Implemented narrowly (M18.4) | Multiple private vacancy actions with optional due instants, completion/cancellation and append-only schedule/lifecycle history; no contact linking |
+| Reminder | In-app derived only (M18.4) | Independent action reminder time, replacement/dismissal history; no scheduler or delivery infrastructure |
 | Interview/process event | Partial | INTERVIEW event supports stage; no scheduled/completed distinction, calendar time, participant or assignment tracking. Assess activity extension before adding a separate interview aggregate |
 | Notes | Implemented (M18.2) | Dedicated append-only VacancyNote records, exposed in Review; no editing or interaction-state side effects |
 | Outcome | Partial | OFFER/REJECTED/WITHDRAWN/CLOSED events; richer outcome detail and reason are not implemented |
@@ -2385,3 +2385,59 @@ cleanup retains them. Guarded whole-vacancy deletion removes them by foreign-key
 cascade, with a scoped cleanup guard permitting note deletion. Preview counts
 include private CRM rows; changing priority or adding a note invalidates a prior
 cleanup token. Priority is current mutable intent; note history is auditable.
+
+# 80. Vacancy next actions and reminders (M18.4)
+
+VacancyCrmRepository owns private scheduling state through getNextActions and
+explicit application commands: createVacancyNextAction, completeVacancyNextAction,
+cancelVacancyNextAction, rescheduleVacancyNextAction, setVacancyActionReminder and
+dismissVacancyActionReminder. These commands never change process state,
+interactions, priority, notes, archive state, employer recognition or source identity.
+
+Migration 014 adds two tables:
+- vacancy_next_actions: immutable ID, canonical vacancy ID, description, initial
+  optional due_at and server-recorded created_at. Multiple actions per vacancy.
+- vacancy_action_changes: immutable request ID, canonical vacancy/action IDs,
+  typed operation, optional due_at/remind_at/reminder_id and server-created timestamp.
+  Composite foreign keys enforce action/vacancy ownership.
+
+The action projection folds changes in insertion order; creation and each change
+remain visible in Review history. Completion/cancellation set lifecycle timestamps
+without deleting anything; terminal actions cannot be rescheduled or changed.
+Description editing and reopening terminal actions are deferred. Cancel and create
+a replacement when needed.
+
+A VacancyActionReminder is a distinct projection of a SET_REMINDER record, whose
+request ID is its durable reminder ID. It has its own remindAt and createdAt,
+and derives dismissedAt or supersededAt from later commands. Setting a new reminder
+supersedes the earlier one while retaining its history. One reminder per action is
+current at a time; a reminder may exist without a due date or before/after that date.
+Completion/cancellation suppress reminder-due signaling but retain reminder history.
+
+All timestamps are UTC ISO instants with milliseconds and Z. Review accepts local
+date/time, labels the browser time zone and converts to UTC before submission;
+invalid local times (including a daylight-saving gap) are rejected. A repeated
+daylight-saving hour uses the browser's earlier-occurrence interpretation.
+No date-only/end-of-day semantics are implied. API timestamps without a time zone
+or normalized UTC representation are rejected.
+
+Review derives status from a single injectable current-time value:
+- ACTIVE without dueAt: NONE; future dueAt: UPCOMING.
+- dueAt exactly equals now: DUE; dueAt earlier than now: OVERDUE.
+- COMPLETED/CANCELLED: INACTIVE for due-state purposes, excluded from overdue count.
+- reminderDue: ACTIVE plus a current, undismissed reminder with remindAt <= now.
+
+These derived flags are never persisted. They refresh when Review is read, after
+commands, or with Refresh action status. An open idle page does not update itself.
+There is no scheduler, background polling, calendar integration or desktop notification.
+Archived vacancies retain their actions and can still show due signals in Review.
+
+Creation uses requestId as action ID. Each subsequent command has its own request
+ID. An identical retry returns without appending, preserving original timestamps
+and never replaying an old schedule over a later one. Reuse for a different payload
+is rejected. Validation and append occur in one IMMEDIATE transaction.
+
+Both tables reject updates and permit deletion only through guarded whole-vacancy
+cleanup. Recapture, archive/restore and single-capture deletion preserve them.
+Whole-vacancy previews count actions and action/reminder history; every appended
+change invalidates existing cleanup tokens.

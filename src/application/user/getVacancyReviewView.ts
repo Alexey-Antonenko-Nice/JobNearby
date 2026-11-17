@@ -1,3 +1,4 @@
+import { deriveNextActions } from "../../domain/user/VacancyNextAction.js";
 import { getEmployerIdentityReview } from "./employerIdentityReview.js";
 import { buildOrganizationRoleReview, effectiveRoleDecisions, projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
 import { deriveEmployerPresentation } from "./deriveEmployerPresentation.js";
@@ -29,6 +30,7 @@ import { employerConfirmationCandidate, isEmployerConfirmationRedundant } from "
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
   dependencies: {
+    readonly now?: () => Date;
     readonly crmRepository?: import("../../domain/user/VacancyCrm.js").VacancyCrmRepository;
     readonly employerIdentityDecisionStore?: import("../../domain/user/EmployerIdentityReview.js").EmployerIdentityDecisionStore;
     readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
@@ -116,7 +118,7 @@ export async function getVacancyReviewView(
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
-    ...(dependencies.crmRepository ? {crm: await dependencies.crmRepository.get(canonicalVacancyId)} : {}),
+    ...(dependencies.crmRepository ? {crm: await dependencies.crmRepository.get(canonicalVacancyId), nextActions: deriveNextActions(await dependencies.crmRepository.getNextActions(canonicalVacancyId),dependencies.now?.() ?? new Date())} : {}),
     ...(dependencies.employerIdentityDecisionStore && dependencies.organizationRoleDecisionRepository ? { employerIdentityReview: await getEmployerIdentityReview(canonicalVacancyId, {...dependencies, organizationRoleDecisionRepository:dependencies.organizationRoleDecisionRepository}) } : {}),
     ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleReview: await buildOrganizationRoleReview(storedVacancy, observations, { ...dependencies, organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository }) } : {}),
     ...(dependencies.agencyMemoryRepository ? { agencyContext: {
