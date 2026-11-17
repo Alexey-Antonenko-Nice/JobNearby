@@ -134,7 +134,7 @@ describe("Airbus employer role isolation", () => {
     expect(new Set(clusters).size).toBe(5);
     expect(f.rows("employer_alias_evidence")).toEqual([]);
   });
-  it("reuses exact-name employer memory without fabricating human role confirmation",async()=>{
+  it("reuses exact-name employer memory without fabricating role confirmation until this vacancy is explicitly confirmed",async()=>{
     const f=fixture(), a=await f.capture("JR10456440",INDIA);
     await f.choose(a.id,"EMPLOYER");
     const decisions=f.rows("vacancy_organization_role_decisions");
@@ -143,6 +143,16 @@ describe("Airbus employer role isolation", () => {
     expect(await assignment(f,b.capture.observationId)).toMatchObject({status:"ACCEPTED",algorithm:"confirmed-employer-memory",employerClusterId:(await assignment(f,a.capture.observationId))!.employerClusterId});
     expect((await f.workflow.getVacancyReview(b.id)).organizationRoleReview![0]!.confirmedRole).toBeNull();
     expect(f.rows("vacancy_organization_role_decisions")).toEqual(decisions);
+    const confirmed = await f.choose(b.id,"EMPLOYER");
+    expect(confirmed.organizationRoleReview![0]!.confirmedRole).toBe("EMPLOYER");
+    expect(await assignment(f,b.capture.observationId)).toMatchObject({
+      status:"USER_CONFIRMED", algorithm:"user-vacancy-organization-role",
+    });
+    expect(await assignment(f,a.capture.observationId)).toMatchObject({
+      status:"USER_CONFIRMED", algorithm:"user-vacancy-organization-role",
+    });
+    expect(f.rows("vacancy_organization_role_decisions")).toHaveLength(decisions.length + 1);
+    expect((await f.workflow.getVacancyReview(a.id)).organizationRoleReview![0]!.confirmedRole).toBe("EMPLOYER");
   });
   it("keeps different roles for the same organization vacancy-specific",async()=>{
     const f=fixture(),a=await f.capture("JR10456440",INDIA);

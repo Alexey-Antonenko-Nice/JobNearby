@@ -381,18 +381,62 @@ describe("ReviewPage", () => {
     expect(screen.getByText("Consultancy name")).toBeInTheDocument();
   });
 
-  it("shows memory reuse without claiming a vacancy-specific role confirmation", async () => {
+  it("shows memory reuse without claiming confirmation, then submits a vacancy-specific role decision", async () => {
     const current = review({ displayState: "MEMORY_REUSED", displayName: "Airbus" });
+    const card = {
+      identityKey: "name:airbus", name: "Airbus", recommendedRole: "EMPLOYER", confidence: 1,
+      evidenceStrength: "EXPLICIT", reasons: [], confirmedRole: null, candidateToken: "token",
+      history: [], actions: ["EMPLOYER", "STAFFING_AGENCY", "RECRUITER", "CLIENT", "CONSULTANCY"].map((role) => ({ role, warning: null })),
+    };
+    const initial = { ...current, organizationRoleReview: [card] };
+    const updated = {
+      ...initial,
+      employer: { ...initial.employer, displayState: "HUMAN_CONFIRMED" },
+      organizationRoleReview: [{ ...card, confirmedRole: "EMPLOYER" }],
+    };
+    respond({ review: initial });
+    respond({ review: updated });
+    const user = userEvent.setup();
+    render(<ReviewPage />);
+    expect(await screen.findByText(/Airbus — Recognized from previous confirmation/)).toBeInTheDocument();
+    expect(screen.getByText(/you have not confirmed the employer role for this vacancy/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeEnabled();
+    expect(screen.queryByText("Confirmed for this vacancy: employer")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm as employer" }));
+    expect(await screen.findByText("Confirmed for this vacancy: employer")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/organization-role-decisions");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual(expect.objectContaining({
+      identityKey: "name:airbus", role: "EMPLOYER", candidateToken: "token", acknowledgeContradiction: false,
+    }));
+  });
+
+  it("labels automatic recognition as unconfirmed while keeping explicit confirmation available", async () => {
+    const current = review({ displayState: "INFERRED", displayName: "Airbus" });
     respond({ review: { ...current, organizationRoleReview: [{
       identityKey: "name:airbus", name: "Airbus", recommendedRole: "EMPLOYER", confidence: 1,
       evidenceStrength: "EXPLICIT", reasons: [], confirmedRole: null, candidateToken: "token",
       history: [], actions: ["EMPLOYER", "STAFFING_AGENCY", "RECRUITER", "CLIENT", "CONSULTANCY"].map((role) => ({ role, warning: null })),
     }] } });
     render(<ReviewPage />);
-    expect(await screen.findByText(/Airbus — Recognized from previous confirmation/)).toBeInTheDocument();
-    expect(screen.getByText(/you have not confirmed the employer role for this vacancy/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Airbus — Automatically recognized/)).toBeInTheDocument();
+    expect(screen.getByText(/not confirmed by you/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm as employer" })).toBeEnabled();
     expect(screen.queryByText("Confirmed for this vacancy: employer")).not.toBeInTheDocument();
+  });
+
+  it("keeps ambiguous employer evidence under review without selecting a candidate", async () => {
+    const current = review({ status: "UNRESOLVED", displayState: "REVIEW_REQUIRED", displayName: null });
+    respond({ review: { ...current, organizationRoleReview: [{
+      identityKey: "name:airbus", name: "Airbus", recommendedRole: "UNKNOWN", confidence: 0,
+      evidenceStrength: "UNKNOWN", reasons: [], confirmedRole: null, candidateToken: "token",
+      history: [], actions: ["EMPLOYER", "STAFFING_AGENCY", "RECRUITER", "CLIENT", "CONSULTANCY"].map((role) => ({ role, warning: null })),
+    }] } });
+    render(<ReviewPage />);
+    expect(await screen.findByText("Employer needs review")).toBeInTheDocument();
+    expect(screen.getByText("The employer assignment has conflicting or ambiguous evidence.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark as employer" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Confirm as employer" })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("shows recurrence for multiple observations", async () => {

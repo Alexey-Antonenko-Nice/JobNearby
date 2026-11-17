@@ -11,6 +11,7 @@ import type { ObservationClusterAssignmentRepository } from "../../domain/recogn
 import type { EmployerClusterRepository } from "../../domain/recognition/EmployerClusterRepository.js";
 import { createVacancyEvidenceExtractor } from "../evidence/createVacancyEvidenceExtractor.js";
 import { MichaelPageSelectedVacancyContextLocator } from "../acquisition/MichaelPageVacancy.js";
+import { isExplicitHumanEmployerAssignment } from "./isExplicitHumanEmployerAssignment.js";
 
 function michaelPageClientWording(observation: SourceObservation): string | undefined {
   const acquisition = observation.metadata.acquisition;
@@ -91,7 +92,8 @@ export async function buildOrganizationRoleReview(vacancy: CanonicalVacancy, obs
     observationId: o.id,
     assignment: (await deps.assignmentRepository?.findEffectiveByObservationId(o.id)) ?? null
   })));
-  const confirmedNames = await Promise.all(assignments.filter(a => a.assignment?.status === "USER_CONFIRMED").map(async a => (await deps.employerClusterRepository.findById(a.assignment!.employerClusterId))?.displayLabel));
+  const explicitEmployerAssignments = assignments.filter(a => isExplicitHumanEmployerAssignment(a.assignment));
+  const confirmedNames = await Promise.all(explicitEmployerAssignments.map(async a => (await deps.employerClusterRepository.findById(a.assignment!.employerClusterId))?.displayLabel));
   const basis = [vacancy.sourceObservationIds, decisions.at(-1)?.id ?? null, assignments.map(a => [a.observationId, a.assignment?.id ?? null])];
   const output: OrganizationRoleReviewItem[] = [];
   for (const [identityKey, name] of names) {
@@ -145,7 +147,7 @@ export async function buildOrganizationRoleReview(vacancy: CanonicalVacancy, obs
       } else reasons.push(prior.size > 1 ? "Historical roles coexist; the current role needs review." : "No reliable organization-role evidence yet.");
     }
     const aliases = await deps.aliasRepository?.findActiveByNormalizedName(key) ?? [];
-    const confirmedByAlias = aliases.some(alias => assignments.some(a => a.assignment?.status === "USER_CONFIRMED" && a.assignment.employerClusterId === alias.employerClusterId));
+    const confirmedByAlias = aliases.some(alias => explicitEmployerAssignments.some(a => a.assignment?.employerClusterId === alias.employerClusterId));
     const decision = current.latest.get(identityKey);
     let confirmedRole = decision ? decision.role === "EMPLOYER" && current.employer !== identityKey ? null : decision.role : null;
     if (!decision && (confirmedByAlias || confirmedNames.some(n => n && normalize(n) === key))) confirmedRole = "EMPLOYER";

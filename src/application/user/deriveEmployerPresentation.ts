@@ -2,6 +2,7 @@ import type { EmployerClusterStatus } from "../../domain/recognition/EmployerClu
 import type { ObservationClusterAssignment } from "../../domain/recognition/ObservationClusterAssignment.js";
 import type { VacancyOrganizationRelationship } from "../../domain/vacancies/CanonicalVacancy.js";
 import type { EmployerDisplayState } from "../../domain/user/EmployerDisplayState.js";
+import { isExplicitHumanEmployerAssignment } from "./isExplicitHumanEmployerAssignment.js";
 
 export function deriveEmployerPresentation(input: {
   readonly clusterStatus: EmployerClusterStatus | null;
@@ -14,7 +15,7 @@ export function deriveEmployerPresentation(input: {
 }): { readonly displayState: EmployerDisplayState; readonly displayName: string | null } {
   const displayState = input.reviewRequired || input.clusterStatus === "CONFLICTED"
     ? "REVIEW_REQUIRED"
-    : input.hasHumanEmployerRoleDecision || isLegacyHumanEmployerConfirmation(input.assignment)
+    : input.hasHumanEmployerRoleDecision || isExplicitHumanEmployerAssignment(input.assignment)
       ? "HUMAN_CONFIRMED"
       : input.assignment?.status === "ACCEPTED" && input.assignment.algorithm === "confirmed-employer-memory"
         ? "MEMORY_REUSED"
@@ -26,13 +27,6 @@ export function deriveEmployerPresentation(input: {
     ?? uniqueName(input.organizationRelationships, "EMPLOYER")
     ?? uniqueName(input.organizationRelationships, "DISPLAYED_COMPANY");
   return { displayState, displayName };
-}
-
-function isLegacyHumanEmployerConfirmation(
-  assignment: Pick<ObservationClusterAssignment, "status" | "algorithm"> | null,
-): boolean {
-  return assignment?.status === "USER_CONFIRMED"
-    && ["user-employer-confirmation", "user-employer-memory-review"].includes(assignment.algorithm);
 }
 
 function uniqueName(
