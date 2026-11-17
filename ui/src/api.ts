@@ -1,5 +1,6 @@
 import type { PublicationCampaignContext as DomainPublicationCampaignContext } from "../../src/domain/user/PublicationCampaignContext.js";
 import type { EmployerDisplayState } from "../../src/domain/user/EmployerDisplayState.js";
+import type { VacancyProcessState } from "../../src/domain/user/VacancyCrm.js";
 
 type Serialized<T> = T extends Date ? string : T extends readonly (infer V)[] ? readonly Serialized<V>[] : T extends object ? { [K in keyof T]: Serialized<T[K]> } : T;
 export type PublicationCampaignContext = Serialized<DomainPublicationCampaignContext>;
@@ -253,4 +254,7 @@ export async function setVacancyPriority(id: string, priority: import("../../src
 }
 export async function addVacancyNote(id: string, requestId: string, text: string): Promise<ReviewView> {
   return (await cleanupRequest<{review:ReviewView}>(id,"crm/notes",{requestId,text})).review;
+}
+export async function setVacancyProcessState(id: string, requestId: string, state: VacancyProcessState): Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/process-state",{requestId,state})).review;
 }

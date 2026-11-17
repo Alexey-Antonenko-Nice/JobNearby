@@ -61,11 +61,12 @@ describe("Private opportunity CRM",()=>{
     migrateDatabase(db);migrateDatabase(db);
     expect(db.prepare("SELECT * FROM schema_migrations WHERE version<=11").all()).toEqual(old);
     expect(db.prepare("SELECT count(*) n FROM schema_migrations WHERE version=12").get()).toEqual({n:1});
+    expect(db.prepare("SELECT count(*) n FROM schema_migrations WHERE version=13").get()).toEqual({n:1});
     expect(db.prepare("SELECT * FROM vacancy_notes").all()).toEqual([]);
     expect(db.pragma("foreign_key_check")).toEqual([]);
     expect(db.prepare("SELECT * FROM canonical_vacancies").all()).toEqual(canonical);
     expect(db.prepare("SELECT * FROM user_vacancy_interaction_events").all()).toEqual(history);
-    expect(await new SqliteVacancyCrmRepository(db).get("legacy")).toEqual({priority:"NONE",notes:[]});
+    expect(await new SqliteVacancyCrmRepository(db).get("legacy")).toEqual({priority:"NONE",notes:[],processState:"DISCOVERED",processTransitions:[]});
   });
   it("serves explicit CRM commands and rejects invalid HTTP payloads",async()=>{
     const x=await setup();
@@ -73,7 +74,8 @@ describe("Private opportunity CRM",()=>{
       captureAndProcessBrowserVacancy:vi.fn(),
       getVacancyReview:x.workflow.getVacancyReview,
       setVacancyPriority:x.workflow.setVacancyPriority,
-      addVacancyNote:x.workflow.addVacancyNote
+      addVacancyNote:x.workflow.addVacancyNote,
+      setVacancyProcessState:x.workflow.setVacancyProcessState
     });
     await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
     const root="http://127.0.0.1:"+(server.address() as AddressInfo).port;
@@ -88,20 +90,63 @@ describe("Private opportunity CRM",()=>{
       expect((await post(path+"notes",{requestId:"empty",text:" "})).status).toBe(400);
       expect((await post(path+"notes",{requestId:"extra",text:"No",createdAt:"forged"})).status).toBe(400);
       expect((await post(path+"priority",{priority:"URGENT"})).status).toBe(400);
+      const stateBody={requestId:"http-process",state:"APPLIED"};
+      const processResult=await post(path+"process-state",stateBody);
+      expect(processResult.status).toBe(200);
+      expect((await processResult.json()).review.crm).toMatchObject({
+        processState:"APPLIED",
+        processTransitions:[{id:"http-process",fromState:"DISCOVERED",toState:"APPLIED",createdAt:"2026-11-17T12:00:00.000Z"}],
+      });
+      expect((await post(path+"process-state",stateBody)).status).toBe(200);
+      expect((await post(path+"process-state",{requestId:"http-process",state:"REJECTED"})).status).toBe(409);
+      expect((await post(path+"process-state",{requestId:"bad-state",state:"UNKNOWN"})).status).toBe(400);
+      expect((await post(path+"process-state",{requestId:"extra",state:"OFFER",fromState:"APPLIED"})).status).toBe(400);
       expect((await post("/vacancies/missing/crm/priority",{priority:"HIGH"})).status).toBe(404);
-      expect((await (await fetch(root+"/vacancies/"+x.first.id+"/review")).json()).review.crm.notes).toHaveLength(1);
+      const review=(await (await fetch(root+"/vacancies/"+x.first.id+"/review")).json()).review;
+      expect(review.crm.notes).toHaveLength(1);
+      expect(review.crm.processTransitions).toHaveLength(1);
+      expect(review.user.currentState).toBe("NEW");
+      expect(x.db.prepare("SELECT count(*) n FROM user_vacancy_interaction_events").get()).toEqual({n:0});
     } finally {await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}
   });
 
   it("defaults to neutral without creating records, validates commands and exposes Review state",async()=>{
     const x=await setup();
-    expect(await x.crm.get(x.first.id)).toEqual({priority:"NONE",notes:[]});
+    expect(await x.crm.get(x.first.id)).toEqual({priority:"NONE",notes:[],processState:"DISCOVERED",processTransitions:[]});
     expect(x.db.prepare("SELECT count(*) n FROM vacancy_crm_priority").get()).toEqual({n:0});
+    expect(x.db.prepare("SELECT count(*) n FROM vacancy_crm_process_state").get()).toEqual({n:0});
     for(const priority of ["LOW","NORMAL","HIGH","NONE"] as const)
       expect((await x.workflow.setVacancyPriority({canonicalVacancyId:x.first.id,priority})).crm?.priority).toBe(priority);
     await expect(x.crm.setPriority(x.first.id,"INVALID" as never)).rejects.toThrow();
     await expect(x.crm.setPriority("missing","HIGH")).rejects.toThrow();
     await expect(x.workflow.addVacancyNote({canonicalVacancyId:x.first.id,requestId:"blank",text:"  "})).rejects.toThrow();
+  });
+  it("records explicit process transitions separately with retry-safe request identities",async()=>{
+    const x=await setup();
+    x.event("APPLIED");
+    const interactionView=await x.workflow.getVacancyReview(x.first.id);
+    expect(interactionView.user.currentState).toBe("APPLIED");
+    expect(interactionView.crm?.processState).toBe("DISCOVERED");
+    const first={canonicalVacancyId:x.first.id,requestId:"process-one",state:"REVIEWING" as const,createdAt:new Date("2026-11-16T12:00:00Z")};
+    await x.crm.setProcessState(first);
+    await x.crm.setProcessState(first);
+    await x.crm.setProcessState({...first,requestId:"process-noop",createdAt:new Date("2026-11-17T12:00:00Z")});
+    await x.crm.setProcessState({...first,requestId:"process-two",state:"APPLIED",createdAt:new Date("2026-11-18T12:00:00Z")});
+    const state=await x.crm.get(x.first.id);
+    expect(state.processState).toBe("APPLIED");
+    expect((await x.workflow.getVacancyReview(x.first.id)).user.currentState).toBe("APPLIED");
+    expect(state.processTransitions.map(({fromState,toState})=>[fromState,toState])).toEqual([
+      ["DISCOVERED","REVIEWING"],["REVIEWING","APPLIED"],
+    ]);
+    expect(state.processTransitions.map(t=>t.id)).toEqual(["process-one","process-two"]);
+    await x.crm.setProcessState(first);
+    expect((await x.crm.get(x.first.id)).processState).toBe("APPLIED");
+    await expect(x.crm.setProcessState({...first,state:"OFFER"})).rejects.toThrow(/different change/);
+    await expect(x.crm.setProcessState({...first,requestId:" ",state:"OFFER"})).rejects.toThrow();
+    await expect(x.crm.setProcessState({...first,requestId:"bad-date",createdAt:new Date("invalid")})).rejects.toThrow();
+    expect(()=>x.db.prepare("UPDATE vacancy_process_transitions SET to_state='OFFER'").run()).toThrow(/append-only/);
+    expect(()=>x.db.prepare("DELETE FROM vacancy_process_transitions").run()).toThrow(/cleanup/);
+    expect(()=>x.db.prepare("DELETE FROM vacancy_crm_process_state").run()).toThrow(/cleanup/);
   });
   it("keeps chronological append-only notes and makes retries idempotent",async()=>{
     const x=await setup();
@@ -121,16 +166,18 @@ describe("Private opportunity CRM",()=>{
     const sources=x.db.prepare("SELECT * FROM source_observations").all();
     await x.workflow.setVacancyPriority({canonicalVacancyId:x.first.id,priority:"HIGH"});
     const view=await x.workflow.addVacancyNote({canonicalVacancyId:x.first.id,requestId:"note",text:"Private employer poison must not become evidence"});
+    const processView=await x.workflow.setVacancyProcessState({canonicalVacancyId:x.first.id,requestId:"progress",state:"PLANNED_TO_APPLY"});
     expect(view.crm?.notes[0]?.text).toContain("Private employer");
-    expect(view.employer).toEqual(before.employer);
-    expect(view.user).toEqual(before.user);
+    expect(processView.crm?.processState).toBe("PLANNED_TO_APPLY");
+    expect(processView.employer).toEqual(before.employer);
+    expect(processView.user).toEqual(before.user);
     expect(x.db.prepare("SELECT * FROM source_observations").all()).toEqual(sources);
     x.archive();
     const next=await x.capture(html.replaceAll("Manufacturing Engineer (m/f/d)","Updated Engineer (m/f/d)"));
     expect(next.id).toBe(x.first.id);
     expect(next.source).not.toBe(x.first.source);
     x.service.setArchived(x.first.id,false,x.service.state(x.first.id).token);
-    expect((await x.workflow.getVacancyReview(x.first.id)).crm).toEqual(view.crm);
+    expect((await x.workflow.getVacancyReview(x.first.id)).crm).toEqual(processView.crm);
   });
   it("isolates separate vacancies",async()=>{
     const x=await setup();
@@ -138,33 +185,42 @@ describe("Private opportunity CRM",()=>{
     expect(second.id).not.toBe(x.first.id);
     await x.crm.setPriority(x.first.id,"HIGH");
     await x.crm.addNote({id:"private",canonicalVacancyId:x.first.id,text:"Only first",createdAt:new Date()});
-    expect(await x.crm.get(second.id)).toEqual({priority:"NONE",notes:[]});
+    await x.crm.setProcessState({canonicalVacancyId:x.first.id,requestId:"first-progress",state:"REVIEWING",createdAt:new Date()});
+    expect(await x.crm.get(second.id)).toEqual({priority:"NONE",notes:[],processState:"DISCOVERED",processTransitions:[]});
     await x.crm.setPriority(second.id,"LOW");
     await x.crm.addNote({id:"second",canonicalVacancyId:second.id,text:"Only second",createdAt:new Date()});
+    await x.crm.setProcessState({canonicalVacancyId:second.id,requestId:"second-progress",state:"APPLIED",createdAt:new Date()});
     expect((await x.crm.get(x.first.id)).priority).toBe("HIGH");
     expect((await x.crm.get(x.first.id)).notes.map(n=>n.text)).toEqual(["Only first"]);
     expect((await x.crm.get(second.id)).notes.map(n=>n.text)).toEqual(["Only second"]);
+    expect((await x.crm.get(x.first.id)).processState).toBe("REVIEWING");
+    expect((await x.crm.get(second.id)).processState).toBe("APPLIED");
   });
   it("retains CRM on capture deletion and includes it in guarded whole deletion",async()=>{
     const x=await setup();
     await x.capture(html.replaceAll("Manufacturing Engineer (m/f/d)","Updated Engineer (m/f/d)"));
     await x.crm.setPriority(x.first.id,"HIGH");
     await x.crm.addNote({id:"n",canonicalVacancyId:x.first.id,text:"Keep",createdAt:new Date()});
+    await x.workflow.setVacancyProcessState({canonicalVacancyId:x.first.id,requestId:"retain-progress",state:"INTERVIEWING"});
     const state=await x.crm.get(x.first.id);
     x.archive();
     await x.remove(x.first.source);
     expect(await x.crm.get(x.first.id)).toEqual(state);
+    expect(x.service.preview(x.first.id).affected).toContainEqual({label:"Private CRM process-state records removed",count:1});
+    expect(x.service.preview(x.first.id).affected).toContainEqual({label:"Private CRM process transitions removed",count:1});
     x.event("APPLIED");
     await expect(x.remove()).rejects.toThrow(/Acknowledge/);
     await x.remove(undefined,true);
     expect(x.db.prepare("SELECT * FROM vacancy_notes").all()).toEqual([]);
     expect(x.db.prepare("SELECT * FROM vacancy_crm_priority").all()).toEqual([]);
+    expect(x.db.prepare("SELECT * FROM vacancy_crm_process_state").all()).toEqual([]);
+    expect(x.db.prepare("SELECT * FROM vacancy_process_transitions").all()).toEqual([]);
     expect(x.db.pragma("foreign_key_check")).toEqual([]);
   });
   it("invalidates cleanup approval after private state changes",async()=>{
     const x=await setup();x.archive();
     const token=x.service.preview(x.first.id).token;
-    await x.crm.addNote({id:"n",canonicalVacancyId:x.first.id,text:"New information",createdAt:new Date()});
+    await x.workflow.setVacancyProcessState({canonicalVacancyId:x.first.id,requestId:"state-change",state:"APPLIED"});
     await expect(x.service.delete({canonicalVacancyId:x.first.id,token,confirmation:"DELETE",acknowledgeApplicationHistory:false})).rejects.toThrow(/changed/);
     const next=x.service.preview(x.first.id).token;
     await x.crm.setPriority(x.first.id,"HIGH");

@@ -1,4 +1,4 @@
-import { VacancyCrmError, validateNote, validatePriority, type VacancyCrmRepository, type VacancyPriority } from "../../domain/user/VacancyCrm.js";
+import { VacancyCrmError, validateNote, validatePriority, validateProcessStateChange, type VacancyCrmRepository, type VacancyPriority, type VacancyProcessState } from "../../domain/user/VacancyCrm.js";
 import type { CanonicalVacancyRepository } from "../../domain/vacancies/CanonicalVacancyRepository.js";
 interface Dependencies {
   readonly crmRepository: VacancyCrmRepository;
@@ -18,5 +18,15 @@ export async function addVacancyNote(input:{canonicalVacancyId:string;requestId:
   validateNote(note);
   await requireVacancy(input.canonicalVacancyId,deps);
   await deps.crmRepository.addNote(note);
+}
+export async function setVacancyProcessState(input:{
+  readonly canonicalVacancyId:string;
+  readonly requestId:string;
+  readonly state:VacancyProcessState;
+},deps:Dependencies):Promise<void> {
+  const change={...input,createdAt:deps.now?.() ?? new Date()};
+  validateProcessStateChange(change);
+  await requireVacancy(input.canonicalVacancyId,deps);
+  await deps.crmRepository.setProcessState(change);
 }
 

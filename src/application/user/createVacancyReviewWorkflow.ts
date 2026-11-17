@@ -1,5 +1,5 @@
-import { setVacancyPriority, addVacancyNote } from "./vacancyCrm.js";
-import type { VacancyCrmRepository, VacancyPriority } from "../../domain/user/VacancyCrm.js";
+import { setVacancyPriority, addVacancyNote, setVacancyProcessState } from "./vacancyCrm.js";
+import type { VacancyCrmRepository, VacancyPriority, VacancyProcessState } from "../../domain/user/VacancyCrm.js";
 import { decideEmployerIdentity, searchEmployerIdentityCandidates } from "./employerIdentityReview.js";
 import type { EmployerIdentityDecisionInput, EmployerIdentityDecisionStore } from "../../domain/user/EmployerIdentityReview.js";
 import { decideVacancyOrganizationRole, type OrganizationRoleDecisionInput } from "./decideVacancyOrganizationRole.js";
@@ -74,6 +74,11 @@ export function createVacancyReviewWorkflow(
     addVacancyNote: async (input: {canonicalVacancyId:string;requestId:string;text:string}) => {
       if(!dependencies.crmRepository) throw new Error("CRM is unavailable.");
       await addVacancyNote(input,{...dependencies,crmRepository:dependencies.crmRepository});
+      return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
+    },
+    setVacancyProcessState: async (input: {canonicalVacancyId:string;requestId:string;state:VacancyProcessState}) => {
+      if(!dependencies.crmRepository) throw new Error("CRM is unavailable.");
+      await setVacancyProcessState(input,{...dependencies,crmRepository:dependencies.crmRepository});
       return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
     },
     searchEmployerIdentities: async (input: { readonly canonicalVacancyId: string; readonly query: string }) => {

@@ -84,7 +84,7 @@ export function ReviewPage(): React.JSX.Element {
   return <main className="page">
     {canonicalVacancyId && <VacancyCleanupSection id={canonicalVacancyId} onChanged={async (wasDeleted) => { if (wasDeleted) { setDeleted(true); return; } try { setReview(await getReview(canonicalVacancyId)); } catch { setNotFound(true); } }} />}
     <a href="/">Back to inbox</a>
-    <header><h1>{text(review.vacancy.title)}</h1><p>Current state: <strong>{review.user.currentState}</strong></p></header>
+    <header><h1>{text(review.vacancy.title)}</h1><p>Interaction history state: <strong>{review.user.currentState}</strong></p></header>
     {error !== null && <p className="error" role="alert">{error}</p>}
     <section><h2>Vacancy</h2><Details values={[
       ["Location", review.vacancy.locationAlternatives.length > 1 ? `Multiple locations (${review.vacancy.locationAlternatives.map(formatLocation).join("; ")})` : formatLocation(review.vacancy.location)], ["Engagement", formatEngagement(review.vacancy.engagement)], ["Work mode", formatWorkMode(review.vacancy.workMode)], ["Compensation", formatCompensation(review.vacancy.compensation)],

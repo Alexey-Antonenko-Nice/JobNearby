@@ -1,4 +1,4 @@
-import { VacancyCrmError, validatePriority } from "../../domain/user/VacancyCrm.js";
+import { VacancyCrmError, validatePriority, validateProcessState } from "../../domain/user/VacancyCrm.js";
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
 import { humanOrganizationRoles, type HumanOrganizationRole } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -14,6 +14,7 @@ export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 export interface BrowserCaptureServerDependencies {
   readonly setVacancyPriority?: VacancyReviewWorkflow["setVacancyPriority"];
   readonly addVacancyNote?: VacancyReviewWorkflow["addVacancyNote"];
+  readonly setVacancyProcessState?: VacancyReviewWorkflow["setVacancyProcessState"];
   readonly vacancyCleanup?: VacancyCleanup;
   readonly decideEmployerIdentity?: VacancyReviewWorkflow["decideEmployerIdentity"];
   readonly searchEmployerIdentities?: VacancyReviewWorkflow["searchEmployerIdentities"];
@@ -57,7 +58,7 @@ export function createBrowserCaptureServer(
         sendJson(response, 201, captureResponseDto(result));
         return;
       }
-      const crmMatch = /^\/vacancies\/([^/]+)\/crm\/(priority|notes)$/u.exec(path);
+      const crmMatch = /^\/vacancies\/([^/]+)\/crm\/(priority|notes|process-state)$/u.exec(path);
       if (request.method === "POST" && crmMatch) {
         operation = "review";
         const canonicalVacancyId = decodePathId(crmMatch[1]!);
@@ -72,6 +73,12 @@ export function createBrowserCaptureServer(
         if (crmMatch[2] === "notes" && dependencies.addVacancyNote) {
           if(typeof body.requestId!=="string" || typeof body.text!=="string" || Object.keys(body).some(key=>!["requestId","text"].includes(key))) throw new InvalidRequestError("Invalid note payload.");
           sendJson(response,201,{review:await dependencies.addVacancyNote({canonicalVacancyId,requestId:body.requestId,text:body.text})});
+          return;
+        }
+        if (crmMatch[2] === "process-state" && dependencies.setVacancyProcessState) {
+          if(typeof body.requestId!=="string" || Object.keys(body).some(key=>!["requestId","state"].includes(key))) throw new InvalidRequestError("Invalid process-state payload.");
+          validateProcessState(body.state);
+          sendJson(response,200,{review:await dependencies.setVacancyProcessState({canonicalVacancyId,requestId:body.requestId,state:body.state})});
           return;
         }
       }
