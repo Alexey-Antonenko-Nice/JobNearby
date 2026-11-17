@@ -1,17 +1,19 @@
 # Job Nearby — Architecture
 
-**Version:** 0.1
+**Version:** 0.2 (M18.1 CRM alignment)
 **Status:** Working Draft
 **Project:** Job Nearby
 **Related documents:** `PRODUCT_SPECIFICATION.md`, `RECOGNITION_MODEL.md`, `DATA_MODEL.md`
 
 ## 1. Purpose
 
-This document defines the initial software architecture for Job Nearby.
+This document defines the modular architecture for the local desktop CRM. Earlier
+recognition-design sections remain conceptual guidance; sections 67-68, 90-91 and
+104 describe the current runtime, delivery gaps and governing CRM roadmap.
 
 The architecture must support the product principles already established:
 
-* company-first user experience;
+* opportunity-centered private CRM with reusable employer context;
 * multi-source vacancy ingestion;
 * immutable source observations;
 * revisable recognition inference;
@@ -40,7 +42,7 @@ recognition, persistence, or user action state. See `CANONICAL_VACANCY.md`.
 
 # 2. Primary Architectural Goal
 
-The first system must support this workflow reliably:
+The existing capture/recognition slice supports this workflow; the CRM roadmap in section 91 builds private opportunity management on top:
 
 ```text
 User encounters vacancy
@@ -64,7 +66,7 @@ Reviewer may make a separate identity-linkage or vacancy-role decision
 Persist only the explicit decision at its own scope
 ```
 
-Everything else is secondary to making this loop understandable, testable, and extensible.
+This supported capture/recognition loop is a foundation for the broader CRM lifecycle, not the whole product. Application tracking must work even when employer identity remains unresolved.
 
 Recognition, identity linkage, cluster membership, and a vacancy-specific
 organization-role decision are separate operations. Recognition or prior employer
@@ -197,7 +199,7 @@ Advantages:
 * excellent relational capabilities;
 * transactional;
 * capable of handling far more observations than an individual job seeker initially requires;
-* straightforward migration to PostgreSQL later.
+* repository boundaries that leave alternative storage possible, without requiring a server database.
 
 The data model is relational enough that a relational database is preferable to a document database.
 
@@ -248,34 +250,19 @@ without changing recognition logic.
 
 ---
 
-# 8. Local-First Versus Server-First
+# 8. Local desktop product and local backend
 
-The recommended initial model is **local-first development with a local backend**.
+The intended distribution is an installable, free desktop CRM for many independent
+users, with a private local data store per user/machine/profile. The current developer
+runtime is React in a browser, a local Node HTTP API, and SQLite. No central Job Nearby
+service is required for private CRM use. Provider capture requires access to the
+source website, but viewing local history must not depend on that website.
 
-Conceptually:
-
-```text
-Browser
-   ↓
-React UI
-   ↓
-Local Node API
-   ↓
-SQLite
-```
-
-This is attractive because private job-search history remains local by default and development is simple.
-
-Later deployment options may include:
-
-```text
-self-hosted server
-personal cloud deployment
-shared public labor-market backend
-hybrid local/private + shared/public data
-```
-
-The initial architecture should not require any of these.
+A desktop shell/runtime strategy has not been selected. The installer must bundle
+or install all needed components; ordinary users must not clone Git, install Node
+or Python, run npm, or configure a development database. Hosted deployment or
+optional synchronization remains a separate future decision, not an initial SaaS
+assumption. See section 68 for packaging gaps.
 
 ---
 
@@ -284,7 +271,7 @@ The initial architecture should not require any of these.
 Job Nearby contains two different data domains:
 
 ```text
-PUBLIC / MARKET EVIDENCE
+MARKET EVIDENCE (NOT AUTOMATICALLY SHAREABLE)
 vacancy observations
 company information
 recognition evidence
@@ -505,7 +492,7 @@ It must not determine employer identity directly.
 
 # 18. Recognition Module
 
-The recognition module is the architectural center of Job Nearby.
+The recognition module is a supporting and differentiating capability of the CRM.
 
 Responsibilities:
 
@@ -942,44 +929,15 @@ Shared generic components can live separately.
 
 ---
 
-# 35. Initial UI
+# 35. Current UI and CRM direction
 
-The first useful UI may consist of only four screens.
-
-### Capture
-
-Paste/import vacancy.
-
-### Recognition Result
-
-Show:
-
-```text
-displayed company evidence
-recognized employer identity (including uncertainty)
-employer-memory reuse, if any
-vacancy-specific organization-role decision, if any
-publication-family match
-supporting evidence
-```
-
-### Employer List
-
-Show known employer clusters.
-
-### Employer Profile
-
-Show:
-
-```text
-identity
-location
-observed publications
-recognition history
-user interaction history
-```
-
-This is enough to validate the product.
+The implemented React UI has Inbox and Review, explicit interaction actions,
+organization-role and identity review, employer/vacancy history context and guarded
+archive/restore/deletion. It is not a completed CRM dashboard or document/contact
+manager. Future opportunity views compose canonical facts with private application,
+document, contact, task and activity records. Employer views remain useful across
+opportunities. Opening a view stays read-only. See the product specification for
+daily work-queue and combined search requirements; no final layout is decided here.
 
 ---
 
@@ -1640,7 +1598,7 @@ These tests should use temporary databases.
 
 # 64. Security
 
-The first local version has modest security requirements but should still avoid obvious problems.
+The local CRM holds sensitive career data. Local-only deployment still requires explicit security and privacy safeguards.
 
 At minimum:
 
@@ -1667,7 +1625,7 @@ If Job Nearby later becomes hosted/multi-user, authentication can be introduced 
 
 The domain should nonetheless use conceptual `userId` references where private history requires ownership.
 
-For a local MVP, a fixed local user identity can satisfy this abstraction.
+For a local MVP, a fixed local user identity can satisfy this abstraction; no shared-user access-control model is implied.
 
 ---
 
@@ -1689,32 +1647,51 @@ A `.env.example` can document required environment variables.
 
 ---
 
-# 67. Deployment
+# 67. Current runtime and distribution audit
 
-Initial supported deployment:
+Audit baseline: `afb16e98d824e6670e74c9e357665fe23efa4041`.
 
-```text
-local developer/user machine
-```
+| Component | Observed implementation | Distribution consequence |
+| --- | --- | --- |
+| API | `runBrowserCaptureServer.ts`; Node/compiled TypeScript, `127.0.0.1:4317` | Bundle runtime and manage process startup/shutdown, single-instance and port conflicts |
+| Data | `better-sqlite3`, local `job-nearby.sqlite` relative to working directory; `createDatabase` applies migrations | Choose per-user writable data directory, safe upgrades and backup; never ship developer databases |
+| UI | React/Vite, dev server `127.0.0.1:5173`; `ui:build` creates static assets | Ship production assets and decide local hosting/shell; Vite dev server is not an installer |
+| Endpoint coupling | Fixed API URL in `ui/src/api.ts` and `browser-extension/popup.js`; fixed UI origin/CORS in HTTP server | Configure endpoint discovery/trust without broadening local API exposure |
+| Capture | Manifest V3 extension, `activeTab`/`scripting`, loopback host permission | Supported-browser install/update and permissions flow required; extension is intake, not a requirement for viewing saved CRM data |
+| Dependencies | `package.json`: Node ecosystem, native `better-sqlite3`, zod; React UI; jsdom is development/test tooling | Audit packaged dependency closure and notices; build native dependencies per supported OS/CPU/Node ABI |
+| Tooling | npm scripts build/start API separately from UI; no installer/release scripts | Pin supported runtime/build environment and build reproducible artifacts |
 
-Potential later deployment:
+Provider-specific extraction runs in repository adapters against captured browser
+material. The shipped browser path does not require a Python service, external
+browser-automation service or central recognition API. Source access/authentication
+still belongs to the user's browser, with provider restrictions and privacy guards.
 
-```text
-Docker
-self-hosted server
-cloud application
-desktop wrapper
-```
-
-Deployment architecture should not dominate the initial code structure.
+No absolute developer-machine path is required by the reviewed startup files, but
+relative DB/tool/fixture paths assume a repository working directory. Current work
+and native-module testing are Windows-oriented; portable Node/React code is not
+proof of tested macOS/Linux support. Select and test target platforms explicitly.
+Python/compiler tools may be needed for native dependency builds if prebuilt
+binaries are unavailable; these must not become end-user setup requirements.
 
 ---
 
-# 68. Desktop Application — Deferred
+# 68. Desktop packaging and release architecture gaps
 
-Electron/Tauri may eventually be useful for a local-first experience, but should not be introduced before the web application validates the workflow.
+Desktop installation is required for the product; only implementation is deferred.
+No Electron/Tauri or equivalent choice has been made. Resolve:
 
-A browser-based local application is enough initially.
+1. Shell versus managed local-browser experience, process lifecycle, production UI hosting and browser opening.
+2. Runtime bundling, native SQLite ABI/platform builds, supported OS/CPU versions and clean-machine installation tests.
+3. Per-profile data/config paths, file permissions, logging, port conflicts and local API access safeguards.
+4. First-run setup, capture extension installation/update, offline CRM use and actionable startup errors.
+5. Document-storage strategy (internal files, references, managed copies or hybrid), immutable used versions, missing-file behavior and portability.
+6. Pre-upgrade backup, transactional schema migration, interrupted-upgrade recovery, version compatibility and rollback limits.
+7. Installer/uninstaller behavior that preserves user data by default, explicit removal choices and update strategy.
+8. Dependency/source/fixture redistribution audit, license/notices, artifact checksums and reproducible release instructions.
+
+Architecture feasibility and license audits should begin before implementation
+choices lock in distribution constraints. No installer, migration, release automation
+or file-storage feature is implemented by M18.1.
 
 ---
 
@@ -2023,19 +2000,18 @@ The public/private boundary established now supports this future.
 
 ---
 
-# 85. Import/Export
+# 85. Backup, restore, export and portability
 
-The application should eventually support export of user-owned data.
+A local SQLite file is not by itself a complete backup product. Users need a
+consistent backup of CRM records plus managed document versions, verified restore,
+export and transfer to another computer. Decide snapshot/transaction handling,
+active WAL/journal handling, attachment consistency, schema/version manifests,
+external-reference resolution and restore verification. Select the export format
+later; preserve identity links, event chronology and historical document usage.
 
-Possible future formats:
-
-```text
-JSON
-CSV
-database backup
-```
-
-The first MVP does not require polished export UI, but storage design should avoid unnecessary lock-in.
+The one-time `tools/remediate-proman.cjs` backup procedure is not a general user backup
+or restore API. Backups and exports are private data and must not enter source or
+release artifacts. Optional cloud synchronization is not part of this requirement.
 
 ---
 
@@ -2125,74 +2101,53 @@ how to add recognition algorithms
 how to submit fixture scenarios
 ```
 
-This can be postponed until the first implementation baseline exists.
+This remains a public-release prerequisite; the implementation baseline already exists.
 
 ---
 
-# 90. License
+# 90. Free/open-source release readiness
 
-Because the project is intended to be free and open source, a software license must be chosen before public release.
+The product is intended to remain free to use, with public GitHub source and
+community inspection/contribution. Open-source license selection required before
+public release. No root LICENSE or CONTRIBUTING.md is tracked at the audited baseline;
+README has a license-pending statement and developer startup commands, but no
+ordinary-user installer/download or upgrade instructions. No tracked `.github`
+release workflow or packaging script was found.
 
-The architecture document does not choose the exact license.
-
-Potential considerations include:
-
-```text
-permissive license
-versus
-copyleft license
-```
-
-This should be a deliberate project decision before publishing the repository publicly.
+A separate license/dependency audit must establish redistribution obligations for
+runtime dependencies, native libraries, extension assets and fixtures before choosing
+and publishing the project license. This document makes no license compatibility
+finding. Release readiness also requires contribution guidance, reproducible build
+instructions, supported-platform requirements, privacy-safe fixtures and a check that
+personal databases/documents/secrets are absent from artifacts and repository history.
+Public source alone is not a substitute for a license or user-data portability.
 
 ---
 
-# 91. Initial Implementation Milestones
+# 91. CRM implementation roadmap
 
-Recommended implementation sequence:
+This is the established roadmap location. It replaces the obsolete M0-M9 startup
+sequence. Phases express dependency order, not one milestone per bullet.
 
-```text
-M0 — Repository baseline
-docs
-package setup
-TypeScript
-tests
-SQLite migration infrastructure
+| Phase | Scope and exit condition | Dependencies |
+| --- | --- | --- |
+| A - Opportunity/application core | Private pipeline semantics, priority, basic notes/history and an explicit next-action concept beside canonical facts; status changes preserve history and unresolved employers remain usable | Existing canonical IDs, interaction repositories and read-only projections; decide pipeline versus activity semantics first |
+| B - Documents | CV/letter library, versions and planned/used associations; later edits cannot change what was submitted | A; storage/backup/portability decision before file ingestion |
+| C - Contacts and activities | Reusable contacts, many-opportunity links, communication notes and a chronological activity timeline including document use | A; integrate B version references without owning file storage |
+| D - Follow-ups/reminders | Durable tasks, due dates, completion and optional contact links; separate notification delivery; upcoming/overdue queue survives restart | A next-action boundary, C contact links; reminder/time-zone/lifecycle decision |
+| E - CRM usability | Combined search/filtering, daily work queue, stalled/advanced opportunities, history and archive/reopen behavior | A-D; reuse existing archive/restore rather than replace it |
+| F - Portability | Consistent private backup, tested restore, export and transfer to a new computer | A-D data ownership and B document-storage contract; define requirements early |
+| G - Desktop distribution | Installer, bundled runtime, production UI, first run, extension integration, upgrades and clean-machine validation | Packaging feasibility investigated early; F recovery plus license/dependency findings before shipment |
+| H - Public release readiness | Selected LICENSE, contribution/install/release docs, public GitHub source, reproducible build/release process and privacy review | G distributable artifacts and F portability; license audit/selection begins early, not only at this final gate |
 
-M1 — Observation capture
-manual vacancy input
-immutable storage
+The next narrow implementation milestone should establish the private opportunity
+tracking boundary: priority and notes with auditable changes linked to canonical
+vacancy IDs, while preserving existing interaction-derived state and employer-role
+semantics. Its design must first specify how a later process state differs from an
+activity event. Do not bundle document storage, contacts, reminders or packaging
+into that first increment. Full pipeline implementation follows within Phase A.
 
-M2 — Employer clusters
-create/search clusters
-manual assignment
-
-M3 — Recognition v0
-deterministic matching
-known/new employer decision
-
-M4 — Employer resolution
-known employers
-aliases
-candidate identities
-confirmation/rejection
-
-M5 — Publication families
-cross-source duplicate recognition
-
-M6 — User history
-research/application/contact events
-
-M7 — Recognition review UI
-explanations and corrections
-
-M8 — Source adapter
-first dedicated job-board capture
-
-M9 — Browser extension prototype
-```
-
-This order prioritizes the useful recognition loop before automation.
+M18.1 itself implements none of these phases. No schema or runtime change is implied.
 
 ---
 
@@ -2287,7 +2242,6 @@ LLM agents
 complex authentication
 multi-tenant SaaS
 mobile native app
-desktop wrapper
 automatic application sending
 full labor-market crawling
 ```
@@ -2318,32 +2272,15 @@ International extensibility should come primarily from clean boundaries, not spe
 
 ---
 
-# 97. Architectural Risk: Vacancy-Centric Drift
+# 97. Architectural risk: collapsing opportunity and evidence
 
-Developers may naturally model:
-
-```text
-Vacancy {
-  company
-  status
-  userApplied
-}
-```
-
-because this resembles ordinary job-board software.
-
-This would undermine the Job Nearby product model.
-
-Code reviews should preserve the distinction:
-
-```text
-Source Observation
-Employer Cluster
-Employer
-Publication Family
-Recruitment Campaign
-User Interaction
-```
+The opportunity is central to the CRM experience, but a single mutable object
+containing captured content, recognition, application state, contacts and documents
+would mix ownership. Keep `CanonicalVacancy` as evidence-backed market interpretation;
+compose private opportunity tracking through stable canonical references. Contacts
+and documents have independent lifecycles; usage, activities and task relationships
+belong to private CRM boundaries. Source recapture/reprojection must not erase private
+records, and uncertain duplicate publications must not silently merge applications.
 
 ---
 
@@ -2503,7 +2440,7 @@ The following rules are established by Architecture v0.1.
 
 **A2 — Domain logic must remain independent of React, HTTP, database technology, and individual vacancy providers.**
 
-**A3 — SQLite is the recommended MVP persistence layer, with migration compatibility toward PostgreSQL.**
+**A3 — Local SQLite is the current persistence layer; alternative databases remain optional behind repositories, not a desktop prerequisite.**
 
 **A4 — Source acquisition is handled through adapters.**
 
@@ -2551,41 +2488,20 @@ The following rules are established by Architecture v0.1.
 
 **A26 — Inbox and Review share a derived, read-only employer presentation; it is not persisted and performs no writes.**
 
+**A27 — Private CRM records compose the central opportunity view without changing recognition ownership.**
+
+**A28 — Ordinary-user installation must supply runtime components and preserve local private data; development setup is not product installation.**
+
 ---
 
-# 104. Architecture Baseline
+# 104. Current baseline and next work
 
-Once this document is approved, the project has sufficient conceptual definition to establish the first implementation baseline.
+The repository, TypeScript implementation, migrations, tests, supported provider
+capture, canonical vacancy identity and React review workflow already exist. Earlier
+conceptual sections describe design intent, not proof every named service/entity is
+implemented. The M18.1 code audit and DATA_MODEL section 78 distinguish actual delivery
+from planned CRM concepts. Follow section 91 for new work rather than recreating the
+recognition prototype. No central service, SaaS authentication or schema change is
+introduced by this documentation alignment.
 
-The initial repository should contain at minimum:
-
-```text
-README.md
-
-docs/
-  PRODUCT_SPECIFICATION.md
-  RECOGNITION_MODEL.md
-  DATA_MODEL.md
-  ARCHITECTURE.md
-
-src/
-tests/
-```
-
-The next step is no longer another conceptual document.
-
-The next step should be:
-
-> **Create the Git repository and TypeScript project baseline, add the approved documentation, establish tests and database migration tooling, and make the first clean baseline commit before implementing product features.**
-
-The first code after that baseline should implement:
-
-```text
-SourceReference
-SourceObservation
-manual capture
-SQLite persistence
-basic tests
-```
-
-Recognition should begin only after immutable observation capture is working correctly.
+---

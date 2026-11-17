@@ -1,596 +1,163 @@
-# Job Nearby — Product Specification
-
-**Version:** 0.1
-**Status:** Working Draft
-**Project:** Job Nearby
-**License intention:** Free and Open Source Software
-
-## 1. Purpose
-
-Job Nearby is a company-first, multi-source job-search intelligence application.
-
-Its purpose is to help a job seeker obtain a suitable job offer while minimizing unnecessary search effort.
-
-Job seekers encounter vacancy publications through many independent sources such as job boards, recruitment agencies, public employment services, company career pages, email alerts, and other channels.
-
-These publications do not provide a reliable representation of the real labor market by themselves.
-
-The same recruitment activity may:
-
-* appear on several job boards;
-* be republished repeatedly;
-* be published by a recruitment agency instead of the actual employer;
-* appear under different company names;
-* hide the employer completely;
-* represent several positions in a single advertisement;
-* produce several different advertisements for the same recruitment campaign.
-
-As a result, counting or browsing vacancy publications alone can produce a distorted picture of actual employer demand and cause the job seeker to repeatedly investigate the same companies or opportunities.
-
-Job Nearby converts these fragmented observations into a persistent, company-centered representation of the job market.
-
----
-
-## 2. Core Product Principle
-
-Job Nearby is **not primarily a vacancy aggregator or job board**.
-
-The principal user-facing entity is the **employer**, represented at the physical location relevant to employment and recruitment.
-
-Vacancy publications are treated as **observations and evidence about employer hiring activity**.
-
-The basic conceptual transformation is:
-
-```text
-Source Observations
-        ↓
-Observed Company and Organization Evidence
-        ↓
-Publication and Employer Recognition
-        ↓
-Employer Cluster / Identity Knowledge
-        ↓
-Vacancy-Specific Organization-Role Decision (when explicitly made)
-        ↓
-Derived Recruitment Activity
-        ↓
-Company Labor-Market Profile
-        ↓
-Job-Seeker Interaction
-```
-
-“Company first” describes the product's focus; it does not make every displayed
-company the employer. A displayed company name, a recognized organization identity,
-membership in an employer cluster, and the employer role for one vacancy are
-different facts.
-
-The application should help answer:
-
-> Which real company is behind this vacancy publication?
-
-> Have I encountered this company before?
-
-> What do I already know about this company?
-
-> Have I already researched, contacted, or applied to it?
-
-> Is this publication new, or have I probably seen the same recruitment activity elsewhere?
-
-> What does the company's observed recruitment history tell me about its demand for workers?
-
----
-
-## 3. Primary User Goal
-
-The primary goal is not to maximize the number of vacancies shown to the user.
-
-The goal is to improve **job-search efficiency**.
-
-Conceptually:
-
-```text
-Job Search Efficiency
-        =
-Probability of obtaining an acceptable job offer
-        /
-Job-seeker effort
-```
-
-This is a product objective rather than an immediately computable metric.
-
-Job Nearby should therefore prefer reducing unnecessary work over maximizing displayed content.
-
-For example:
-
-```text
-30 fresh vacancy publications
-        ↓
-23 probable employers
-        ↓
-14 already known employers
- 9 genuinely new employers
-        ↓
-User investigates primarily
-the 9 new employers
-```
-
-This may be considerably more useful than presenting all 30 publications independently.
-
----
-
-## 4. Company-First Model
-
-For Job Nearby, a company is represented at the level useful to a job seeker.
-
-The system is not primarily concerned with reconstructing complete corporate ownership or management structures.
-
-The relevant entity is an employer or employer location that:
-
-* employs or potentially employs workers;
-* has or is associated with a physical workplace;
-* conducts recruitment directly or through an intermediary;
-* can potentially be contacted or investigated by the job seeker.
-
-Legal entities, corporate groups, SIREN/SIRET identifiers, subsidiaries, establishments, and similar information may be retained when useful for identification and deduplication, but they are supporting information rather than the primary user experience.
-
----
-
-## 5. Employer Identity Is Not Required
-
-A fundamental Job Nearby principle is:
-
-> **An employer can exist in the system before its name is known.**
-
-Example:
-
-```text
-UNKNOWN EMPLOYER #17
-
-Location:
-Molsheim
-
-Characteristics:
-International industrial group
-Highly automated manufacturing site
-
-Observed recruitment:
-Maintenance technicians
-
-Identity:
-Unresolved
-```
-
-If another publication later contains a similar employer fingerprint, Job Nearby may recognize it as belonging to the same employer even though the employer remains anonymous.
-
-Later evidence may resolve the identity:
-
-```text
-UNKNOWN EMPLOYER #17
-        ↓
-XYZ Industries France
-```
-
-All historical observations associated with the unresolved employer are then retained as part of the resolved employer history.
-
----
-
-## 6. Employer Clustering and Employer Identification
-
-Job Nearby treats these as two different inference problems.
-
-### 6.1 Employer clustering
-
-Question:
-
-> Do these publications probably concern the same real employer?
-
-Example:
-
-```text
-Publication A ──┐
-Publication B ──┼──► UNKNOWN EMPLOYER #17
-Publication C ──┘
-```
-
-The employer's actual name may remain unknown.
-
-### 6.2 Employer identification
-
-Question:
-
-> Which real company does this employer cluster represent?
-
-Example:
-
-```text
-UNKNOWN EMPLOYER #17
-        ↓
-Candidate evidence
-        ↓
-Groupe SIAT
-```
-
-The confidence values for these conclusions must remain independent.
-
-Example:
-
-```text
-sameEmployerConfidence = 0.96
-identityConfidence     = 0.35
-```
-
-This means Job Nearby is highly confident that several publications concern the same employer but does not yet know reliably which company it is.
-
-Clustering and identification are recognition conclusions, not organization-role
-decisions. An observation may be grouped with a known employer identity without
-establishing that the organization is the employer for its vacancy.
-
----
-
-## 7. Multi-Source by Design
-
-Job Nearby must not depend conceptually on one vacancy provider.
-
-Potential sources include:
-
-* Indeed;
-* Meteojob;
-* Jooble;
-* France Travail;
-* HelloWork;
-* recruitment agencies;
-* employer career pages;
-* email vacancy alerts;
-* public APIs;
-* permitted feeds;
-* manually supplied vacancy information;
-* future sources not yet known.
-
-Source-specific mechanisms should feed a common internal observation model.
-
-Conceptually:
-
-```text
-Indeed ──────────────┐
-Meteojob ────────────┤
-Jooble ──────────────┤
-France Travail ──────┤
-Company websites ────┤
-Manual capture ──────┤
-Future sources ──────┘
-                     ↓
-             Source Observation
-```
-
-The domain model must therefore not contain assumptions specific to France Travail, Indeed, or another individual provider.
-
----
-
-## 8. Source Observation
-
-A source observation represents what Job Nearby actually observed at a particular moment.
-
-A URL alone is not sufficient evidence.
-
-Job-board links may:
-
-* expire;
-* redirect;
-* become inaccessible;
-* point to a generic search page after the vacancy closes;
-* contain temporary email tracking information;
-* change their displayed content.
-
-Job Nearby should therefore preserve the useful information available when the publication is captured.
-
-Typical observation data may include:
-
-```text
-source
-source URL
-source vacancy identifier
-capture timestamp
-
-displayed title
-displayed company
-location
-description
-salary
-contract information
-publication date
-recruiter
-contact information
-
-source-specific metadata
-raw captured content
-```
-
-Not all fields will be available for every source.
-
-“Displayed company” means the company name shown by the source. It is source
-evidence only: it does not, by itself, establish employer recognition, organization
-identity, or a human-confirmed employer role.
-
----
-
-## 9. Evidence Preservation
-
-Job Nearby must distinguish between:
-
-**Observation**
-
-and
-
-**Inference**.
-
-The basic rule is:
-
-```text
-Source Data
-    ↓
-Immutable Observation
-    ↓
-Normalized Evidence
-    ↓
-Inference
-    ↓
-Domain Knowledge
-```
-
-Original observations should not be destroyed merely because the system has normalized, deduplicated, or classified them.
-
-This enables:
-
-* future reprocessing;
-* improved recognition algorithms;
-* correction of incorrect inference;
-* auditing;
-* comparison of alternative algorithms;
-* historical analysis;
-* open-source experimentation.
-
----
-
-## 10. Provenance
-
-Important facts and conclusions should retain information about their origin.
-
-For example:
-
-```text
-Company address
-Source: SIRENE
-
-Vacancy publication
-Source: Meteojob
-
-Recruitment potential
-Source: external public dataset
-
-Employer identity
-Derived by: Job Nearby recognition engine
-
-Organization identity linkage
-Basis: explicit reviewer decision
-Scope: identity association only, not a vacancy employer-role decision
-
-Vacancy employer role
-Basis: explicit human organization-role decision for one vacancy
-```
-
-Job Nearby should avoid representing inferred information as directly observed fact.
-
----
-
-## 11. Recruiter Is Not Necessarily the Employer
-
-Recruitment agencies and intermediaries must be distinguished from actual employers.
-
-Example:
-
-```text
-Publication:
-Technicien de Maintenance
-
-Displayed company:
-Page Personnel
-
-Recruiter:
-Page Personnel
-
-Actual employer:
-Unknown industrial company
-
-Workplace:
-Obernai
-```
-
-Job Nearby must not automatically interpret the displayed recruitment agency as the employer.
-
-The conceptual roles are:
-
-```text
-Publication
-     │
-     ├── displayed company (observed source evidence)
-     ├── recruiter / intermediary
-     ├── organization identity (may be known or unresolved)
-     ├── employer role for this vacancy (may be undecided)
-     └── workplace
-```
-
-These may refer to the same organization/location for direct recruitment, or to different entities when recruitment is outsourced.
-
----
-
-## 12. Publication Duplication
-
-Job Nearby distinguishes several forms of apparent duplication.
-
-### 12.1 Publication duplicate
-
-The same or substantially identical advertisement appears through several channels.
-
-Example:
-
-```text
-Meteojob publication ─┐
-HelloWork publication ├──► same publication family
-Jobijoba publication ─┘
-```
-
-### 12.2 Recruitment duplicate
-
-Different publications may represent the same underlying recruitment activity.
-
-This is a more difficult inference problem.
-
-### 12.3 Employer duplicate
-
-Different publications or names may refer to the same employer.
-
-Example:
-
-```text
-ABC Industrie
-ABC Industries SAS
-ABC Group Strasbourg
-        ↓
-same employer/location
-```
-
-These forms of duplication must not be treated as the same problem.
-
----
-
-## 13. Publication Family
-
-A Publication Family groups publications believed to be copies, syndications, or republications of substantially the same advertisement.
-
-Example:
-
-```text
-Publication Family #42
-
-Meteojob
-HelloWork
-Jobijoba
-Recruitment agency site
-```
-
-All original publications remain preserved.
-
-Publication-family detection reduces distortion without losing information about where and how the advertisement was distributed.
-
----
-
-## 14. Recruitment Campaign
-
-Real-world examples show that the relationship:
-
-```text
-one advertisement = one vacant position
-```
-
-cannot be assumed.
-
-One advertisement may recruit several employees.
-
-Several advertisements may support one recruitment campaign.
-
-Repeated advertisements may indicate:
-
-* continuous recruitment;
-* several open positions;
-* expansion;
-* high employee turnover;
-* difficulty recruiting;
-* automatic republication;
-* an unfilled position.
-
-Job Nearby therefore introduces the conceptual entity **Recruitment Campaign**.
-
-A recruitment campaign represents inferred employer hiring activity and may contain one or more publication families.
-
-The exact number of positions may remain unknown.
-
----
-
-## 15. Employer Fingerprint
-
-Anonymous employers may sometimes be recognized through combinations of characteristics.
-
-Potential fingerprint evidence includes:
-
-* location;
-* industrial sector;
-* company size;
-* approximate employee count;
-* products;
-* manufacturing processes;
-* machinery;
-* technologies;
-* shift pattern;
-* maintenance-team size;
-* energy infrastructure;
-* unusual terminology;
-* required languages;
-* salary structure;
-* benefits;
-* recruitment agency;
-* job responsibilities;
-* related vacancies;
-* career-page information;
-* historical observations.
-
-Individual clues may be weak.
-
-A combination can provide strong identification evidence.
-
-Example:
-
-```text
-Strasbourg
-+ paper manufacturer
-+ approximately 160 employees
-+ European market
-+ large paper machine
-+ biomass boiler
-+ wastewater treatment
-+ electricity generation
-        ↓
-strong employer fingerprint
-```
-
----
-
-## 16. Probabilistic Recognition
-
-Recognition must be probabilistic rather than destructive.
-
-Job Nearby should be capable of expressing:
-
-```text
-Employer candidate A    82%
-Employer candidate B    13%
-Unknown                  5%
-```
-
-Confidence should accompany significant inferred relationships.
-
-A low-confidence inference should not silently overwrite evidence.
-
-When confidence is insufficient, the correct result is:
-
-```text
-UNRESOLVED
-```
-
-rather than a forced company identification.
-
----
-
-## 17. Human Confirmation
+# Job Nearby - Product Specification
+
+**Version:** 0.2 (M18.1, Chapter 2 CRM alignment)
+**Status:** Working product specification; requirements are not claims of delivery
+**Implementation audit baseline:** `afb16e98d824e6670e74c9e357665fe23efa4041`
+
+## 1. Product definition
+
+Job Nearby is intended to be a completely free, open-source desktop CRM for job
+seekers, with employer-recognition capabilities. It helps a person manage the
+complete lifecycle of a job opportunity. Recognition of the likely original
+employer behind recruiting-agency publications is an important differentiating
+capability inside that CRM, not the whole product.
+
+The vacancy/opportunity is the central user-facing CRM record. Employer and agency
+views provide reusable context across opportunities. The current implementation is
+a local developer-run application; the ordinary-user desktop distribution is a
+required future deliverable. Source is intended to be publicly available on GitHub
+for inspection and contribution. No open-source license has yet been selected.
+**Open-source license selection required before public release.** Public source
+availability alone does not establish open-source redistribution permissions.
+
+## 2. Opportunity lifecycle and lightweight use
+
+The conceptual flow is discovery/capture → vacancy understanding → original-employer
+recognition where possible → decision whether to pursue → application preparation
+→ CV/letter association → application/outreach → contacts and communication history
+→ follow-up/next action → interview/process progression → outcome, archive and history.
+
+Stages are optional and may repeat or occur out of order. A user can simply capture
+an opportunity and record an application, or maintain detailed documents, contacts
+and process steps. An unresolved employer must not prevent applying or following up.
+A recognized employer must not imply that the user intends to apply.
+
+## 3. Opportunity record
+
+The user should eventually be able to carry or reference:
+
+| Information | User-visible capability |
+| --- | --- |
+| Vacancy facts | Title, location, work mode, compensation, publication and capture dates |
+| Organizations | Employer/likely original employer, agency, displayed company, recognition state and uncertainty |
+| Provenance | Source provider, source URL/identity, preserved observations/publications |
+| Private tracking | Application/process state, priority, notes, next action and follow-up date |
+| People and preparation | Relevant contacts, planned/used CV and motivation-letter versions |
+| History | Communication/activity timeline, interviews/process steps and final outcome |
+| Organization | Active/archive state and recovery of archived opportunities |
+
+This describes a composed CRM view, not a single persistence table. Evidence-backed
+canonical facts and private subordinate records retain separate ownership.
+
+## 4. Application/process pipeline
+
+The CRM needs to distinguish discovered, reviewing, planned to apply, applied,
+awaiting response, follow-up due, recruiter/contact engaged, interview scheduled,
+interview completed, additional test/assignment, offer, rejected, withdrawn and no
+longer relevant. These are semantic needs, not a frozen enum. Follow-up due may be
+a task-derived condition; archive is a separate visibility/lifecycle dimension.
+
+Recognition state, application state, task state and archive state are independent.
+Current state must not replace chronological history. The existing latest-interaction
+projection is a foundation, not a complete process pipeline: recording a phone call
+must not eventually erase the fact that an application is awaiting response.
+
+## 5. Application documents
+
+A document library must support multiple CV/résumé and motivation/cover-letter
+variants: generic engineering, commissioning, electromechanical technician,
+startup/R&D, and English/French variants, for example. An opportunity must identify
+exactly which versions are planned and which were actually used for an application
+or subsequent document submission.
+
+Document identity, version and use in a particular application are different facts.
+Editing a CV or letter later must not change the recorded version used historically.
+Renaming or replacing an external file must not silently rewrite that history.
+
+The architecture must decide between internal storage, external local references,
+managed copies or a hybrid. No option is selected here. The decision must cover
+version integrity, missing files, privacy, backup/restore and computer-to-computer
+portability. Letter generation and automatic submission are not prerequisites.
+
+## 6. Contacts
+
+Contacts are first-class private CRM information: recruiters, hiring managers, HR
+representatives, agency consultants, employees/referrals, interviewers, company
+contacts and other relevant people. Useful optional fields include name, role/title,
+organization, email, phone, profile/LinkedIn URL and notes with appropriate provenance.
+One contact can relate to several opportunities; one opportunity can have several
+contacts with different roles. Contact identity and vacancy relationships must not
+be collapsed. Captured person evidence is not automatically a user-maintained contact.
+
+## 7. Activity and communication history
+
+A chronological timeline should answer: “What happened with this opportunity, and
+when?” It includes application submitted, email sent/received, phone/recruiter call,
+LinkedIn message, interview invitation/completion, follow-up sent, rejection/offer
+received, document sent, note added, status changed and contact created/linked.
+Activities may refer to contacts and exact document versions. Occurrence time and
+recording time are distinct where needed. Corrections must remain auditable; a
+current-state projection must not replace events. Manual recording is sufficient
+initially; mailbox or messaging integration is not required.
+
+## 8. Next actions, follow-ups and reminders
+
+A task/next action is something the user intends to do. A reminder is a mechanism
+that alerts the user about that action or an event. They are separate concepts.
+
+Examples include applying before a deadline, sending a follow-up, calling a recruiter,
+preparing an interview, sending requested documents, checking a portal, asking for
+the original employer identity, updating a CV, preparing a technical assignment and
+contacting a hiring manager. A task needs a description, due date/time, related
+opportunity, optional contact, completion state and notes. Reminder configuration
+and delivery state belong to the alert mechanism. Upcoming and overdue follow-ups
+must be visible even when a notification was missed. Scheduling must eventually
+address time zones, application restart/sleep and completed/cancelled tasks.
+
+## 9. Daily work queue and search
+
+The daily view should answer what to do today, which applications need follow-up,
+which interviews are upcoming, which vacancies await action or review, which
+contacts need a response, which opportunities are stalled, and what recently
+advanced or was rejected. This is a product requirement, not a final dashboard design.
+
+Search/filter combinations should include employer, agency, title, location,
+status/application state, priority, follow-up due, contact, date, CV used,
+source/provider, active/archive and employer-recognition state. Views must not
+create interaction events merely by being opened.
+
+## 10. Employer recognition as CRM context
+
+An agency publication may expose a provider, recruiting agency, named client,
+displayed company and original-employer candidates. Recognition preserves those
+roles and uncertainty. It helps prevent duplicate applications, identify agencies
+advertising a common opportunity, understand who is hiring, reuse relevant employer,
+contact and application history, improve follow-ups and reveal related opportunities.
+
+Anonymous employer clusters remain valid. Clustering confidence and identity
+confidence are independent; location, industry and other fingerprints are evidence,
+not proof. Source/provider domains and shared brand words never establish an
+employer identity or transfer human role confirmation. Employer/location history
+and optional future geographic or labor-market analysis support CRM decisions.
+Detailed recognition design remains in [RECOGNITION_MODEL.md](RECOGNITION_MODEL.md).
+
+## 11. Publications, duplicates and evidence
+
+Different employer/agency sites, syndicated boards, several agencies for a client,
+and reposts may describe one underlying opportunity. Source observations,
+publication families, recruitment campaigns, employer clusters and canonical
+vacancies are distinct. A campaign may contain several positions; shared employer
+identity alone does not prove vacancy sameness. Link a shared opportunity only with
+sufficient evidence; do not automatically merge uncertain opportunities.
+
+Preserve source identities, observations and provenance while interpreting them.
+New captures normally extend evidence history. Raw capture is not permission to
+retain unrelated private dashboard data: sanitization and privacy remediation take
+precedence over historical payload fidelity. Private application records and notes
+must not become public recognition evidence. Source adapters remain replaceable;
+no provider, country, AI service or external registry defines the CRM domain.
+
+## 12. Recognition and human decision safeguards
 
 Employer-related conclusions have different scopes and must not be presented as
 equivalent:
@@ -627,593 +194,73 @@ Inbox and Review may expose the same presentation state, derived from evidence
 and human decisions. It is read-only: presenting a state must not create or
 mutate an identity, assignment, or organization-role decision.
 
----
-
-## 18. Employer Labor-Market History
-
-Each employer accumulates an observed hiring history.
-
-Potential information includes:
-
-* first observed hiring activity;
-* most recent hiring activity;
-* number of observed publications;
-* publication families;
-* recruitment campaigns;
-* occupations sought;
-* skills sought;
-* locations;
-* recruitment frequency;
-* recruitment channels;
-* recruitment agencies used;
-* persistent demand patterns.
-
-Historical evidence must be preserved rather than replacing previous observations with the latest value.
-
----
-
-## 19. User Interaction History
-
-The user's relationship with an employer is distinct from the employer's labor-market history.
-
-Example statuses or events may include:
-
-```text
-discovered
-researched
-interesting
-not interesting
-contacted
-application prepared
-application sent
-reply received
-interview
-rejected
-offer received
-follow-up required
-```
-
-This should be represented as an event/history model rather than merely one permanent status wherever practical.
-
-Example:
-
-```text
-Employer: Company A
-
-Labor-market history:
-  7 publications observed
-  repeated maintenance recruitment
-
-User history:
-  researched       12 Aug
-  application sent 14 Aug
-  reply received   18 Aug
-```
-
----
-
-## 20. Primary MVP Workflow
-
-The first useful Job Nearby workflow is:
-
-```text
-User encounters vacancy
-        ↓
-Capture/import publication
-        ↓
-Preserve source observation
-        ↓
-Extract and normalize evidence
-        ↓
-Search existing employer clusters
-        ↓
-Existing employer?
-   /             \
- YES              NO
-  │                │
-reuse a supported  create provisional
-recognition link   employer cluster
-  │                │
-  └───────┬────────┘
-          ↓
-Keep employer clustering and identity recognition distinct
-          ↓
-Assess organization roles from vacancy evidence
-          ↓
-Present evidence, recognition, ambiguity, and any prior decision separately
-          ↓
-Reviewer may link identity or make an explicit vacancy-specific role decision
-          ↓
-Preserve the decision at its proper scope
-```
-
-If evidence is ambiguous, review remains necessary; if employer evidence is absent,
-the result remains neutral. Neither condition is repaired by silently choosing a
-candidate.
-
----
-
-## 21. MVP User Result
-
-The first version should distinguish results such as:
-
-```text
-AUTOMATICALLY RECOGNIZED
-
-Employer identity:
-Recognized from current evidence
-
-Employer role for this vacancy:
-Not yet confirmed for this vacancy
-
-Prior employer knowledge:
-May be reused without creating a vacancy-specific decision
-```
-
-```text
-EMPLOYER ROLE CONFIRMED FOR THIS VACANCY
-
-Groupe SIAT — Urmatt
-
-Employer identity:
-Recognized
-
-Vacancy-specific role:
-Confirmed for this vacancy by the reviewer
-
-Previous publications:
-7
-
-Recent recruitment:
-Maintenance technicians
-
-Your history:
-Not contacted
-
-Latest publication:
-Possibly part of an existing
-recruitment campaign
-```
-
-or:
-
-```text
-EMPLOYER NEEDS REVIEW
-
-Employer candidates:
-Several plausible organizations
-
-Vacancy-specific employer role:
-Not decided
-
-Highest-ranked candidate:
-Not selected automatically
-```
-
-or:
-
-```text
-EMPLOYER NOT IDENTIFIED
-
-Employer evidence:
-Not available or insufficient
-
-Employer role:
-Undecided; no failed confirmation is implied
-```
-
-An automatically recognized or prior-known employer can be useful without implying
-that a person confirmed its role for the current vacancy.
-
----
-
-## 22. Initial Capture Strategy
-
-The first implementation does not require automatic access to every vacancy provider.
-
-Potential initial ingestion mechanisms include:
-
-* manual text paste;
-* manual URL submission;
-* browser-based capture;
-* browser extension;
-* email import;
-* source APIs where available and appropriate.
-
-A browser extension may eventually provide a particularly useful workflow:
-
-```text
-User views vacancy
-        ↓
-Add to Job Nearby
-        ↓
-Visible vacancy information captured immediately
-        ↓
-Recognition performed
-        ↓
-Existing company/history shown
-```
-
-Source-specific legal and technical restrictions must be investigated before implementing automated capture or redistribution.
-
----
-
-## 23. Labor-Market Analytics
-
-Labor-market analytics are an important long-term function but are not required for the first MVP.
-
-Accumulated observations can eventually support company analytics such as:
-
-```text
-Hiring activity
-Persistent demand
-Occupations sought
-Skills sought
-Recruitment frequency
-Recruitment channels
-Recruitment trends
-Current campaigns
-Historical campaigns
-```
-
-This transforms the accumulated job-search memory into a representation of the local labor market.
-
----
-
-## 24. Company-First User Experience
-
-The eventual primary interface should emphasize companies rather than vacancy counts.
-
-Conceptual example:
-
-```text
-BLUE PAPER — Strasbourg
-
-Distance:
-7.2 km
-
-Hiring activity:
-High
-
-Observed occupations:
-Maintenance technician
-Electrical technician
-Energy technician
-
-Observed publications:
-12
-
-Recruitment pattern:
-Persistent technical recruitment
-
-Latest observation:
-4 days ago
-
-Contactability:
-Good
-
-Your status:
-Not yet contacted
-```
-
-Individual publications remain accessible as supporting evidence.
-
----
-
-## 25. Geographic Model
-
-Employer locations should be geocoded when reliable location information is available.
-
-This eventually enables:
-
-* nearby-company discovery;
-* commuting-distance analysis;
-* employer maps;
-* geographic labor-market analysis;
-* regional demand patterns.
-
-The geographic model must distinguish when possible between:
-
-* employer address;
-* workplace;
-* recruitment office;
-* approximate vacancy location.
-
-These locations are not necessarily identical.
-
----
-
-## 26. External Data Enrichment
-
-Job Nearby may enrich observations using external authoritative or useful sources.
-
-For France these may include, among others:
-
-* SIRENE/SIRET establishment information;
-* ROME occupation and skill classifications;
-* geocoding services;
-* France Travail vacancy data;
-* hiring-potential datasets;
-* public company information.
-
-External sources should remain adapters/evidence providers rather than becoming assumptions embedded throughout the core domain model.
-
-This enables future use outside France.
-
----
-
-## 27. Open-Source Principle
-
-Job Nearby is intended to be free and open source.
-
-The architecture should therefore support:
-
-* transparent inference;
-* inspectable evidence;
-* replaceable recognition algorithms;
-* source adapters;
-* community contributions;
-* reproducible tests;
-* documented decisions;
-* extensibility to new countries and vacancy sources.
-
-The application should avoid unnecessary dependence on proprietary services when an open alternative is practical.
-
-If optional AI services are eventually used, core data structures should not depend on one AI provider.
-
----
-
-## 28. Privacy Principle
-
-Job Nearby contains two fundamentally different categories of information:
-
-### Public labor-market observations
-
-Examples:
-
-* vacancy publications;
-* public company information;
-* public recruitment information.
-
-### Private job-seeker information
-
-Examples:
-
-* companies investigated;
-* applications;
-* recruiter conversations;
-* interview history;
-* personal notes.
-
-The architecture must keep these concerns separable.
-
-Future collaborative or public datasets must not inadvertently expose a user's private job-search history.
-
----
-
-## 29. MVP Scope
-
-### Included
-
-The initial MVP should concentrate on:
-
-* multi-source vacancy observation;
-* persistent capture;
-* employer clustering;
-* unresolved employers;
-* employer identification;
-* recognition confidence;
-* company profiles;
-* previous-publication detection;
-* user/company interaction history;
-* separate organization-identity review and vacancy-specific organization-role
-  decisions;
-* provenance preservation.
-
-### Explicitly postponed
-
-The initial MVP does not need:
-
-* complete automatic collection of the labor market;
-* perfect vacancy deduplication;
-* perfect employer identification;
-* automatic job applications;
-* sophisticated career recommendations;
-* salary prediction;
-* full labor-market simulation;
-* AI-generated application letters;
-* comprehensive corporate ownership reconstruction;
-* advanced job-seeker scoring;
-* mobile applications;
-* international support from day one.
-
-These capabilities may be introduced later if supported by the evidence architecture.
-
----
-
-## 30. Initial Development Strategy
-
-Development should proceed in the following order:
-
-```text
-1. Product Specification
-        ↓
-2. Recognition Model
-        ↓
-3. Data Model
-        ↓
-4. Architecture
-        ↓
-5. Repository creation
-        ↓
-6. TypeScript project skeleton
-        ↓
-7. Test corpus from real publications
-        ↓
-8. Recognition prototype
-        ↓
-9. Minimal user interface
-```
-
-The real vacancy publications examined during initial reconnaissance should become anonymized or legally suitable **test scenarios** representing problems such as:
-
-* directly identified employer;
-* anonymous employer successfully identified;
-* anonymous employer unresolved;
-* recruitment agency versus employer;
-* duplicate publication across sources;
-* several vacancies in one recruitment campaign;
-* same employer with different vacancy descriptions;
-* expired tracking URL;
-* conflicting employer candidates.
-
----
-
-## 31. Success Criterion for the First MVP
-
-The first MVP is successful if it meaningfully reduces repeated employer research during everyday job searching.
-
-Given a newly encountered vacancy publication, Job Nearby should attempt to answer:
-
-```text
-WHO IS THIS EMPLOYER?
-
-HAVE I SEEN THIS EMPLOYER BEFORE?
-
-WHAT DO I ALREADY KNOW ABOUT IT?
-
-HAVE I ALREADY TAKEN ACTION?
-
-IS THIS PUBLICATION PROBABLY RELATED
-TO SOMETHING I HAVE ALREADY SEEN?
-```
-
-It does not need to answer every question with certainty.
-
-A correctly expressed:
-
-```text
-UNKNOWN
-```
-
-or:
-
-```text
-PROBABLY THE SAME EMPLOYER — 78%
-```
-
-is preferable to an unsupported definitive conclusion.
-
----
-
-## 32. Foundational Architecture Rules
-
-The following rules are established by Product Specification v0.1:
-
-**Rule 1 — Company first**
-Companies/employer locations are the primary user-facing entities.
-
-**Rule 2 — Multi-source**
-No individual vacancy provider defines the Job Nearby domain model.
-
-**Rule 3 — Publications are observations**
-A vacancy publication is evidence, not automatically a unique vacancy.
-
-**Rule 4 — Preserve evidence**
-Normalization and inference must not destroy original observations.
-
-**Rule 5 — Preserve provenance**
-Important information should retain its source.
-
-**Rule 6 — Anonymous employers are valid entities**
-An employer cluster may exist without a resolved company name.
-
-**Rule 7 — Clustering and identification are independent**
-Confidence that publications concern the same employer is separate from confidence in the employer's identity.
-
-**Rule 8 — Recruiter ≠ employer**
-Recruitment intermediaries must not automatically become employers.
-
-**Rule 9 — Duplication has multiple meanings**
-Publication duplication, recruitment duplication, and employer duplication are separate problems.
-
-**Rule 10 — Recruitment may involve multiple positions**
-Publication counts must not be interpreted directly as vacancy counts.
-
-**Rule 11 — Inference is probabilistic**
-Uncertainty and contradictory evidence must be representable.
-
-**Rule 12 — Human correction is evidence**
-
-Human identity-linkage and organization-role decisions must be preserved
-separately and at their respective scopes.
-
-**Rule 13 — Market history ≠ user history**
-Employer hiring observations and private job-seeker interactions are separate domains.
-
-**Rule 14 — Historical evidence matters**
-New observations should normally extend history rather than overwrite it.
-
-**Rule 15 — Unknown is a legitimate result**
-
-Job Nearby must prefer unresolved identity to false certainty.
-
-**Rule 16 — Displayed company is source evidence**
-
-A displayed company name does not by itself establish identity or employer role.
-
-**Rule 17 — Recognition is not role confirmation**
-
-Automatic recognition and prior employer knowledge do not create a
-vacancy-specific human decision.
-
-**Rule 18 — Identity linkage is not an organization-role decision**
-
-An alias or organization identity may be linked without deciding that it is the
-employer for a vacancy.
-
-**Rule 19 — Cluster membership does not transfer role decisions**
-
-Names, source tenants, and shared cluster membership do not confirm the employer
-role across vacancies.
-
-**Rule 20 — Human employer-role decisions are vacancy-specific**
-
-Only an explicit decision for a vacancy confirms an organization's employer role
-for that vacancy. Changing it later is explicit reassignment.
-
-**Rule 21 — Preserve ambiguity and neutral absence**
-
-Ambiguous candidates are not silently selected, and absence of employer evidence
-is not treated as a failed confirmation.
-
-**Rule 22 — Presentation is derived and read-only**
-
-Inbox and Review may share a presentation of underlying evidence and decisions;
-the presentation itself creates or changes no decision.
-
----
-
-## 33. Next Specification
-
-The next project document should be:
-
-**`RECOGNITION_MODEL.md`**
-
-It should define in detail:
-
-* employer fingerprints;
-* evidence features;
-* employer clusters;
-* candidate identities;
-* publication-family detection;
-* confidence representation;
-* positive and negative evidence;
-* contradictory evidence;
-* human confirmation;
-* cluster merge/split behavior;
-* re-evaluation when new evidence arrives;
-* recognition algorithm evolution;
-* test scenarios and expected outcomes.
-
-Only after the Recognition Model is understood should the concrete TypeScript domain model be finalized.
+## 13. Local desktop installation and independent users
+
+The target is an installable desktop application for ordinary users. Installation
+must bundle/install necessary runtime components. Users must not need to install
+Node.js or Python, install development dependencies, clone the repository, run npm,
+configure a development database or understand internal architecture.
+
+No desktop shell technology is selected by this specification. Browser capture is
+an optional intake capability of the CRM; its installation/integration must be
+explained and supported in the eventual distribution. Many independent users means
+one local application and private data store per user/machine/profile initially,
+not a shared server, central database or multi-tenant SaaS.
+
+## 14. Local data, privacy and portability
+
+The current application uses local SQLite. CRM data must remain usable locally;
+application history must not require a central Job Nearby cloud service. CVs,
+letters, contacts, notes and interactions are personal data. Public GitHub source
+and open-source distribution do not make that data public. Captured source material
+can also contain sensitive or licensed content; it is not automatically shareable.
+Optional future sync is not required for the initial desktop product.
+
+Users need backup, verified restore, export and migration to another computer.
+Portability must include the database and any managed application documents,
+relationships and version history. The final export format is undecided. Open
+source alone is not sufficient portability. Backups remain private user data.
+
+## 15. Current delivery and remaining scope
+
+Audited from code at the baseline above, without opening the live database:
+
+| Capability | Delivery state |
+| --- | --- |
+| Capture, canonical facts/source identity, bounded provider extraction | Implemented for supported paths; not every provider/layout |
+| Recognition, employer memory, explicit identity and vacancy-role decisions | Implemented, with uncertainty and separate scopes |
+| Inbox/Review, source/history context, archive/restore, guarded deletion | Implemented |
+| Interaction history and application state | Partial: append-only vacancy events and latest-event state, not a full pipeline |
+| Contacts and interviews | Partial evidence/event metadata only; no contact library or interview schedule |
+| Notes, priority, preparation and richer activity timeline | Missing product workflows; notes had conceptual documentation only |
+| CV/letter library, versioning and usage associations | Missing |
+| Tasks/reminders and daily work queue | Missing |
+| CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
+| Backup/restore/export and desktop installer | Missing ordinary-user workflows |
+| Public open-source release readiness | Intent documented; license, contribution and release work remain |
+
+See [DATA_MODEL.md section 78](DATA_MODEL.md#78-crm-core-gap-analysis-m181) for
+model boundaries and implementation evidence. This milestone changes documentation
+only. It does not implement any missing capability.
+
+## 16. Roadmap and release gates
+
+The governing implementation order is maintained in
+[ARCHITECTURE.md section 91](ARCHITECTURE.md#91-crm-implementation-roadmap):
+A opportunity/application core; B documents; C contacts/activity; D follow-ups and
+reminders; E CRM usability; F portability; G desktop distribution; H public release.
+Licensing/dependency and packaging feasibility investigations start early; their
+release gates cannot wait until public distribution. Storage and portability
+requirements must shape document design before files are accumulated.
+
+## 17. Out of scope and foundational invariants
+
+No cloud sync, authentication service, SaaS, automatic application sending, mobile
+app, comprehensive labor-market collection or AI-generated letters is required for
+the initial desktop CRM. Future enrichment and analytics must not block core tracking.
+
+Preserve evidence/provenance, stable opportunity identity and uncertainty. Keep
+recognition, identity, vacancy-specific human roles and private application history
+separate. Recapture must not overwrite private decisions, documents or history.
+A central opportunity view composes normalized records rather than turning the
+canonical market vacancy into one giant mutable CRM entity.

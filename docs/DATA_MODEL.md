@@ -1,6 +1,6 @@
 # Job Nearby — Data Model
 
-**Version:** 0.1
+**Version:** 0.2 (M18.1 CRM alignment)
 **Status:** Working Draft
 **Project:** Job Nearby
 **Related documents:** `PRODUCT_SPECIFICATION.md`, `RECOGNITION_MODEL.md`
@@ -8,6 +8,10 @@
 ## 1. Purpose
 
 This document defines the core Job Nearby domain entities, their relationships, ownership, lifecycle, mutability, and historical behavior.
+
+The opportunity is the central CRM view, composed from evidence-backed canonical
+facts and separate private records. This remains a conceptual model: many named
+entities below are not implemented. Section 78 is the current CRM delivery/gap audit.
 
 The model is designed around four principles:
 
@@ -1212,7 +1216,9 @@ Job Nearby should avoid assuming that a phone number observed once remains indef
 
 # 44. UserEmployerInteraction
 
-The private user domain begins with `UserEmployerInteraction`.
+`UserEmployerInteraction` is an earlier conceptual employer-level design, not the
+implemented interaction record. Current private history uses vacancy-specific
+`UserVacancyInteractionEvent` (section 45). Employer-level views aggregate it.
 
 Rather than storing one mutable status, Job Nearby should preferably preserve interaction history.
 
@@ -1266,8 +1272,9 @@ EmployerCluster
   -> EmployerMemoryView
 ```
 
-The view includes only canonical vacancies whose explicit employer relationship
-references the cluster. It summarizes immutable observation history, existing
+Current history lookup follows effective ACCEPTED/USER_CONFIRMED observation
+assignments, with a conservative canonical relationship fallback; see
+`M12.5-employer-history.md`. This updates the earlier M6.2 relationship-only rule. It summarizes immutable observation history, existing
 organization roles, and private vacancy interaction histories without merging or
 mutating them. `EmployerMemoryView` has no persistence table and is not
 source-of-truth data; it is reconstructed from the public and private layers.
@@ -1304,7 +1311,7 @@ Reading or opening a review never records `REVIEWED`. That event, like every oth
 private interaction, must be requested explicitly. Only the append-only USER LAYER
 changes; review and employer-memory signals remain derived.
 
-Possible types include:
+Future conceptual types (not the current event enum) include:
 
 ```text
 DISCOVERED
@@ -1328,7 +1335,10 @@ The list should remain extensible.
 
 # 46. Why User History References EmployerCluster
 
-User interactions should normally reference `EmployerCluster`, not only resolved `Employer`.
+Current interaction records reference `CanonicalVacancy`, not `EmployerCluster`.
+Employer history is a derived association across vacancies and effective memberships.
+A future employer-only interaction may use a cluster without requiring resolved identity;
+it must not replace vacancy-specific application history.
 
 Reason:
 
@@ -1585,7 +1595,7 @@ The data model must distinguish public/shared evidence from user-private informa
 Conceptually:
 
 ```text
-PUBLIC / SHAREABLE DOMAIN
+MARKET EVIDENCE DOMAIN (NOT AUTOMATICALLY SHAREABLE)
 
 SourceObservation
 EvidenceRecord
@@ -1610,7 +1620,10 @@ application-related metadata
 personal recruiter notes
 ```
 
-The exact sharing policy may become more restrictive depending on source licensing.
+All data is local by default. Captured material may contain personal information or
+source licensing restrictions; a market-domain label does not authorize sharing. CVs,
+letters, contacts, notes, tasks and application history remain private regardless of
+public source-code distribution.
 
 ---
 
@@ -1635,7 +1648,7 @@ RecruitmentCampaign
 belongs to EmployerCluster
 
 UserEmployerInteraction
-belongs to User + EmployerCluster
+conceptual employer-level record; current UserVacancyInteractionEvent belongs to CanonicalVacancy
 ```
 
 Inference relationships should not be hidden inside unrelated objects.
@@ -1747,7 +1760,8 @@ Hard deletion may still be required for:
 
 The full conceptual model is intentionally richer than the first implementation.
 
-The first MVP probably requires only:
+The following is the historical recognition-prototype proposal, not the current
+schema or the CRM implementation backlog (see section 78):
 
 ```text
 SourceObservation
@@ -1998,7 +2012,7 @@ These should normally resolve to the same `Employer` but different `EmployerLoca
 
 Depending on the desired recognition granularity, Job Nearby may maintain separate employer clusters for materially different hiring locations and later resolve all of them to the same employer.
 
-This prevents the company-first UI from losing geographic relevance.
+This preserves geographic relevance in employer context across CRM opportunities.
 
 ---
 
@@ -2101,23 +2115,13 @@ This supports efficient UI without sacrificing event history.
 
 ---
 
-# 72. Storage Neutrality
+# 72. Storage neutrality and current persistence
 
-This data model is conceptual.
-
-It does not yet decide whether storage should use:
-
-```text
-PostgreSQL
-SQLite
-document database
-embedded local storage
-hybrid architecture
-```
-
-That belongs in `ARCHITECTURE.md`.
-
-The domain model should not be unnecessarily distorted to fit one storage technology.
+The domain boundaries remain storage-independent. The actual implementation uses
+local SQLite through repository adapters and migrations; storage is not an undecided
+runtime choice. Alternative database adapters are optional future work, not an
+installation requirement. Document file storage remains a separate unresolved
+architecture decision (section 78 and ARCHITECTURE section 68).
 
 ---
 
@@ -2216,7 +2220,7 @@ The following rules are established by Data Model v0.1.
 
 **DM11 — Recruitment campaigns are separate from publications and may represent multiple positions.**
 
-**DM12 — User interactions attach to employer clusters so history survives later identity resolution.**
+**DM12 — Current user interactions attach to canonical vacancies; derived employer history follows supported memberships without moving or rewriting private events.**
 
 **DM13 — Historical observations, confirmations, and recognition changes should normally be additive.**
 
@@ -2300,4 +2304,56 @@ It should decide how this data model is implemented operationally, including:
 * deployment assumptions;
 * how future contributors can add recognition algorithms and source adapters without modifying the core domain.
 
-After `ARCHITECTURE.md` is approved, the project should have enough stability to initialize the repository and begin the TypeScript implementation.
+The repository and TypeScript implementation already exist. The next work follows
+ARCHITECTURE section 91; the sections above remain conceptual guidance rather than
+a migration specification.
+
+
+# 78. CRM core gap analysis (M18.1)
+
+Audit baseline: `afb16e98d824e6670e74c9e357665fe23efa4041`. No live database was
+opened. Evidence: `src/domain/user/UserVacancyInteractionEvent.ts`,
+`src/infrastructure/persistence/SqliteUserVacancyInteractionRepository.ts`,
+`src/domain/vacancies/CanonicalVacancy.ts`, migration files 001-011,
+`src/application/user/`, `ui/src/ReviewPage.tsx` and `ui/src/InboxPage.tsx`.
+Concept names below describe responsibility; they do not prescribe new tables.
+
+| Concept | Classification | Existing representation and later boundary |
+| --- | --- | --- |
+| Vacancy/opportunity identity and market facts | Adequately represented as foundation | CanonicalVacancy, source/exact-identity claims and evidence references; compose private CRM records by stable canonical ID |
+| Application / JobApplication | Partial | APPLIED events and optional channel/source reference; no preparation record or separate application-attempt lifecycle. Decide whether repeat applications need their own identity before adding an entity |
+| Application/pipeline state | Partial | NEW or latest interaction type; richer process state must remain distinct from latest activity, recognition and archive |
+| CV/Resume and MotivationLetter/CoverLetter | Missing | Shared document-library concept with kind/language/variant metadata is preferable to duplicating identical lifecycles |
+| DocumentVersion | Missing | Stable immutable version identity and recoverable submitted content; content fingerprint alone cannot recover a deleted file |
+| ApplicationDocument association | Missing | Planned versus actually-used version, opportunity/application or submission activity, and use time; never a mutable filename-only reference |
+| Contact | Partial conceptual coverage; missing CRM implementation | RecruitmentContact/ContactPoint were documented; person/contact evidence extraction is not an editable contact library |
+| VacancyContact relationship | Missing | Many-to-many private links with context/role; do not require one contact to belong to one vacancy |
+| Interaction / Activity | Partial | Append-only vacancy events with occurredAt/recordedAt and typed metadata; extend deliberately for communication, documents, notes and links without losing historical events |
+| Task / NextAction | Missing | Private intended work with optional due time/contact, completion and notes; decide durable identity/ownership before adding reminder delivery |
+| Reminder | Missing | Separate notification schedule/delivery state referring to task or event, not the task itself |
+| Interview/process event | Partial | INTERVIEW event supports stage; no scheduled/completed distinction, calendar time, participant or assignment tracking. Assess activity extension before adding a separate interview aggregate |
+| Notes | Documented only; implementation missing | UserNote concept exists; current event metadata does not accept arbitrary notes. Support opportunity scope and auditable edits |
+| Outcome | Partial | OFFER/REJECTED/WITHDRAWN/CLOSED events; richer outcome detail and reason are not implemented |
+| Priority | Missing | Private user preference, independent of recognition confidence |
+| Archive/restore | Adequately represented for current workflow | Migration 011 and cleanup service; archive is not an application outcome, and source recapture must not silently reopen it |
+
+Current event types are REVIEWED, INTERESTED, APPLIED, CONTACTED, INTERVIEW, OFFER,
+REJECTED, WITHDRAWN and CLOSED. The current state is NEW without events, otherwise
+the latest event by occurredAt, recordedAt and ID. CONTACTED has optional direction
+and contact method, not a Contact ID or communication body. Existing UI action
+buttons and derived history summaries do not constitute the full future CRM timeline.
+
+## CRM ownership and invariants for later implementation
+
+- Canonical market facts remain separate from private opportunity tracking. Recognition failure/uncertainty never blocks private application activity.
+- Preserve stable references across recapture/reprojection; never infer human role confirmation from task/application state or employer-cluster membership.
+- Current pipeline state and chronological activity are distinct. Changing state adds auditable history; recording a call need not move the process backward.
+- Contacts and document-library items have independent lifecycles. Vacancy links, submitted versions and activity references are private relationships.
+- Past document usage must resolve to the version actually submitted after edits, renames, deletion of the external original, backup/restore and machine transfer. Decide storage policy before implementing document intake.
+- Tasks describe intent; reminders describe alerts. Completion, cancellation, missed delivery, time zones and restart behavior need explicit semantics.
+- Private notes and user contact details are never silently promoted into shared recognition evidence. Public GitHub source does not publish local records.
+- Existing cleanup safeguards must be extended before introducing new dependent records; document/contact deletion must not silently break application history. User-directed privacy deletion remains possible.
+
+No new entity, enum, table or schema migration is introduced here. The next private
+tracking increment and later pipeline decisions should reuse the current repository
+and application boundaries rather than replacing evidence-backed canonical records.
