@@ -13,10 +13,11 @@ afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
   it("retains a failed note draft and reuses its request identity on retry", async () => {
-    const initial={...review({status:"UNRESOLVED"}),crm:{priority:"NONE",notes:[]}};
+    const crm={priority:"NONE" as const,notes:[],processState:"DISCOVERED" as const,processTransitions:[]};
+    const initial={...review({status:"UNRESOLVED"}),crm};
     respond({review:initial});
     fetchMock.mockRejectedValueOnce(new Error("Connection interrupted"));
-    respond({review:{...initial,crm:{priority:"NONE",notes:[
+    respond({review:{...initial,crm:{...crm,notes:[
       {id:"saved",canonicalVacancyId:"canonical-1",text:"<script>private</script>",createdAt:"2026-11-17T12:00:00Z"}
     ]}}});
     render(<ReviewPage/>);
@@ -31,9 +32,10 @@ describe("ReviewPage", () => {
   });
 
   it("changes private priority and adds chronological notes through Review commands", async () => {
-    const initial={...review({status:"UNRESOLVED"}),crm:{priority:"NONE",notes:[]}};
-    const prioritized={...initial,crm:{priority:"HIGH",notes:[]}};
-    const noted={...prioritized,crm:{priority:"HIGH",notes:[
+    const crm={priority:"NONE" as const,notes:[],processState:"DISCOVERED" as const,processTransitions:[]};
+    const initial={...review({status:"UNRESOLVED"}),crm};
+    const prioritized={...initial,crm:{...crm,priority:"HIGH" as const}};
+    const noted={...prioritized,crm:{...prioritized.crm,notes:[
       {id:"one",canonicalVacancyId:"canonical-1",text:"Mention commissioning experience",createdAt:"2026-11-17T12:00:00Z"}
     ]}};
     respond({review:initial});respond({review:prioritized});respond({review:noted});
@@ -49,6 +51,28 @@ describe("ReviewPage", () => {
     expect(screen.getByLabelText("New note")).toHaveValue("");
     expect(fetchMock.mock.calls[2]?.[0]).toContain("/crm/notes");
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({requestId:expect.any(String),text:"Mention commissioning experience"});
+  });
+
+  it("shows process state separately and retries its explicit transition with the same request identity", async () => {
+    const crm={priority:"NONE" as const,notes:[],processState:"DISCOVERED" as const,processTransitions:[]};
+    const initial={...review({status:"UNRESOLVED"}),crm};
+    const updated={...initial,crm:{...crm,processState:"APPLIED" as const,processTransitions:[
+      {id:"transition-1",canonicalVacancyId:"canonical-1",fromState:"DISCOVERED",toState:"APPLIED",createdAt:"2026-11-17T12:00:00.000Z"}
+    ]}};
+    respond({review:initial});
+    fetchMock.mockRejectedValueOnce(new Error("Connection interrupted"));
+    respond({review:updated});
+    render(<ReviewPage/>);
+    expect(await screen.findByLabelText("Application process state")).toHaveValue("DISCOVERED");
+    await userEvent.selectOptions(screen.getByLabelText("Application process state"),"APPLIED");
+    await userEvent.click(screen.getByRole("button",{name:"Save process state"}));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Connection interrupted");
+    await userEvent.click(screen.getByRole("button",{name:"Save process state"}));
+    expect(await screen.findByText("DISCOVERED to APPLIED")).toBeInTheDocument();
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/crm/process-state");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({requestId:expect.any(String),state:"APPLIED"});
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toEqual(fetchMock.mock.calls[2]?.[1]?.body);
+    expect(screen.getByText("Interaction history state:",{exact:false})).toHaveTextContent("NEW");
   });
 
   it("shows saved Dexory qualifications without losing alternatives or optionality", async () => {
@@ -261,7 +285,7 @@ describe("ReviewPage", () => {
   it("loads a NEW vacancy without creating an interaction", async () => {
     respond({ review: review() });
     render(<ReviewPage />);
-    expect(await screen.findByText("Current state:", { exact: false })).toHaveTextContent("NEW");
+    expect(await screen.findByText("Interaction history state:", { exact: false })).toHaveTextContent("NEW");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]![1]).toBeUndefined();
   });
@@ -279,7 +303,7 @@ describe("ReviewPage", () => {
     respond({ review: review() }); respond({ review: review({ currentState: "REVIEWED", isNewVacancy: false }) });
     const user = userEvent.setup(); render(<ReviewPage />);
     await screen.findByRole("button", { name: "REVIEWED" }); await user.click(screen.getByRole("button", { name: "REVIEWED" }));
-    expect(await screen.findByText("Current state:", { exact: false })).toHaveTextContent("REVIEWED");
+    expect(await screen.findByText("Interaction history state:", { exact: false })).toHaveTextContent("REVIEWED");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]![0]).toContain("/interactions");
   });
@@ -298,7 +322,7 @@ describe("ReviewPage", () => {
     await user.click(screen.getByRole("button", { name: "REVIEWED" }));
     expect(screen.getByRole("button", { name: "APPLIED" })).toBeDisabled();
     finish(json({ review: review({ currentState: "REVIEWED" }) }));
-    expect(await screen.findByText("Current state:", { exact: false })).toHaveTextContent("REVIEWED");
+    expect(await screen.findByText("Interaction history state:", { exact: false })).toHaveTextContent("REVIEWED");
   });
 
   it("shows a not-found state for a missing vacancy", async () => {

@@ -44,6 +44,7 @@ const reviewWorkflow = createVacancyReviewWorkflow({
 const server = createBrowserCaptureServer({
   setVacancyPriority: reviewWorkflow.setVacancyPriority,
   addVacancyNote: reviewWorkflow.addVacancyNote,
+  setVacancyProcessState: reviewWorkflow.setVacancyProcessState,
   vacancyCleanup: new SqliteVacancyCleanup(database),
   decideEmployerIdentity: reviewWorkflow.decideEmployerIdentity,
   searchEmployerIdentities: reviewWorkflow.searchEmployerIdentities,
