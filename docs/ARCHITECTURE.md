@@ -49,24 +49,27 @@ Capture/import publication
         ↓
 Store immutable observation
         ↓
-Normalize source information
+Preserve displayed company and other source evidence
         ↓
-Run recognition
+Run publication and employer recognition
         ↓
-Find/create employer cluster
+Find/create employer-cluster membership and assess identity
         ↓
-Attempt employer identification
+Assess organization roles from vacancy evidence
         ↓
-Retrieve existing user history
+Build a shared, read-only Inbox/Review presentation
         ↓
-Present recognition result
+Reviewer may make a separate identity-linkage or vacancy-role decision
         ↓
-User confirms or corrects
-        ↓
-Persist new evidence/history
+Persist only the explicit decision at its own scope
 ```
 
 Everything else is secondary to making this loop understandable, testable, and extensible.
+
+Recognition, identity linkage, cluster membership, and a vacancy-specific
+organization-role decision are separate operations. Recognition or prior employer
+knowledge must not silently write a role decision, and a role decision for one
+vacancy must not transfer to another.
 
 ---
 
@@ -513,11 +516,14 @@ compare employer clusters
 rank employer candidates
 generate identity resolutions
 produce explanations
-handle confirmations
 trigger re-evaluation
 ```
 
 It should be divided internally into smaller services.
+
+This module may produce recognition and identity-linkage evidence. The
+human-authored organization-role decision for one vacancy belongs to the user
+application boundary and is not a recognition result.
 
 ---
 
@@ -671,7 +677,7 @@ Responsibilities:
 ```text
 Employer
 EmployerLocation
-EmployerAlias
+EmployerAliasEvidence
 EmployerIdentifier
 Recruiter
 RecruitmentContact
@@ -681,6 +687,10 @@ ContactPoint
 This module represents real-world organizational identities once known.
 
 It should not own raw source observations.
+
+Alias evidence belongs to organization identity/recognition. It may help associate
+an observed name with a cluster or identity, but it does not decide the
+organization's role for a vacancy.
 
 ---
 
@@ -699,6 +709,9 @@ websites
 ```
 
 User corrections can enrich this registry over time.
+
+Only identity-level corrections belong here. A vacancy's organization role is
+decided separately and must not be inferred from registry membership.
 
 ---
 
@@ -744,6 +757,10 @@ For example:
 does not constitute evidence that two publications belong to the same employer.
 
 It is user history, not recognition evidence.
+
+The user application boundary also owns vacancy-specific human
+`VacancyOrganizationRoleDecision` records. These are separate from private
+application/interview history and from organization identity/alias decisions.
 
 ---
 
@@ -854,7 +871,8 @@ Potential use cases:
 CaptureVacancy
 RecognizeObservation
 ReviewRecognition
-ConfirmEmployerIdentity
+DecideEmployerIdentityLink
+DecideVacancyOrganizationRole
 RejectEmployerCandidate
 RecordEmployerInteraction
 SearchKnownEmployers
@@ -890,14 +908,16 @@ POST   /api/observations/:id/recognize
 GET    /api/employer-clusters
 GET    /api/employer-clusters/:id
 
-POST   /api/employer-clusters/:id/confirm-identity
-POST   /api/employer-clusters/:id/reject-candidate
+POST   /api/vacancies/:id/employer-identity-decisions
+POST   /api/vacancies/:id/organization-role-decisions
 
 GET    /api/employer-clusters/:id/interactions
 POST   /api/employer-clusters/:id/interactions
 ```
 
-Exact routes should be designed during implementation.
+Identity-linkage and organization-role routes have different decision semantics.
+Neither route may be replaced by a presentation update; organization-role
+decisions are scoped to one vacancy.
 
 ---
 
@@ -935,10 +955,10 @@ Paste/import vacancy.
 Show:
 
 ```text
-recognized employer
-known/new status
-identity confidence
-cluster confidence
+displayed company evidence
+recognized employer identity (including uncertainty)
+employer-memory reuse, if any
+vacancy-specific organization-role decision, if any
 publication-family match
 supporting evidence
 ```
@@ -987,15 +1007,37 @@ Repositories should expose domain-relevant operations rather than generic databa
 
 Operations affecting several related records should use transactions.
 
+Identity-linkage changes and vacancy-role decisions have separate transaction
+boundaries. For example, an identity-linkage decision may update the
+observation-to-cluster assignment and alias evidence; it does not create a
+vacancy-role decision. A role decision records the organization and role for one
+canonical vacancy and updates only the related vacancy assignments.
+
+Neither transaction may convert a read-model/presentation state into a decision.
+
+---
+
+### Identity-linkage transaction
+
 Example:
 
 ```text
-user confirms employer identity
+reviewer links an observed organization to a known identity
         ↓
-create ConfirmationRecord
-create IdentityResolution
-update current cluster projection
-possibly add EmployerAlias
+record identity assignment/history
+possibly add identity alias evidence
+do not create a vacancy-role decision
+```
+
+### Vacancy-role decision transaction
+
+```text
+reviewer selects an organization role for one vacancy
+        ↓
+append VacancyOrganizationRoleDecision
+record prior-decision relationship and evidence basis
+update related assignment projection transactionally
+do not change decisions for other vacancies
 ```
 
 These should succeed or fail atomically.
@@ -1793,6 +1835,11 @@ These are presentation-oriented projections.
 
 They must not become authoritative domain entities.
 
+Inbox and Review derive the same employer presentation from the same underlying
+source evidence, recognition and identity relationships, prior employer knowledge,
+and vacancy-specific role decisions. The presentation is read-only and creates or
+mutates none of those records. It is not a persisted domain entity.
+
 ---
 
 # 76. EmployerSummary Projection
@@ -1813,6 +1860,8 @@ userStatus
 
 This is ideal for lists and map views.
 
+`identityStatus` must not stand in for the vacancy-specific organization role.
+
 ---
 
 # 77. RecognitionReview Projection
@@ -1823,15 +1872,21 @@ Example:
 RecognitionReview
 
 observation
+displayedCompanyEvidence
 clusterMatch
 candidateEmployers
 identityStatus
+priorEmployerKnowledge
+vacancyOrganizationRoleDecision?
 supportingEvidence
 contradictions
 previousUserActions
 ```
 
 This may become the central MVP screen.
+
+It is a read projection: an automatically recognized identity or reused memory
+does not become human-confirmed merely because it appears in the review.
 
 ---
 
@@ -2199,19 +2254,21 @@ Example:
 
 ```text
 Job Nearby:
-"This is probably Employer Cluster #14."
+"This observation may belong to Employer Cluster #14."
 
 User:
-"Yes."
+"Link this name to the known organization identity."
 
 or:
 
-"No, this is a new employer."
+"Keep the organization identities separate."
 ```
 
 This is not a temporary embarrassment to hide.
 
-Human correction is part of the recognition architecture.
+Identity linkage is distinct from choosing the employer role. A human employer-role
+decision must explicitly name the organization and vacancy; ambiguous candidates
+are not auto-selected, and changing a confirmed role is an explicit reassignment.
 
 ---
 
@@ -2483,6 +2540,16 @@ The following rules are established by Architecture v0.1.
 **A20 — Avoid premature infrastructure, generalization, and distributed architecture.**
 
 **A21 — Canonical vacancy persistence is accessed through a domain repository port. The SQLite adapter stores a replaceable current projection with explicit evidence links; source observations remain immutable, and projection history is deferred.**
+
+**A22 — Displayed company evidence, organization identity, cluster membership, and vacancy organization roles are separate concerns.**
+
+**A23 — Recognition and prior employer knowledge do not create human vacancy-role decisions.**
+
+**A24 — Identity-linkage/alias decisions and vacancy-specific role decisions use separate application commands and persistence semantics.**
+
+**A25 — `VacancyOrganizationRoleDecision` is human-authored and scoped to one canonical vacancy; recapture alone does not replace it.**
+
+**A26 — Inbox and Review share a derived, read-only employer presentation; it is not persisted and performs no writes.**
 
 ---
 

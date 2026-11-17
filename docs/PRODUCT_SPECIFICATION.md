@@ -42,22 +42,27 @@ Vacancy publications are treated as **observations and evidence about employer h
 The basic conceptual transformation is:
 
 ```text
-Vacancy Publications
+Source Observations
         ↓
-Evidence Extraction
+Observed Company and Organization Evidence
         ↓
-Publication Recognition
+Publication and Employer Recognition
         ↓
-Employer Clustering
+Employer Cluster / Identity Knowledge
         ↓
-Employer Identification
+Vacancy-Specific Organization-Role Decision (when explicitly made)
         ↓
-Recruitment Activity
+Derived Recruitment Activity
         ↓
 Company Labor-Market Profile
         ↓
 Job-Seeker Interaction
 ```
+
+“Company first” describes the product's focus; it does not make every displayed
+company the employer. A displayed company name, a recognized organization identity,
+membership in an employer cluster, and the employer role for one vacancy are
+different facts.
 
 The application should help answer:
 
@@ -216,6 +221,10 @@ identityConfidence     = 0.35
 
 This means Job Nearby is highly confident that several publications concern the same employer but does not yet know reliably which company it is.
 
+Clustering and identification are recognition conclusions, not organization-role
+decisions. An observation may be grouped with a known employer identity without
+establishing that the organization is the employer for its vacancy.
+
 ---
 
 ## 7. Multi-Source by Design
@@ -298,6 +307,10 @@ raw captured content
 
 Not all fields will be available for every source.
 
+“Displayed company” means the company name shown by the source. It is source
+evidence only: it does not, by itself, establish employer recognition, organization
+identity, or a human-confirmed employer role.
+
 ---
 
 ## 9. Evidence Preservation
@@ -357,8 +370,12 @@ Source: external public dataset
 Employer identity
 Derived by: Job Nearby recognition engine
 
-Identity confirmation
-Confirmed by: user
+Organization identity linkage
+Basis: explicit reviewer decision
+Scope: identity association only, not a vacancy employer-role decision
+
+Vacancy employer role
+Basis: explicit human organization-role decision for one vacancy
 ```
 
 Job Nearby should avoid representing inferred information as directly observed fact.
@@ -395,9 +412,11 @@ The conceptual roles are:
 ```text
 Publication
      │
-     ├── Recruiter
-     ├── Employer
-     └── Workplace
+     ├── displayed company (observed source evidence)
+     ├── recruiter / intermediary
+     ├── organization identity (may be known or unresolved)
+     ├── employer role for this vacancy (may be undecided)
+     └── workplace
 ```
 
 These may refer to the same organization/location for direct recruitment, or to different entities when recruitment is outsourced.
@@ -573,31 +592,40 @@ rather than a forced company identification.
 
 ## 17. Human Confirmation
 
-The user should be able to:
+Employer-related conclusions have different scopes and must not be presented as
+equivalent:
 
-* confirm an employer identity;
-* reject an employer identity;
-* merge employer clusters;
-* separate incorrectly merged clusters;
-* mark publications as related;
-* mark publications as unrelated;
-* correct extracted information.
+* **Displayed company:** a source observation may contain a company name. It is
+  evidence, not proof that the company is recognized or is the employer.
+* **Automatically recognized employer:** recognition may associate evidence with
+  an employer identity or cluster. This is not a human decision for the vacancy.
+* **Recognized from prior employer knowledge:** exact-name or conservative prior
+  knowledge may reuse an identity or cluster association. That reuse does not
+  create a new human organization-role decision.
+* **Organization identity / alias linkage:** a reviewer may decide that an
+  observed name refers to a known organization. This is an identity decision; it
+  does not decide which organization role applies to the vacancy.
+* **Employer-cluster membership:** grouping observations as the same underlying
+  employer identity is not a vacancy-specific role decision. Shared names,
+  Workday tenants, or cluster membership do not transfer a decision between
+  vacancies.
+* **Vacancy-specific human organization-role decision:** only an explicit human
+  decision that an organization plays the employer role confirms that role for
+  that particular vacancy. The decision is independent of identity linkage and
+  cluster membership. Confirmation of one vacancy does not confirm another,
+  even when the name, cluster, source tenant, prior knowledge, or alias matches.
+* **Ambiguous employer:** when several candidates remain plausible, preserve the
+  ambiguity and request review. The highest-ranked candidate must not silently
+  become the employer.
+* **No employer evidence:** this is a neutral state, not a failed confirmation.
+  The employer is not identified from the available evidence.
+* **Reassignment:** changing a vacancy that already has a human-confirmed
+  employer role is an explicit reassignment/change, distinct from first
+  confirmation.
 
-Human confirmation becomes part of the evidence history.
-
-The system should distinguish between:
-
-```text
-algorithmically inferred
-```
-
-and
-
-```text
-user confirmed
-```
-
-information.
+Inbox and Review may expose the same presentation state, derived from evidence
+and human decisions. It is read-only: presenting a state must not create or
+mutate an identity, assignment, or organization-role decision.
 
 ---
 
@@ -683,38 +711,55 @@ Existing employer?
    /             \
  YES              NO
   │                │
-attach         create provisional
-observation    employer cluster
+reuse a supported  create provisional
+recognition link   employer cluster
   │                │
   └───────┬────────┘
           ↓
-Attempt employer identification
+Keep employer clustering and identity recognition distinct
           ↓
-Retrieve user history
+Assess organization roles from vacancy evidence
           ↓
-Present result
+Present evidence, recognition, ambiguity, and any prior decision separately
           ↓
-User confirms/corrects
+Reviewer may link identity or make an explicit vacancy-specific role decision
           ↓
-Preserve new knowledge
+Preserve the decision at its proper scope
 ```
+
+If evidence is ambiguous, review remains necessary; if employer evidence is absent,
+the result remains neutral. Neither condition is repaired by silently choosing a
+candidate.
 
 ---
 
 ## 21. MVP User Result
 
-The first version should be able to produce results such as:
+The first version should distinguish results such as:
 
 ```text
-COMPANY RECOGNIZED
+AUTOMATICALLY RECOGNIZED
+
+Employer identity:
+Recognized from current evidence
+
+Employer role for this vacancy:
+Not yet confirmed for this vacancy
+
+Prior employer knowledge:
+May be reused without creating a vacancy-specific decision
+```
+
+```text
+EMPLOYER ROLE CONFIRMED FOR THIS VACANCY
 
 Groupe SIAT — Urmatt
 
-Identification confidence:
-Very high
+Employer identity:
+Recognized
 
-Company already known:
-YES
+Vacancy-specific role:
+Confirmed for this vacancy by the reviewer
 
 Previous publications:
 7
@@ -733,27 +778,32 @@ recruitment campaign
 or:
 
 ```text
-EMPLOYER UNRESOLVED
+EMPLOYER NEEDS REVIEW
 
-Unknown Employer #17 — Molsheim
+Employer candidates:
+Several plausible organizations
 
-Employer cluster already known:
-YES
+Vacancy-specific employer role:
+Not decided
 
-Previous publications:
-4
-
-Probable recruitment:
-Several maintenance technicians
-
-Actual company:
-Not reliably identified
-
-Your history:
-Already investigated
+Highest-ranked candidate:
+Not selected automatically
 ```
 
-The second result is still useful.
+or:
+
+```text
+EMPLOYER NOT IDENTIFIED
+
+Employer evidence:
+Not available or insufficient
+
+Employer role:
+Undecided; no failed confirmation is implied
+```
+
+An automatically recognized or prior-known employer can be useful without implying
+that a person confirmed its role for the current vacancy.
 
 ---
 
@@ -956,7 +1006,8 @@ The initial MVP should concentrate on:
 * company profiles;
 * previous-publication detection;
 * user/company interaction history;
-* manual confirmation and correction;
+* separate organization-identity review and vacancy-specific organization-role
+  decisions;
 * provenance preservation.
 
 ### Explicitly postponed
@@ -1093,7 +1144,9 @@ Publication counts must not be interpreted directly as vacancy counts.
 Uncertainty and contradictory evidence must be representable.
 
 **Rule 12 — Human correction is evidence**
-User confirmations and corrections must be preserved.
+
+Human identity-linkage and organization-role decisions must be preserved
+separately and at their respective scopes.
 
 **Rule 13 — Market history ≠ user history**
 Employer hiring observations and private job-seeker interactions are separate domains.
@@ -1102,7 +1155,42 @@ Employer hiring observations and private job-seeker interactions are separate do
 New observations should normally extend history rather than overwrite it.
 
 **Rule 15 — Unknown is a legitimate result**
+
 Job Nearby must prefer unresolved identity to false certainty.
+
+**Rule 16 — Displayed company is source evidence**
+
+A displayed company name does not by itself establish identity or employer role.
+
+**Rule 17 — Recognition is not role confirmation**
+
+Automatic recognition and prior employer knowledge do not create a
+vacancy-specific human decision.
+
+**Rule 18 — Identity linkage is not an organization-role decision**
+
+An alias or organization identity may be linked without deciding that it is the
+employer for a vacancy.
+
+**Rule 19 — Cluster membership does not transfer role decisions**
+
+Names, source tenants, and shared cluster membership do not confirm the employer
+role across vacancies.
+
+**Rule 20 — Human employer-role decisions are vacancy-specific**
+
+Only an explicit decision for a vacancy confirms an organization's employer role
+for that vacancy. Changing it later is explicit reassignment.
+
+**Rule 21 — Preserve ambiguity and neutral absence**
+
+Ambiguous candidates are not silently selected, and absence of employer evidence
+is not treated as a failed confirmation.
+
+**Rule 22 — Presentation is derived and read-only**
+
+Inbox and Review may share a presentation of underlying evidence and decisions;
+the presentation itself creates or changes no decision.
 
 ---
 
