@@ -16,12 +16,13 @@ publications supports that workflow while preserving uncertainty.
 Implemented: supported browser capture, canonical vacancies and source identity,
 employer recognition and vacancy-specific role decisions, React Inbox/Review,
 append-only interaction events and derived history, archive/restore and guarded
-deletion. Application tracking is currently a latest-interaction projection, not a
-complete CRM pipeline.
+deletion. Private CRM includes priority, append-only notes, explicit process-state
+history, next actions and derived in-app reminders. M19.1 adds a CV/motivation-letter
+library with immutable managed versions and vacancy-specific selection history.
+Selecting a version does not assert that it was sent.
 
-Planned: priority and private notes, richer pipeline/activity tracking, CV/letter
-library with historical version associations, contacts, tasks/reminders, daily work
-queue, broader search, backup/restore/export, and ordinary-user desktop installation.
+Planned: richer activity/submission tracking, contacts, a daily work queue, broader
+search, backup/restore/export, and ordinary-user desktop installation.
 See [the implementation roadmap](docs/ARCHITECTURE.md#91-crm-implementation-roadmap).
 
 ## Desktop and privacy direction
@@ -37,6 +38,15 @@ Job Nearby cloud service. Public source does not make CVs, letters, contacts, no
 application history or captured personal material public. Do not contribute personal
 databases, backups or application documents. Backup/restore and portable export are
 required future product workflows; no cloud sync is assumed.
+
+Document imports are limited to 5 MiB. Managed files live under the per-user
+application-data directory (`%LOCALAPPDATA%/JobNearby` on Windows), independently
+of the current SQLite path. `JOB_NEARBY_DOCUMENT_DATA_DIR` can select another
+absolute persistent root outside the checkout and temporary directories. Do not
+change it without moving/restoring its document subtree. A complete backup needs
+**both the SQLite database and managed document files**. File locations are relative
+in metadata; the original imported source file is not required. See the architecture
+for platform defaults, integrity checks and crash-recovery limitations.
 
 ## Documentation
 

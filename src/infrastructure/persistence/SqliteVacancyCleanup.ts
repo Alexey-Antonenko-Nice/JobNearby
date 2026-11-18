@@ -27,7 +27,7 @@ export class SqliteVacancyCleanup implements VacancyCleanup {
     const vacancy = this.db.prepare("SELECT * FROM canonical_vacancies WHERE id=?").get(id);
     if (!vacancy) throw new VacancyCleanupError("Vacancy no longer exists.", 404);
     const ids = JSON.stringify(this.members(id));
-    const tables = ["canonical_vacancies", "canonical_vacancy_observation_claims", "canonical_vacancy_source_observations", "canonical_vacancy_exact_identity_claims", "vacancy_organization_role_decisions", "user_vacancy_interaction_events", "vacancy_cleanup_state", "vacancy_crm_priority", "vacancy_notes", "vacancy_crm_process_state", "vacancy_process_transitions", "vacancy_next_actions", "vacancy_action_changes"];
+    const tables = ["canonical_vacancies", "canonical_vacancy_observation_claims", "canonical_vacancy_source_observations", "canonical_vacancy_exact_identity_claims", "vacancy_organization_role_decisions", "user_vacancy_interaction_events", "vacancy_cleanup_state", "vacancy_crm_priority", "vacancy_notes", "vacancy_crm_process_state", "vacancy_process_transitions", "vacancy_next_actions", "vacancy_action_changes", "vacancy_application_documents"];
     const owned = tables.map(table => [table, this.db.prepare(`SELECT * FROM ${table} WHERE ${table === "canonical_vacancies" ? "id" : "canonical_vacancy_id"}=? ORDER BY rowid`).all(id)]);
     const sources = ["source_observations", "capture_occurrences", "observation_cluster_assignments", "publication_family_memberships", "recruitment_campaign_memberships"].map(table => [table, this.db.prepare(`SELECT * FROM ${table} WHERE ${table === "source_observations" ? "id" : "source_observation_id"} IN (SELECT value FROM json_each(?)) ORDER BY rowid`).all(ids)]);
     // Shared-memory or effective-employer changes can alter retention/reprojection.
@@ -67,6 +67,7 @@ export class SqliteVacancyCleanup implements VacancyCleanup {
     return { ...state, token: hash([state.token, observationId ?? null]), targetObservationId: observationId ?? null,
       requiresHistoryAcknowledgement: Boolean(history), retainedSourceIds,
       affected: [
+        { label: "Vacancy document associations removed (library retained)", count: observationId ? 0 : count("vacancy_application_documents", "canonical_vacancy_id", [id]) },
         { label: "Vacancy records", count: observationId ? 0 : 1 },
         { label: "Capture links removed", count: ids.length },
         { label: "Source snapshots permanently removed", count: ids.length - retainedSourceIds.length },

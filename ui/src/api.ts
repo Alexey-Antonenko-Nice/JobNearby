@@ -91,6 +91,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly documents?: Serialized<import("../../src/domain/user/ApplicationDocument.js").ApplicationDocumentsView>;
   readonly nextActions?: Serialized<import("../../src/domain/user/VacancyNextAction.js").NextActionsView>;
   readonly crm?: Serialized<import("../../src/domain/user/VacancyCrm.js").VacancyCrmState>;
   readonly employerIdentityReview?: import("../../src/domain/user/EmployerIdentityReview").EmployerIdentityReview | null;
@@ -277,4 +278,14 @@ export async function setVacancyActionReminder(id:string,actionId:string,request
 }
 export async function dismissVacancyActionReminder(id:string,actionId:string,requestId:string,reminderId:string):Promise<ReviewView> {
   return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions/"+encodeURIComponent(actionId)+"/dismiss-reminder",{requestId,reminderId})).review;
+}
+
+export async function importApplicationDocument(id:string, input:Record<string,unknown>):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"documents/import",input)).review;
+}
+export async function associateVacancyDocument(id:string,versionId:string,requestId:string):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"documents/associations",{versionId,requestId})).review;
+}
+export function documentDownloadUrl(versionId:string):string {
+  return API_ORIGIN+"/documents/versions/"+encodeURIComponent(versionId)+"/content";
 }

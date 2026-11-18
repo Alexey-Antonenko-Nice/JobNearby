@@ -1,3 +1,4 @@
+import { VacancyDocumentsSection } from "./VacancyDocumentsSection";
 import { VacancyNextActionsSection } from "./VacancyNextActionsSection";
 import { VacancyCrmSection } from "./VacancyCrmSection";
 import { VacancyCleanupSection } from "./VacancyCleanupSection";
@@ -102,6 +103,7 @@ export function ReviewPage(): React.JSX.Element {
     </section>}
     {review.vacancyContext && <><VacancyContextSection context={review.vacancyContext} /><PublicationCampaignContextSection context={review.vacancyContext} /></>}
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
+    <VacancyDocumentsSection key={"documents:"+review.vacancy.canonicalVacancyId} review={review} onSaved={setReview} disabled={pending} />
     <VacancyNextActionsSection key={"actions:"+review.vacancy.canonicalVacancyId} review={review} onSaved={setReview} disabled={pending} />
     <VacancyCrmSection key={review.vacancy.canonicalVacancyId} review={review} onSaved={setReview} disabled={pending} />
     <section><h2>User state</h2><Details values={[["Applied before to this vacancy", yesNo(review.user.everApplied)], ["Interviewed for this vacancy", yesNo(review.user.everInterviewed)], ["Rejected for this vacancy", yesNo(review.user.everRejected)], ["Last interaction date", date(review.user.lastInteractionAt)]]} /></section>

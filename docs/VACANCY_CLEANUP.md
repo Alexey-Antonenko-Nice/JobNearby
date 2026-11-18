@@ -59,3 +59,18 @@ counts and action/reminder-history counts, then remove both through guarded
 foreign-key cascades. Every appended scheduling/lifecycle command invalidates a
 previous cleanup approval. Time passing alone changes derived due flags, not stored
 history or cleanup tokens. Existing application/interview acknowledgement remains.
+
+
+## Application-document associations (M19.1)
+
+Cleanup snapshots include `vacancy_application_documents`; adding a selection
+invalidates earlier approvals. Whole-vacancy previews count all current and prior
+associations, and guarded deletion removes them with the canonical vacancy.
+Single-capture deletion preserves them while the canonical vacancy remains.
+Archive/restore changes neither selections nor the shared library.
+
+Logical documents, immutable versions and managed files are shared library data,
+not vacancy-owned cleanup targets. They survive deletion of any associated vacancy,
+including the last one. Standalone document/version deletion is deliberately
+unsupported pending a reference-aware retention design. Existing application and
+interview history acknowledgement still applies. Selection is not evidence of sending.

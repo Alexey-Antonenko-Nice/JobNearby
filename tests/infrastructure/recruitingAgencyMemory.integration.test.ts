@@ -378,7 +378,7 @@ describe("human-confirmed agency memory", () => {
       expect((await reopened.workflow.getVacancyReview("first")).agencyContext?.known[0]?.source).toBe("USER_CONFIRMED");
       expect(() => copy.prepare("UPDATE confirmed_organization_roles SET role='RECRUITER'").run()).toThrow("append-only");
       expect(() => copy.prepare("DELETE FROM confirmed_organization_roles").run()).toThrow("append-only");
-      expect(copy.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 14 });
+      expect(copy.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 15 });
     } finally { reopened?.db.close(); f.db.close(); }
   });
   it("upgrades a populated version 8 database additively and idempotently", async () => {
@@ -391,7 +391,7 @@ describe("human-confirmed agency memory", () => {
       const before = snapshot();
       migrateDatabase(f.db); migrateDatabase(f.db);
       expect(snapshot()).toBe(before);
-      expect(f.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 14 });
+      expect(f.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get()).toEqual({ version: 15 });
       expect(f.db.prepare("SELECT COUNT(*) AS count FROM confirmed_organization_roles").get()).toEqual({ count: 0 });
     } finally { f.db.close(); }
   });

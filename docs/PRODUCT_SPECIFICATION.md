@@ -74,10 +74,22 @@ Document identity, version and use in a particular application are different fac
 Editing a CV or letter later must not change the recorded version used historically.
 Renaming or replacing an external file must not silently rewrite that history.
 
-The architecture must decide between internal storage, external local references,
-managed copies or a hybrid. No option is selected here. The decision must cover
-version integrity, missing files, privacy, backup/restore and computer-to-computer
-portability. Letter generation and automatic submission are not prerequisites.
+M19.1 implements a managed-copy library for CV and MOTIVATION_LETTER documents.
+Review can import a logical document with its first version, add newer versions,
+and select an exact existing version for a vacancy. Each import retains immutable
+bytes and SHA-256 metadata independently of the original local file. Maximum file
+size is 5 MiB; document editing, rendering and standalone deletion are deferred.
+
+An association means **selected for this vacancy**, not sent or submitted. Selecting
+another version of the same kind preserves the prior association in history. The
+same version can be selected for several vacancies. Recapture and archive/restore
+preserve selections; whole-vacancy deletion removes its associations but retains
+the shared library. Recording actual submission/use remains a later capability.
+
+Missing or altered managed files are shown as unavailable and cannot be newly
+selected or downloaded. A complete future backup must include both the database
+and managed document files; original external paths are not required. Letter
+generation and automatic submission are not prerequisites.
 
 ## 6. Contacts
 
@@ -240,7 +252,7 @@ Audited from code at the baseline above, without opening the live database:
 | Contacts and interviews | Partial evidence/event metadata only; no contact library or interview schedule |
 | Notes and priority | Implemented in Review (M18.2): private priority and append-only chronological notes, preserved across recapture and archive/restore |
 | Application preparation and richer activity timeline | Future workflows; notes remain distinct from interaction events |
-| CV/letter library, versioning and usage associations | Missing |
+| CV/letter library, versioning and usage associations | M19.1: managed immutable versions and Review selection/history; actual sending/submission tracking deferred |
 | Next actions/reminders | Implemented in Review (M18.4): multiple actions, due times, completion/cancellation and reminder history; due signals calculated on read, no background notifications |
 | Daily work queue | Future work |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
