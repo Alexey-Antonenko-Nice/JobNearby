@@ -1,3 +1,4 @@
+import { DocumentLibraryPage } from "./DocumentLibraryPage";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
@@ -6,5 +7,5 @@ import { InboxPage } from "./InboxPage";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>{window.location.pathname.startsWith("/review/") ? <ReviewPage /> : <InboxPage />}</StrictMode>,
+  <StrictMode>{window.location.pathname === "/documents" ? <DocumentLibraryPage /> : window.location.pathname.startsWith("/review/") ? <ReviewPage /> : <InboxPage />}</StrictMode>,
 );

@@ -1,4 +1,4 @@
-import { ApplicationDocumentError, MAX_DOCUMENT_BYTES, applicationDocumentKinds } from "../../domain/user/ApplicationDocument.js";
+import { ApplicationDocumentError, MAX_DOCUMENT_BYTES, applicationDocumentKinds, type ImportApplicationDocument } from "../../domain/user/ApplicationDocument.js";
 import { VacancyCrmError, validatePriority, validateProcessState } from "../../domain/user/VacancyCrm.js";
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
 import { humanOrganizationRoles, type HumanOrganizationRole } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
@@ -13,6 +13,12 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly getApplicationDocuments?: VacancyReviewWorkflow["getApplicationDocuments"];
+  readonly importLibraryDocument?: VacancyReviewWorkflow["importLibraryDocument"];
+  readonly renameApplicationDocument?: VacancyReviewWorkflow["renameApplicationDocument"];
+  readonly archiveApplicationDocument?: VacancyReviewWorkflow["archiveApplicationDocument"];
+  readonly restoreApplicationDocument?: VacancyReviewWorkflow["restoreApplicationDocument"];
+
   readonly importApplicationDocument?: VacancyReviewWorkflow["importApplicationDocument"];
   readonly associateVacancyDocument?: VacancyReviewWorkflow["associateVacancyDocument"];
   readonly getApplicationDocumentContent?: VacancyReviewWorkflow["getApplicationDocumentContent"];
@@ -68,6 +74,29 @@ export function createBrowserCaptureServer(
         sendJson(response, 201, captureResponseDto(result));
         return;
       }
+      if(request.method==="GET" && path==="/documents" && dependencies.getApplicationDocuments) {
+        operation="review";sendJson(response,200,{library:dependencies.getApplicationDocuments()});return;
+      }
+      const lifecycle=/^\/documents\/([^/]+)\/(rename|archive|restore)$/u.exec(path);
+      if(request.method==="POST" && (path==="/documents/import" || lifecycle)) {
+        operation="review";
+        if(!/^application\/json(?:\s*;|$)/iu.test(request.headers["content-type"]??"")) throw new InvalidRequestError("Document commands require JSON.");
+        const body=await readJsonBody(request,"Document");
+        if(path==="/documents/import" && dependencies.importLibraryDocument) {
+          sendJson(response,200,{library:dependencies.importLibraryDocument(parseDocumentImport(body))});return;
+        }
+        if(lifecycle) {
+          if(!isRecord(body) || typeof body.requestId!=="string" || Object.keys(body).some(k=>!["requestId",...(lifecycle[2]==="rename"?["name"]:[])].includes(k))) throw new InvalidRequestError("Invalid document lifecycle payload.");
+          const target={documentId:decodePathId(lifecycle[1]!),requestId:body.requestId};
+          if(lifecycle[2]==="rename" && dependencies.renameApplicationDocument) {
+            if(typeof body.name!=="string") throw new InvalidRequestError("Document name required.");
+            sendJson(response,200,{library:dependencies.renameApplicationDocument({...target,name:body.name})});return;
+          }
+          if(lifecycle[2]==="archive" && dependencies.archiveApplicationDocument) {sendJson(response,200,{library:dependencies.archiveApplicationDocument(target)});return;}
+          if(lifecycle[2]==="restore" && dependencies.restoreApplicationDocument) {sendJson(response,200,{library:dependencies.restoreApplicationDocument(target)});return;}
+        }
+        throw new ApplicationDocumentError("Document library unavailable.",500);
+      }
       const contentMatch=/^\/documents\/versions\/([^/]+)\/content$/u.exec(path);
       if(request.method==="GET" && contentMatch && dependencies.getApplicationDocumentContent) {
         operation="review";
@@ -89,20 +118,7 @@ export function createBrowserCaptureServer(
           sendJson(response,200,{review:await dependencies.associateVacancyDocument({canonicalVacancyId,versionId:body.versionId,requestId:body.requestId})});return;
         }
         if(documentMatch[2]==="import" && dependencies.importApplicationDocument) {
-          const existing=typeof body.documentId==="string";
-          const allowed=["requestId","originalFileName","mediaType","contentBase64",...(existing?["documentId"]:["name","kind"])];
-          if(Object.keys(body).some(k=>!allowed.includes(k)) || typeof body.originalFileName!=="string" || typeof body.contentBase64!=="string"
-            || (body.mediaType!==null && typeof body.mediaType!=="string")) throw new InvalidRequestError("Invalid document import.");
-          if(body.contentBase64.length>4*Math.ceil(MAX_DOCUMENT_BYTES/3)) throw new ApplicationDocumentError("File exceeds 5 MiB.",413);
-          if(body.contentBase64.length%4!==0 || /[^A-Za-z0-9+/=]/u.test(body.contentBase64)) throw new InvalidRequestError("Invalid file encoding.");
-          const bytes=Buffer.from(body.contentBase64,"base64");
-          if(bytes.toString("base64")!==body.contentBase64) throw new InvalidRequestError("Invalid file encoding.");
-          const common={requestId:body.requestId,originalFileName:body.originalFileName,mediaType:body.mediaType,bytes};
-          if(existing) {
-            sendJson(response,200,{review:await dependencies.importApplicationDocument({canonicalVacancyId,document:{...common,documentId:body.documentId as string}})});return;
-          }
-          if(typeof body.name!=="string" || !applicationDocumentKinds.includes(body.kind as never)) throw new InvalidRequestError("Choose a document kind and name.");
-          sendJson(response,200,{review:await dependencies.importApplicationDocument({canonicalVacancyId,document:{...common,name:body.name,kind:body.kind as typeof applicationDocumentKinds[number]}})});return;
+          sendJson(response,200,{review:await dependencies.importApplicationDocument({canonicalVacancyId,document:parseDocumentImport(body)})});return;
         }
         throw new ApplicationDocumentError("Document library unavailable.",500);
       }
@@ -449,4 +465,21 @@ function setCorsHeaders(request: IncomingMessage, response: ServerResponse): voi
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(body));
+}
+
+/** Both Review and the reusable library use the same bounded import decoder. */
+function parseDocumentImport(body:unknown):ImportApplicationDocument {
+  if(!isRecord(body) || typeof body.requestId!=="string") throw new InvalidRequestError("Document request ID required.");
+  const existing=typeof body.documentId==="string";
+  const allowed=["requestId","originalFileName","mediaType","contentBase64",...(existing?["documentId"]:["name","kind"])];
+  if(Object.keys(body).some(k=>!allowed.includes(k)) || typeof body.originalFileName!=="string" || typeof body.contentBase64!=="string"
+    || (body.mediaType!==null && typeof body.mediaType!=="string")) throw new InvalidRequestError("Invalid document import.");
+  if(body.contentBase64.length>4*Math.ceil(MAX_DOCUMENT_BYTES/3)) throw new ApplicationDocumentError("File exceeds 5 MiB.",413);
+  if(body.contentBase64.length%4!==0 || /[^A-Za-z0-9+/=]/u.test(body.contentBase64)) throw new InvalidRequestError("Invalid file encoding.");
+  const bytes=Buffer.from(body.contentBase64,"base64");
+  if(bytes.toString("base64")!==body.contentBase64) throw new InvalidRequestError("Invalid file encoding.");
+  const common={requestId:body.requestId,originalFileName:body.originalFileName,mediaType:body.mediaType,bytes};
+  if(existing) return {...common,documentId:body.documentId as string};
+  if(typeof body.name!=="string" || !applicationDocumentKinds.includes(body.kind as never)) throw new InvalidRequestError("Choose a document kind and name.");
+  return {...common,name:body.name,kind:body.kind as typeof applicationDocumentKinds[number]};
 }

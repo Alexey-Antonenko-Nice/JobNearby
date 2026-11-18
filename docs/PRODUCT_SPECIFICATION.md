@@ -91,6 +91,18 @@ selected or downloaded. A complete future backup must include both the database
 and managed document files; original external paths are not required. Letter
 generation and automatic submission are not prerequisites.
 
+M19.2 adds a Documents library reachable from Inbox and Review. It defaults to
+active documents and offers archived/all views. Logical documents can be renamed,
+archived and restored. Detail shows ordered version history, original filenames,
+import dates, sizes, integrity and current/historical reference counts, with verified
+browser downloads and the shared version-import flow.
+
+Archive is not deletion: existing selected and historical versions remain visible
+and downloadable when intact. Archived documents are excluded from new Review
+selections and imports until restored. Renaming changes only the current display
+name, not version identity/content or selection history. Permanent deletion remains
+unavailable even for unreferenced versions; referenced history is protected.
+
 ## 6. Contacts
 
 Contacts are first-class private CRM information: recruiters, hiring managers, HR

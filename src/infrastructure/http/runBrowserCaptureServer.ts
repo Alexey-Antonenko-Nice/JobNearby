@@ -47,6 +47,12 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
 const server = createBrowserCaptureServer({
+  getApplicationDocuments: reviewWorkflow.getApplicationDocuments,
+  importLibraryDocument: reviewWorkflow.importLibraryDocument,
+  renameApplicationDocument: reviewWorkflow.renameApplicationDocument,
+  archiveApplicationDocument: reviewWorkflow.archiveApplicationDocument,
+  restoreApplicationDocument: reviewWorkflow.restoreApplicationDocument,
+
   importApplicationDocument: reviewWorkflow.importApplicationDocument,
   associateVacancyDocument: reviewWorkflow.associateVacancyDocument,
   getApplicationDocumentContent: reviewWorkflow.getApplicationDocumentContent,

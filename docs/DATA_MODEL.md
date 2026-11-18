@@ -2472,9 +2472,42 @@ idempotent and do not reactivate superseded selections. Source paths are not sto
 File integrity is checked on library reads, selection and download; missing/corrupt
 files remain visible as such and do not silently change identity or disappear.
 
-Updates to all three tables are rejected. Standalone document/version deletion is
+Updates to all three base tables are rejected. M19.2 projects logical rename/archive
+state from its separate change ledger (section 82). Standalone document/version deletion is
 not supported. Associations cascade only during guarded whole-vacancy deletion;
 shared documents, versions and bytes remain, even if no vacancy currently uses them.
 Recapture, archive/restore and single-capture deletion preserve associations.
 Association additions invalidate cleanup approval tokens. Priority, notes, process
 state, next actions, interactions and organization decisions are unchanged.
+
+
+# 82. Logical document lifecycle (M19.2)
+
+Logical display metadata can change; immutable document versions cannot.
+Migration 016 adds `application_document_changes`: request ID, logical document ID,
+operation (`RENAME`, `ARCHIVE`, `RESTORE`), name only for rename, and server UTC
+creation time. Rows are append-only with foreign-key and update/delete guards.
+No existing document, version or association is rewritten by migration.
+
+The logical document read model folds these commands in insertion order to derive
+its current name and nullable `archivedAt`. Initially all M19.1 documents are active.
+Archive/restore is independent of vacancy archive and changes no files or versions.
+Renaming changes the current displayed name, including in historical views; no
+historical name snapshot is implied. Exact version IDs/metadata remain unchanged.
+
+Explicit application commands execute in IMMEDIATE transactions. Identical request
+retries return without appending or replaying an old change over newer intent.
+Reusing a lifecycle request ID for another document, operation or name is rejected.
+Archived documents reject new imports and associations until restored. Retries of
+already-successful imports/associations remain idempotent even after archive.
+
+Version views expose `referenceCount` (all retained association rows) and
+`currentReferenceCount` (latest association per vacancy/document kind). Their
+difference is the superseded-reference count. Counts include archived vacancies,
+archived documents and all other vacancies, not just the visible Review or Inbox.
+Repeated selections are separate references; the count is not unique-vacancy count.
+
+Permanent deletion is deferred for **all** logical documents and versions, including
+unreferenced ones. Existing database guards remain; no destructive application,
+HTTP or UI command is provided. Removing a vacancy's last association reduces the
+reference count but does not delete library metadata, lifecycle history or files.

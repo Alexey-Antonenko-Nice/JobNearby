@@ -28,6 +28,16 @@ describe("ReviewPage", () => {
       {id:"letter",kind:"MOTIVATION_LETTER" as const,name:"Engineering letter",createdAt:date,versions:[version("l1","letter",1)]}
     ],associations:[] as {id:string;canonicalVacancyId:string;documentVersionId:string;createdAt:string;current:boolean}[]}};
   }
+  it("hides archived documents from new selection/import while retaining exact selected history and download",async()=>{
+    const initial=documentReview(),archived={...initial,documents:{...initial.documents,library:initial.documents.library.map(d=>({...d,archivedAt:d.id==="cv"?"2026-11-18T09:00:00Z":null})),associations:[{id:"a",canonicalVacancyId:"canonical-1",documentVersionId:"v1",createdAt:"2026-11-18T09:00:00Z",current:true}]}};
+    respond({review:archived});render(<ReviewPage/>);
+    expect(await screen.findByText(/Document archived; selection preserved/)).toBeInTheDocument();
+    expect(screen.getByRole("link",{name:"Download selected cv"})).toHaveAttribute("href","http://127.0.0.1:4317/documents/versions/v1/content");
+    expect(within(screen.getByLabelText("CV version")).queryByRole("option",{name:/Engineering CV/})).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText("Import a document version"));
+    expect(within(screen.getByLabelText("Logical document")).queryByRole("option",{name:/Engineering CV/})).not.toBeInTheDocument();
+    expect(screen.getByRole("link",{name:"Manage document library"})).toHaveAttribute("href","/documents");
+  });
   it("selects CV and motivation-letter versions and retains replaced selections in Review history",async()=>{
     const initial=documentReview(),a=(id:string,version:string,current=true)=>({id,canonicalVacancyId:"canonical-1",documentVersionId:version,createdAt:"2026-11-18T09:00:00.000Z",current});
     const withCv={...initial,documents:{...initial.documents,associations:[a("a1","v1")]}};

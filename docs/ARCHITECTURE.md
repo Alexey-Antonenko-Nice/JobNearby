@@ -2557,3 +2557,30 @@ an equivalent consistency mechanism. Restoring to another computer can use a new
 configured root because metadata keys are relative. Original external files are
 not needed. Copying only the SQLite file is no longer a complete personal-data
 backup. No cloud, synchronization, scheduler or document deletion UI is introduced.
+
+
+## M19.2 document library management
+
+The Documents page (`/documents`) manages reusable library identity; Review continues
+to manage exact vacancy selections. Both use `DocumentImportForm`, the same bounded
+HTTP import decoder, application library and managed storage service. No duplicate
+file-import implementation, OS open command, editor or preview engine is introduced.
+
+Logical rename/archive/restore commands append to a SQLite lifecycle ledger. They
+perform no filesystem mutations and therefore introduce no additional orphan-file
+window. Version metadata/base document identity guards remain in place. No permanent
+delete endpoint exists: safe reference-aware deletion and scan/reconcile maintenance
+remain future work. Normal handled import failures still clean their staged files;
+the documented hard-crash orphan limitation from M19.1 is unchanged.
+
+The repository counts all retained associations, including superseded selections and
+archived vacancies, and rejects new selection/import against an archived document
+inside the same IMMEDIATE transaction that validates its request. Existing archived
+selections continue to resolve and download through SHA-256 verification. The full
+library read contains archived items so history remains resolvable; UI selection
+lists default to active items. Backend guards reject stale picker submissions.
+
+Lifecycle metadata uses no new physical path. Restoring the database and managed
+file subtree under another configured root preserves identity, lifecycle and verified
+downloads. Complete backup still means SQLite **plus** managed files; backup/restore
+implementation and filesystem reconciliation are not part of this milestone.

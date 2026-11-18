@@ -74,3 +74,14 @@ not vacancy-owned cleanup targets. They survive deletion of any associated vacan
 including the last one. Standalone document/version deletion is deliberately
 unsupported pending a reference-aware retention design. Existing application and
 interview history acknowledgement still applies. Selection is not evidence of sending.
+
+
+## Logical document lifecycle (M19.2)
+
+Rename/archive/restore affect only shared logical-document metadata via its append-only
+change ledger. They do not alter any vacancy selection and do not change vacancy
+cleanup ownership. Whole-vacancy deletion continues to remove that vacancy's current
+and superseded associations, retaining the library, versions, managed bytes and
+logical-document lifecycle history. Last-reference removal never triggers deletion.
+Reference counts include superseded selections and archived vacancies. Permanent
+document/version deletion remains prohibited, including for unreferenced versions.

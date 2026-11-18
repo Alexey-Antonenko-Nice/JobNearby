@@ -1,3 +1,4 @@
+import { migration015 } from "../../src/infrastructure/database/migrations/015_application_documents.js";
 import { migration012 } from "../../src/infrastructure/database/migrations/012_vacancy_crm.js";
 import { migration013 } from "../../src/infrastructure/database/migrations/013_vacancy_process_state.js";
 import { migration011 } from "../../src/infrastructure/database/migrations/011_vacancy_cleanup.js";
@@ -14,7 +15,7 @@ import { migration009 } from "../../src/infrastructure/database/migrations/009_c
 import { migration010 } from "../../src/infrastructure/database/migrations/010_create_vacancy_organization_role_decisions.js";
 import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, unlinkSync, symlinkSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync, unlinkSync, symlinkSync, mkdirSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
@@ -266,6 +267,142 @@ describe("Immutable application documents",()=>{
       expect((await post(path+"import",{...body,requestId:"large",contentBase64:Buffer.alloc(MAX_DOCUMENT_BYTES+1).toString("base64")})).status).toBe(413);
       expect((await post("/vacancies/missing/documents/import",{...body,requestId:"missing"})).status).toBe(404);
       expect(x.documentRepo.versions()).toHaveLength(1);
+    } finally {await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
+  });
+});
+
+
+describe("Document library lifecycle",()=>{
+  it("renames only logical metadata while preserving exact versions and association history",async()=>{
+    const x=await setup(),v=x.library.importVersion(importInput());
+    x.library.associate({canonicalVacancyId:x.first.id,versionId:v.id,requestId:"selected"});
+    const before=x.documentRepo.versions(),associations=x.documentRepo.associations(x.first.id),bytes=x.storage.read(v.storageKey);
+    x.library.rename({documentId:v.documentId,name:"Commissioning CV - EN",requestId:"rename"});
+    expect(x.library.list()[0]?.name).toBe("Commissioning CV - EN");
+    expect(x.documentRepo.versions()).toEqual(before);expect(x.documentRepo.associations(x.first.id)).toEqual(associations);expect(x.storage.read(v.storageKey)).toEqual(bytes);
+    expect(x.library.list()[0]?.versions[0]).toMatchObject({referenceCount:1,currentReferenceCount:1});
+  });
+  it("archives/restores without changing versions, associations, download or vacancy archive state",async()=>{
+    const x=await setup(),v=x.library.importVersion(importInput());
+    const selection={canonicalVacancyId:x.first.id,versionId:v.id,requestId:"selected"};x.library.associate(selection);
+    const before=x.documentRepo.versions(),associations=x.documentRepo.associations(x.first.id),cleanup=x.service.state(x.first.id);
+    x.library.archive({documentId:v.documentId,requestId:"archive"});
+    expect(x.library.list()[0]?.archivedAt?.toISOString()).toBe("2026-11-17T12:00:00.000Z");
+    expect(x.library.download(v.id).bytes).toEqual(Buffer.from("exact CV bytes"));
+    expect(()=>x.library.associate({...selection,requestId:"new-selection"})).toThrow(/Restore/);
+    expect(()=>x.library.importVersion({...importInput("new-version"),documentId:v.documentId})).toThrow(/Restore/);
+    x.library.associate(selection);expect(x.library.importVersion(importInput())).toEqual(v);
+    expect(x.service.state(x.first.id)).toEqual(cleanup);
+    expect(x.documentRepo.versions()).toEqual(before);expect(x.documentRepo.associations(x.first.id)).toEqual(associations);
+    x.library.restore({documentId:v.documentId,requestId:"restore"});
+    expect(x.library.list()[0]?.archivedAt).toBeNull();
+    expect(x.library.importVersion({...importInput("new-version"),documentId:v.documentId}).versionNumber).toBe(2);
+  });
+  it("lifecycle retries never replay old changes and conflicting IDs are rejected",async()=>{
+    const x=await setup(),v=x.library.importVersion(importInput());const target={documentId:v.documentId};
+    const rename={...target,name:"First name",requestId:"rename"};
+    x.library.rename(rename);x.library.rename({...rename,name:"Later name",requestId:"rename-later"});x.library.rename(rename);
+    x.library.archive({...target,requestId:"archive"});x.library.restore({...target,requestId:"restore"});x.library.archive({...target,requestId:"archive"});x.library.restore({...target,requestId:"restore"});
+    expect(x.library.list()[0]).toMatchObject({name:"Later name",archivedAt:null});
+    expect(x.db.prepare("SELECT COUNT(*) n FROM application_document_changes").get()).toEqual({n:4});
+    expect(()=>x.library.rename({...rename,name:"Conflict"})).toThrow(/already used/);
+    expect(()=>x.library.restore({...target,requestId:"archive"})).toThrow(/already used/);
+    const other=x.library.importVersion(importInput("other"));
+    expect(()=>x.library.archive({documentId:other.documentId,requestId:"archive"})).toThrow(/already used/);
+    x.library.archive({...target,requestId:"archive-again"});x.library.restore({...target,requestId:"restore"});
+    expect(x.library.list()[0]?.archivedAt).not.toBeNull();
+  });
+  it.each(["", " ", "x".repeat(201)])("rejects invalid rename without a lifecycle write (%j)",async name=>{
+    const x=await setup(),v=x.library.importVersion(importInput());
+    expect(()=>x.library.rename({documentId:v.documentId,requestId:"bad",name})).toThrow(/1 to 200/);
+    expect(x.db.prepare("SELECT * FROM application_document_changes").all()).toEqual([]);
+  });
+  it("counts historical and current references across active and archived vacancies",async()=>{
+    const x=await setup(),v1=x.library.importVersion(importInput()),v2=x.library.importVersion({...importInput("v2"),documentId:v1.documentId});
+    const other=await x.capture(html.replaceAll("4964827101","4964827102"),payload.pageUrl.replace("4964827101","4964827102"));
+    const select=(vacancy:string,version:string,requestId:string)=>x.library.associate({canonicalVacancyId:vacancy,versionId:version,requestId});
+    select(x.first.id,v1.id,"a1");select(x.first.id,v2.id,"a2");select(other.id,v1.id,"b1");x.archive();
+    x.library.archive({documentId:v1.documentId,requestId:"archive-doc"});
+    expect(x.library.list()[0]?.versions.map(v=>[v.versionNumber,v.referenceCount,v.currentReferenceCount])).toEqual([[1,2,1],[2,1,1]]);
+    for(const id of [v1.id,v2.id]) expect(()=>x.db.prepare("DELETE FROM application_document_versions WHERE id=?").run(id)).toThrow(/deletion/);
+    expect(()=>x.db.prepare("DELETE FROM application_documents WHERE id=?").run(v1.documentId)).toThrow(/deletion/);
+  });
+  it("forbids deletion even for unreferenced versions and keeps the lifecycle ledger immutable",async()=>{
+    const x=await setup(),v=x.library.importVersion(importInput());
+    expect(x.library.list()[0]?.versions[0]?.referenceCount).toBe(0);
+    expect(()=>x.db.prepare("DELETE FROM application_document_versions WHERE id=?").run(v.id)).toThrow(/deletion/);
+    x.library.archive({documentId:v.documentId,requestId:"a"});
+    expect(()=>x.db.prepare("UPDATE application_document_changes SET operation='RESTORE'").run()).toThrow(/immutable/);
+    expect(()=>x.db.prepare("DELETE FROM application_document_changes").run()).toThrow(/cannot be deleted/);
+    for(const field of ["document_id","version_number","content_hash","storage_key","size_bytes","original_file_name","media_type"])
+      expect(()=>x.db.prepare("UPDATE application_document_versions SET "+field+"="+field+" WHERE id=?").run(v.id)).toThrow(/immutable/);
+    expect(x.library).not.toHaveProperty("deleteVersion");
+  });
+  it("recapture and vacancy archive/restore do not change document lifecycle, CRM or employer semantics",async()=>{
+    const x=await setup(),v=x.library.importVersion(importInput());await x.create();
+    await x.workflow.setVacancyPriority({canonicalVacancyId:x.first.id,priority:"HIGH"});
+    await x.workflow.addVacancyNote({canonicalVacancyId:x.first.id,requestId:"note",text:"Keep"});
+    await x.workflow.setVacancyProcessState({canonicalVacancyId:x.first.id,requestId:"p",state:"APPLIED"});
+    const before=await x.workflow.getVacancyReview(x.first.id);
+    x.library.rename({documentId:v.documentId,requestId:"rename",name:"Renamed"});x.library.archive({documentId:v.documentId,requestId:"archive"});
+    const after=await x.workflow.getVacancyReview(x.first.id);
+    expect(after.crm).toEqual(before.crm);expect(after.nextActions).toEqual(before.nextActions);expect(after.employer).toEqual(before.employer);
+    const documents=x.library.list();await x.capture(html.replaceAll("Manufacturing Engineer (m/f/d)","Updated Engineer (m/f/d)"));
+    x.archive();x.service.setArchived(x.first.id,false,x.service.state(x.first.id).token);
+    expect(x.library.list()).toEqual(documents);
+  });
+  it("last-reference cleanup preserves archived logical identity, lifecycle, versions and files",async()=>{
+    const x=await setup(),v=x.library.importVersion(importInput());
+    x.library.associate({canonicalVacancyId:x.first.id,versionId:v.id,requestId:"a"});
+    x.library.archive({documentId:v.documentId,requestId:"archive-doc"});x.archive();await x.remove();
+    expect(x.library.list()[0]).toMatchObject({id:v.documentId,archivedAt:expect.any(Date)});
+    expect(x.library.list()[0]?.versions[0]).toMatchObject({id:v.id,referenceCount:0,currentReferenceCount:0,integrity:"AVAILABLE"});
+    expect(x.library.download(v.id).bytes).toEqual(Buffer.from("exact CV bytes"));expect(x.db.pragma("foreign_key_check")).toEqual([]);
+  });
+  it("retains lifecycle and verified downloads after relocating the managed store",async()=>{
+    const x=await setup(),v=x.library.importVersion(importInput());x.library.rename({documentId:v.documentId,requestId:"rename",name:"Moved CV"});x.library.archive({documentId:v.documentId,requestId:"a"});
+    const relocated=temporaryRoot();cpSync(x.root,relocated,{recursive:true});
+    const library=new ManagedApplicationDocumentLibrary(x.documentRepo,new LocalManagedDocumentStorage(relocated));
+    expect(library.list()).toEqual(x.library.list());expect(library.download(v.id).bytes).toEqual(x.library.download(v.id).bytes);
+    library.restore({documentId:v.documentId,requestId:"restore"});expect(library.list()[0]?.archivedAt).toBeNull();
+  });
+  it("migrates populated version 15 without rewriting document or association history",()=>{
+    const db=versionEightDatabase();databases.push(db);
+    for(const m of [migration009,migration010,migration011,migration012,migration013,migration014,migration015]) {
+      m.up(db);db.prepare("INSERT INTO schema_migrations VALUES (?,?,?)").run(m.version,m.name,"2026-11-18");
+    }
+    db.prepare("INSERT INTO canonical_vacancies VALUES (?,?,?,?,?,?,?)").run("legacy","PARTIAL","test","1","2026-11-16","2026-11-16","2026-11-16");
+    db.prepare("INSERT INTO application_documents VALUES (?,?,?,?)").run("doc","CV","Original","2026-11-18");
+    db.prepare("INSERT INTO application_document_versions VALUES (?,?,?,?,?,?,?,?,?,?,?)").run("v","doc",1,"cv.pdf",null,1,"a".repeat(64),"relative", "2026-11-18","import","fingerprint");
+    db.prepare("INSERT INTO vacancy_application_documents VALUES (?,?,?,?)").run("a","legacy","v","2026-11-18");
+    const snapshot=()=>["application_documents","application_document_versions","vacancy_application_documents"].map(t=>db.prepare("SELECT * FROM "+t).all());
+    const before=snapshot();migrateDatabase(db);migrateDatabase(db);expect(snapshot()).toEqual(before);
+    expect(new SqliteApplicationDocumentRepository(db).list()[0]).toMatchObject({name:"Original",archivedAt:null});
+    expect(db.prepare("SELECT COUNT(*) n FROM schema_migrations WHERE version=16").get()).toEqual({n:1});
+  });
+  it("library HTTP reuses imports, lifecycle guards and verified downloads; no deletion route exists",async()=>{
+    const x=await setup(),server=createBrowserCaptureServer({captureAndProcessBrowserVacancy:async()=>{throw Error("unused");},...x.workflow});
+    await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
+    const base="http://127.0.0.1:"+(server.address() as AddressInfo).port;
+    try {
+      const post=(path:string,body:unknown)=>fetch(base+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const input={requestId:"library-import",name:"Library CV",kind:"CV",originalFileName:"cv.pdf",mediaType:null,contentBase64:Buffer.from("cv").toString("base64")};
+      expect((await post("/documents/import",input)).status).toBe(200);
+      expect((await post("/documents/import",input)).status).toBe(200);
+      const doc=x.library.list()[0]!,version=doc.versions[0]!;
+      const next={requestId:"v2",documentId:doc.id,originalFileName:"new.pdf",mediaType:null,contentBase64:Buffer.from("cv2").toString("base64")};
+      expect((await post("/documents/import",next)).status).toBe(200);
+      expect(x.library.list()[0]?.versions.map(v=>v.versionNumber)).toEqual([1,2]);
+      expect((await post("/documents/"+doc.id+"/rename",{requestId:"rename",name:"Renamed"})).status).toBe(200);
+      expect((await post("/documents/"+doc.id+"/archive",{requestId:"archive"})).status).toBe(200);
+      expect((await post("/documents/"+doc.id+"/archive",{requestId:"archive"})).status).toBe(200);
+      expect((await post("/documents/import",{...next,requestId:"v3"})).status).toBe(409);
+      expect((await post("/documents/"+doc.id+"/restore",{requestId:"restore"})).status).toBe(200);
+      const response=await fetch(base+"/documents");expect(response.status).toBe(200);
+      expect(JSON.stringify(await response.json())).not.toContain("storageKey");
+      for(const path of ["/documents/"+doc.id,"/documents/versions/"+version.id]) expect((await fetch(base+path,{method:"DELETE"})).status).toBe(404);
+      expect((await post("/documents/"+doc.id+"/rename",{requestId:"bad",name:"bad",storageKey:"evil"})).status).toBe(400);
+      expect((await fetch(base+"/documents/versions/"+version.id+"/content")).status).toBe(200);
     } finally {await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
   });
 });

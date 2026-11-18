@@ -75,8 +75,17 @@ export function createVacancyReviewWorkflow(
     await dependencies.crmRepository.changeNextAction(input, dependencies.now?.() ?? new Date());
     return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
   }
+  function documentLibrary() {
+    if(!dependencies.documentLibrary) throw new ApplicationDocumentError("Document library unavailable.",500);
+    return dependencies.documentLibrary;
+  }
   type ActionTarget = {canonicalVacancyId:string;actionId:string;requestId:string};
   return {
+    getApplicationDocuments: () => documentLibrary().list(),
+    importLibraryDocument: (input:ImportApplicationDocument) => {documentLibrary().importVersion(input);return documentLibrary().list();},
+    renameApplicationDocument: (input:{documentId:string;requestId:string;name:string}) => {documentLibrary().rename(input);return documentLibrary().list();},
+    archiveApplicationDocument: (input:{documentId:string;requestId:string}) => {documentLibrary().archive(input);return documentLibrary().list();},
+    restoreApplicationDocument: (input:{documentId:string;requestId:string}) => {documentLibrary().restore(input);return documentLibrary().list();},
     importApplicationDocument: async (input: {canonicalVacancyId:string;document:ImportApplicationDocument}) => {
       if(!dependencies.documentLibrary) throw new ApplicationDocumentError("Document library unavailable.",500);
       if(!await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId)) throw new ApplicationDocumentError("Vacancy not found.",404);
