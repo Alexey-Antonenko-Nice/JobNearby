@@ -2511,3 +2511,13 @@ Permanent deletion is deferred for **all** logical documents and versions, inclu
 unreferenced ones. Existing database guards remain; no destructive application,
 HTTP or UI command is provided. Removing a vacancy's last association reduces the
 reference count but does not delete library metadata, lifecycle history or files.
+
+## M20.1 — Implemented private contacts
+
+`Contact` is a reusable user-owned person identity: display name, job title, notes and UTC creation/archive timestamps. Multiple editable `ContactMethod` records preserve entered EMAIL, PHONE, LINKEDIN_URL or OTHER values. Names/emails never automatically merge identities; duplicate warnings are deferred.
+
+`VacancyContact` links a canonical vacancy to a contact with its own role: RECRUITER, HIRING_MANAGER, HR, INTERVIEWER, REFERRAL, EMPLOYEE_CONTACT, AGENCY_CONSULTANT or OTHER. Ending sets endedAt and preserves earlier links. Contacts may be edited, archived and restored, but not permanently deleted.
+
+Contact != Organization; contact role != VacancyOrganizationRoleDecision; contact method != Interaction. Older RecruitmentContact/ContactPoint sections are conceptual. Organization links are deferred: current optional organization IDs lack a reusable organization table/FK; employer clusters and agency-role memory are not interchangeable with organization identities. Interaction/contact and action/contact links are deferred; historical metadata remains unchanged.
+
+Migration 017 adds contacts, contact_methods, vacancy_contacts and contact_requests (retry fingerprints/result IDs). Each command uses an IMMEDIATE transaction. Identical retries do not replay earlier edits; conflicting request reuse fails. Captured person evidence never populates this library automatically.

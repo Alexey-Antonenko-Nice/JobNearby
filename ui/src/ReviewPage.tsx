@@ -1,3 +1,4 @@
+import { VacancyContactsSection } from "./VacancyContactsSection";
 import { VacancyDocumentsSection } from "./VacancyDocumentsSection";
 import { VacancyNextActionsSection } from "./VacancyNextActionsSection";
 import { VacancyCrmSection } from "./VacancyCrmSection";
@@ -103,6 +104,7 @@ export function ReviewPage(): React.JSX.Element {
     </section>}
     {review.vacancyContext && <><VacancyContextSection context={review.vacancyContext} /><PublicationCampaignContextSection context={review.vacancyContext} /></>}
     <section><h2>Sources</h2>{review.vacancy.sourceLinks.length === 0 ? <p>Unknown</p> : <ul>{review.vacancy.sourceLinks.map((source) => <li key={source.sourceObservationId}>{source.provider} - <a href={source.url} target="_blank" rel="noreferrer">Open vacancy</a></li>)}</ul>}</section>
+    <VacancyContactsSection key={"contacts:"+review.vacancy.canonicalVacancyId} review={review} onSaved={setReview} disabled={pending} />
     <VacancyDocumentsSection key={"documents:"+review.vacancy.canonicalVacancyId} review={review} onSaved={setReview} disabled={pending} />
     <VacancyNextActionsSection key={"actions:"+review.vacancy.canonicalVacancyId} review={review} onSaved={setReview} disabled={pending} />
     <VacancyCrmSection key={review.vacancy.canonicalVacancyId} review={review} onSaved={setReview} disabled={pending} />

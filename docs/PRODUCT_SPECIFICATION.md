@@ -296,3 +296,7 @@ recognition, identity, vacancy-specific human roles and private application hist
 separate. Recapture must not overwrite private decisions, documents or history.
 A central opportunity view composes normalized records rather than turning the
 canonical market vacancy into one giant mutable CRM entity.
+
+## M20.1 — Reusable private contacts
+
+Contacts is a manual local CRM library: create/edit people, maintain multiple contact methods, search by name or method value, archive and restore. Review can create/link a contact, assign a vacancy-specific role and end the relationship while retaining history. Existing links to archived contacts remain visible; new links require restoration. No permanent deletion, automatic deduplication, synchronization or enrichment is provided. Organization affiliation and explicit interaction/task contact references remain future work. These private records neither confirm employer roles nor change process state. Public GitHub source does not make personal contacts public.
