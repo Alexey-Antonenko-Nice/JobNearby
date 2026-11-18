@@ -1,3 +1,4 @@
+import { ApplicationDocumentError, type ApplicationDocumentLibrary, type ImportApplicationDocument } from "../../domain/user/ApplicationDocument.js";
 import type { ActionRequest } from "../../domain/user/VacancyNextAction.js";
 import { setVacancyPriority, addVacancyNote, setVacancyProcessState } from "./vacancyCrm.js";
 import type { VacancyCrmRepository, VacancyPriority, VacancyProcessState } from "../../domain/user/VacancyCrm.js";
@@ -31,6 +32,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly documentLibrary?: ApplicationDocumentLibrary;
   readonly crmRepository?: VacancyCrmRepository;
   readonly employerIdentityDecisionStore?: EmployerIdentityDecisionStore;
   readonly organizationRoleDecisionRepository?: VacancyOrganizationRoleDecisionRepository;
@@ -53,6 +55,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.documentLibrary ? {documentLibrary:dependencies.documentLibrary} : {}),
     ...(dependencies.now ? {now:dependencies.now} : {}),
     ...(dependencies.crmRepository ? {crmRepository:dependencies.crmRepository} : {}),
     ...(dependencies.employerIdentityDecisionStore ? { employerIdentityDecisionStore: dependencies.employerIdentityDecisionStore } : {}),
@@ -74,6 +77,21 @@ export function createVacancyReviewWorkflow(
   }
   type ActionTarget = {canonicalVacancyId:string;actionId:string;requestId:string};
   return {
+    importApplicationDocument: async (input: {canonicalVacancyId:string;document:ImportApplicationDocument}) => {
+      if(!dependencies.documentLibrary) throw new ApplicationDocumentError("Document library unavailable.",500);
+      if(!await dependencies.canonicalVacancyRepository.findById(input.canonicalVacancyId)) throw new ApplicationDocumentError("Vacancy not found.",404);
+      dependencies.documentLibrary.importVersion(input.document);
+      return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
+    },
+    associateVacancyDocument: async (input:{canonicalVacancyId:string;versionId:string;requestId:string}) => {
+      if(!dependencies.documentLibrary) throw new ApplicationDocumentError("Document library unavailable.",500);
+      dependencies.documentLibrary.associate(input);
+      return getVacancyReviewView(input.canonicalVacancyId,reviewDependencies);
+    },
+    getApplicationDocumentContent: (versionId:string) => {
+      if(!dependencies.documentLibrary) throw new ApplicationDocumentError("Document library unavailable.",500);
+      return dependencies.documentLibrary.download(versionId);
+    },
     createVacancyNextAction: (input:{canonicalVacancyId:string;requestId:string;description:string;dueAt:string|null}) =>
       actionCommand({...input,actionId:input.requestId,kind:"CREATE"}),
     completeVacancyNextAction: (input:ActionTarget) => actionCommand({...input,kind:"COMPLETE"}),

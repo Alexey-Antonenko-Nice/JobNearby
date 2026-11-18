@@ -1,3 +1,7 @@
+import { ManagedApplicationDocumentLibrary } from "../../application/user/ApplicationDocumentLibrary.js";
+import { SqliteApplicationDocumentRepository } from "../persistence/SqliteApplicationDocumentRepository.js";
+import { LocalManagedDocumentStorage } from "../storage/LocalManagedDocumentStorage.js";
+import { documentDataDirectory } from "../storage/documentDataDirectory.js";
 import { SqliteVacancyCrmRepository } from "../persistence/SqliteVacancyCrmRepository.js";
 import { SqliteVacancyCleanup } from "../persistence/SqliteVacancyCleanup.js";
 import { SqliteEmployerIdentityDecisionStore } from "../persistence/SqliteEmployerIdentityDecisionStore.js";
@@ -26,6 +30,7 @@ const runtime = createCaptureProcessingRuntime(database, {
   },
 });
 const reviewWorkflow = createVacancyReviewWorkflow({
+  documentLibrary: new ManagedApplicationDocumentLibrary(new SqliteApplicationDocumentRepository(database),new LocalManagedDocumentStorage(documentDataDirectory())),
   crmRepository: new SqliteVacancyCrmRepository(database),
   employerIdentityDecisionStore: new SqliteEmployerIdentityDecisionStore(database),
   organizationRoleDecisionRepository: new SqliteVacancyOrganizationRoleDecisionRepository(database),
@@ -42,6 +47,9 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
 const server = createBrowserCaptureServer({
+  importApplicationDocument: reviewWorkflow.importApplicationDocument,
+  associateVacancyDocument: reviewWorkflow.associateVacancyDocument,
+  getApplicationDocumentContent: reviewWorkflow.getApplicationDocumentContent,
   createVacancyNextAction: reviewWorkflow.createVacancyNextAction,
   completeVacancyNextAction: reviewWorkflow.completeVacancyNextAction,
   cancelVacancyNextAction: reviewWorkflow.cancelVacancyNextAction,

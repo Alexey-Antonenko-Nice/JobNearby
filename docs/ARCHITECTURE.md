@@ -1684,7 +1684,7 @@ No Electron/Tauri or equivalent choice has been made. Resolve:
 2. Runtime bundling, native SQLite ABI/platform builds, supported OS/CPU versions and clean-machine installation tests.
 3. Per-profile data/config paths, file permissions, logging, port conflicts and local API access safeguards.
 4. First-run setup, capture extension installation/update, offline CRM use and actionable startup errors.
-5. Document-storage strategy (internal files, references, managed copies or hybrid), immutable used versions, missing-file behavior and portability.
+5. M19.1 establishes managed immutable document copies (see document storage below); complete backup/restore and actual submission provenance remain to be implemented.
 6. Pre-upgrade backup, transactional schema migration, interrupted-upgrade recovery, version compatibility and rollback limits.
 7. Installer/uninstaller behavior that preserves user data by default, explicit removal choices and update strategy.
 8. Dependency/source/fixture redistribution audit, license/notices, artifact checksums and reproducible release instructions.
@@ -2505,3 +2505,55 @@ recognition prototype. No central service, SaaS authentication or schema change 
 introduced by this documentation alignment.
 
 ---
+
+
+## M19.1 managed application-document storage
+
+`ManagedApplicationDocumentLibrary` coordinates an application repository port and
+`ManagedDocumentStorage`; SQLite owns metadata and `LocalManagedDocumentStorage`
+owns immutable copies. Explicit workflow commands import versions and associate
+versions with vacancies. The Review read model exposes metadata, selection history
+and integrity status, never physical storage paths. Captures and recognition do not
+read document bytes or metadata.
+
+`documentDataDirectory` resolves a per-user root independently of the working directory:
+
+- Windows: `%LOCALAPPDATA%/JobNearby` (user-home fallback).
+- macOS: `~/Library/Application Support/JobNearby`.
+- Linux: `$XDG_DATA_HOME/JobNearby` or `~/.local/share/JobNearby`.
+- Optional `JOB_NEARBY_DOCUMENT_DATA_DIR`: absolute persistent directory outside
+  the repository and system temporary tree. This is deployment configuration, not
+  a browser-supplied path.
+
+Files use `documents/<document UUID>/<version UUID>/content` beneath that root.
+Only the relative storage key is persisted. Filenames are metadata and cannot
+choose a path; traversal/control characters are rejected. Storage validates its
+keys and rejects existing symlink/reparse-link components. POSIX files/directories
+request private permissions; Windows access follows the user's local-data ACL.
+The local OS account and filesystem remain trusted; this is not encrypted storage.
+
+The existing bounded JSON HTTP transport carries base64 uploads (5 MiB decoded
+maximum within the 8 MiB request limit); multipart infrastructure is not introduced.
+Document writes require JSON. Client media types are stored only as metadata;
+downloads are attachments with octet-stream, no-sniff, no-store and sandbox headers.
+No HTML/PDF preview or execution occurs. SHA-256 and size are verified before
+selection/download, and reads expose missing/corrupt integrity states.
+
+Import sequence: begin IMMEDIATE metadata transaction; check idempotency; stage a
+new file under its logical document directory, write/flush/verify, atomically rename
+to a new UUID directory; insert metadata; commit. Normal write/metadata failures
+roll back metadata and remove only that import's created files. A committed version
+therefore has already stored bytes. As with any SQLite-plus-files design, a hard
+process/machine crash between file rename and metadata commit can leave an
+unreferenced file; automatic orphan deletion/reconciliation is deferred. No claim
+of cross-resource or power-loss atomicity is made. Keep such files for storage
+review, not automatic adoption; disk failure/tampering is surfaced by integrity
+checks. A failed cleanup reports that storage review is needed.
+
+This milestone does not relocate the existing SQLite database or implement desktop
+packaging. A complete future backup/restore must consistently include **both** the
+SQLite database and the managed document subtree, with the application stopped or
+an equivalent consistency mechanism. Restoring to another computer can use a new
+configured root because metadata keys are relative. Original external files are
+not needed. Copying only the SQLite file is no longer a complete personal-data
+backup. No cloud, synchronization, scheduler or document deletion UI is introduced.

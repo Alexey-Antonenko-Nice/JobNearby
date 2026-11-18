@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +12,82 @@ beforeEach(() => window.history.pushState({}, "", "/review/canonical-1"));
 afterEach(() => { cleanup(); fetchMock.mockReset(); });
 
 describe("ReviewPage", () => {
+  function submitDocumentImport() {
+    const button=screen.getByRole("button",{name:"Import immutable version"});
+    expect(button).toBeEnabled();
+    expect((screen.getByLabelText("Document file (maximum 5 MiB)") as HTMLInputElement).files).toHaveLength(1);
+    // user-event sets a DOM FileList shim; jsdom's native required-file validation
+    // reads its internal FileList instead. Dispatch the form submit after upload.
+    fireEvent.submit(button.closest("form")!);
+  }
+  function documentReview() {
+    const date="2026-11-18T09:00:00.000Z";
+    const version=(id:string,documentId:string,versionNumber:number)=>({id,documentId,versionNumber,originalFileName:id+".pdf",mediaType:"application/pdf",sizeBytes:5,contentHash:"a".repeat(64),createdAt:date,integrity:"AVAILABLE" as const});
+    return {...review({status:"UNRESOLVED"}),documents:{library:[
+      {id:"cv",kind:"CV" as const,name:"Engineering CV",createdAt:date,versions:[version("v1","cv",1),version("v2","cv",2)]},
+      {id:"letter",kind:"MOTIVATION_LETTER" as const,name:"Engineering letter",createdAt:date,versions:[version("l1","letter",1)]}
+    ],associations:[] as {id:string;canonicalVacancyId:string;documentVersionId:string;createdAt:string;current:boolean}[]}};
+  }
+  it("selects CV and motivation-letter versions and retains replaced selections in Review history",async()=>{
+    const initial=documentReview(),a=(id:string,version:string,current=true)=>({id,canonicalVacancyId:"canonical-1",documentVersionId:version,createdAt:"2026-11-18T09:00:00.000Z",current});
+    const withCv={...initial,documents:{...initial.documents,associations:[a("a1","v1")]}};
+    const withLetter={...initial,documents:{...initial.documents,associations:[a("a1","v1"),a("a2","l1")]}};
+    const replaced={...initial,documents:{...initial.documents,associations:[a("a1","v1",false),a("a2","l1"),a("a3","v2")]}};
+    respond({review:initial});respond({review:withCv});respond({review:withLetter});respond({review:replaced});
+    render(<ReviewPage/>);
+    await userEvent.selectOptions(await screen.findByLabelText("CV version"),"v1");
+    await userEvent.click(screen.getByRole("button",{name:"Select cv version"}));
+    expect(await screen.findByText("Selected: Engineering CV — v1")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Motivation letter version"),"l1");
+    await userEvent.click(screen.getByRole("button",{name:"Select motivation letter version"}));
+    expect(await screen.findByText("Selected: Engineering letter — v1")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("CV version"),"v2");await userEvent.click(screen.getByRole("button",{name:"Select cv version"}));
+    expect(await screen.findByText("Selected: Engineering CV — v2")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("Document association history (3)"));
+    expect(screen.getByText(/CV: Engineering CV — v1 — Previously selected/)).toBeInTheDocument();
+    expect(screen.getByText(/not proof of sending/)).toBeInTheDocument();
+    expect(screen.getByRole("link",{name:"Download selected cv"})).toHaveAttribute("href","http://127.0.0.1:4317/documents/versions/v2/content");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({versionId:"v1",requestId:expect.any(String)});
+  });
+  it("imports a first document version and a later version without automatically selecting either",async()=>{
+    const initial=documentReview();respond({review:initial});respond({review:initial});respond({review:initial});render(<ReviewPage/>);
+    await userEvent.click(await screen.findByText("Import a document version"));
+    await userEvent.type(screen.getByLabelText("Document name"),"Technician CV");
+    await userEvent.upload(screen.getByLabelText("Document file (maximum 5 MiB)"),new File(["bytes"],"my-cv.pdf",{type:"application/pdf"}));
+    submitDocumentImport();
+    await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(()=>expect(screen.getByLabelText("Document file (maximum 5 MiB)")).toHaveValue(""));
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("/documents/import");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({kind:"CV",name:"Technician CV",originalFileName:"my-cv.pdf",contentBase64:"Ynl0ZXM="});
+    await userEvent.selectOptions(screen.getByLabelText("Logical document"),"cv");
+    await userEvent.upload(screen.getByLabelText("Document file (maximum 5 MiB)"),new File(["new"],"new.pdf"));
+    submitDocumentImport();
+    await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(()=>expect(screen.getByLabelText("Document file (maximum 5 MiB)")).toHaveValue(""));
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({documentId:"cv",contentBase64:"bmV3"});
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).not.toHaveProperty("kind");
+  });
+  it("retains import identity and file selection after a failed request",async()=>{
+    const initial=documentReview();respond({review:initial});fetchMock.mockRejectedValueOnce(Error("Import interrupted"));respond({review:initial});render(<ReviewPage/>);
+    await userEvent.click(await screen.findByText("Import a document version"));
+    await userEvent.selectOptions(screen.getByLabelText("Document kind"),"MOTIVATION_LETTER");
+    await userEvent.type(screen.getByLabelText("Document name"),"Letter");
+    await userEvent.upload(screen.getByLabelText("Document file (maximum 5 MiB)"),new File(["letter"],"letter.pdf"));
+    submitDocumentImport();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Import interrupted");
+    submitDocumentImport();
+    await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(3));
+    await waitFor(()=>expect(screen.getByLabelText("Document file (maximum 5 MiB)")).toHaveValue(""));
+    expect(fetchMock.mock.calls[1]?.[1]?.body).toBe(fetchMock.mock.calls[2]?.[1]?.body);
+  });
+  it("shows missing versions without a download link and refuses their selection",async()=>{
+    const initial=documentReview();const missing={...initial,documents:{...initial.documents,library:initial.documents.library.map(d=>({...d,versions:d.versions.map(v=>({...v,integrity:"MISSING" as const}))})),associations:[{id:"a",canonicalVacancyId:"canonical-1",documentVersionId:"v1",createdAt:"2026-11-18T09:00:00Z",current:true}]}};
+    respond({review:missing});render(<ReviewPage/>);
+    expect(await screen.findByText("v1.pdf — MISSING")).toBeInTheDocument();
+    expect(screen.queryByRole("link",{name:"Download selected cv"})).not.toBeInTheDocument();
+    expect(screen.getByRole("option",{name:/Engineering CV — v1/})).toBeDisabled();
+  });
+
   it("retains a failed note draft and reuses its request identity on retry", async () => {
     const crm={priority:"NONE" as const,notes:[],processState:"DISCOVERED" as const,processTransitions:[]};
     const initial={...review({status:"UNRESOLVED"}),crm};

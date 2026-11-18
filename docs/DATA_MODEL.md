@@ -2120,8 +2120,8 @@ This supports efficient UI without sacrificing event history.
 The domain boundaries remain storage-independent. The actual implementation uses
 local SQLite through repository adapters and migrations; storage is not an undecided
 runtime choice. Alternative database adapters are optional future work, not an
-installation requirement. Document file storage remains a separate unresolved
-architecture decision (section 78 and ARCHITECTURE section 68).
+installation requirement. M19.1 establishes managed immutable document copies
+behind a storage port (section 81); desktop packaging and full backup remain future work.
 
 ---
 
@@ -2323,9 +2323,9 @@ Concept names below describe responsibility; they do not prescribe new tables.
 | Vacancy/opportunity identity and market facts | Adequately represented as foundation | CanonicalVacancy, source/exact-identity claims and evidence references; compose private CRM records by stable canonical ID |
 | Application / JobApplication | Partial | APPLIED events and optional channel/source reference; no preparation record or separate application-attempt lifecycle. Decide whether repeat applications need their own identity before adding an entity |
 | Application/pipeline state | Partial | NEW or latest interaction type; richer process state must remain distinct from latest activity, recognition and archive |
-| CV/Resume and MotivationLetter/CoverLetter | Missing | Shared document-library concept with kind/language/variant metadata is preferable to duplicating identical lifecycles |
-| DocumentVersion | Missing | Stable immutable version identity and recoverable submitted content; content fingerprint alone cannot recover a deleted file |
-| ApplicationDocument association | Missing | Planned versus actually-used version, opportunity/application or submission activity, and use time; never a mutable filename-only reference |
+| CV/Resume and MotivationLetter/CoverLetter | Implemented narrowly (M19.1) | Shared ApplicationDocument with CV/MOTIVATION_LETTER kind and name; richer language/variant metadata deferred |
+| DocumentVersion | Implemented (M19.1) | Immutable version metadata and managed exact bytes; SHA-256 verifies integrity; future backups must include files |
+| VacancyApplicationDocument association | Selected-version history implemented (M19.1) | Current/prior exact-version selections by document kind; actual sending/submission proof deferred |
 | Contact | Partial conceptual coverage; missing CRM implementation | RecruitmentContact/ContactPoint were documented; person/contact evidence extraction is not an editable contact library |
 | VacancyContact relationship | Missing | Many-to-many private links with context/role; do not require one contact to belong to one vacancy |
 | Interaction / Activity | Partial | Append-only vacancy events with occurredAt/recordedAt and typed metadata; extend deliberately for communication, documents, notes and links without losing historical events |
@@ -2349,7 +2349,7 @@ buttons and derived history summaries do not constitute the full future CRM time
 - Preserve stable references across recapture/reprojection; never infer human role confirmation from task/application state or employer-cluster membership.
 - Current pipeline state and chronological activity are distinct. Changing state adds auditable history; recording a call need not move the process backward.
 - Contacts and document-library items have independent lifecycles. Vacancy links, submitted versions and activity references are private relationships.
-- Past document usage must resolve to the version actually submitted after edits, renames, deletion of the external original, backup/restore and machine transfer. Decide storage policy before implementing document intake.
+- Past document usage must resolve to the version actually submitted after edits, renames, deletion of the external original, backup/restore and machine transfer. M19.1 uses managed copies; recording actual submission remains future work.
 - Tasks describe intent; reminders describe alerts. Completion, cancellation, missed delivery, time zones and restart behavior need explicit semantics.
 - Private notes and user contact details are never silently promoted into shared recognition evidence. Public GitHub source does not publish local records.
 - Existing cleanup safeguards must be extended before introducing new dependent records; document/contact deletion must not silently break application history. User-directed privacy deletion remains possible.
@@ -2441,3 +2441,40 @@ Both tables reject updates and permit deletion only through guarded whole-vacanc
 cleanup. Recapture, archive/restore and single-capture deletion preserve them.
 Whole-vacancy previews count actions and action/reminder history; every appended
 change invalidates existing cleanup tokens.
+
+
+# 81. Application documents and version selections (M19.1)
+
+ApplicationDocument != ApplicationDocumentVersion != VacancyApplicationDocument.
+All are private CRM information, never source or employer-recognition evidence.
+
+Migration 015 adds:
+
+- `application_documents`: shared logical ID, kind (`CV` or `MOTIVATION_LETTER`),
+  name and server UTC creation timestamp. A document is not owned by a vacancy.
+- `application_document_versions`: immutable UUID, document ID, per-document
+  sequential version number, original filename (metadata only), optional media
+  type (untrusted metadata), byte size, SHA-256, relative storage key, UTC creation
+  timestamp, unique import request ID and request fingerprint.
+- `vacancy_application_documents`: immutable association/request ID, canonical
+  vacancy ID, exact version ID and UTC creation timestamp. It references a version,
+  never a floating logical document or external file path.
+
+The latest association in insertion order for each document kind is current for
+that vacancy. Earlier selections remain queryable, including replacement by a
+version of another logical document of the same kind. No history row is overwritten.
+Association means selected/intended, not proof of sending or an application event.
+
+Version numbering and metadata insertion occur in an IMMEDIATE transaction.
+An identical import retry returns the original version and verifies its bytes;
+conflicting request-ID reuse is rejected. Association retries are similarly
+idempotent and do not reactivate superseded selections. Source paths are not stored.
+File integrity is checked on library reads, selection and download; missing/corrupt
+files remain visible as such and do not silently change identity or disappear.
+
+Updates to all three tables are rejected. Standalone document/version deletion is
+not supported. Associations cascade only during guarded whole-vacancy deletion;
+shared documents, versions and bytes remain, even if no vacancy currently uses them.
+Recapture, archive/restore and single-capture deletion preserve associations.
+Association additions invalidate cleanup approval tokens. Priority, notes, process
+state, next actions, interactions and organization decisions are unchanged.
