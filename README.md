@@ -20,6 +20,9 @@ deletion. Private CRM includes priority, append-only notes, explicit process-sta
 history, next actions and derived in-app reminders. M19.1 adds a CV/motivation-letter
 library with immutable managed versions and vacancy-specific selection history.
 Selecting a version does not assert that it was sent.
+The Documents page adds reusable-library management: active/archived/all views,
+rename, archive/restore, version history and reference counts. Archived documents
+remain available to existing history; permanent deletion is intentionally deferred.
 
 Planned: richer activity/submission tracking, contacts, a daily work queue, broader
 search, backup/restore/export, and ordinary-user desktop installation.

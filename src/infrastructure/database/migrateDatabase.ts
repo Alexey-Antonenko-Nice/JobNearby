@@ -1,3 +1,4 @@
+import { migration016 } from "./migrations/016_document_lifecycle.js";
 import { migration015 } from "./migrations/015_application_documents.js";
 import { migration014 } from "./migrations/014_vacancy_next_actions.js";
 import { migration012 } from "./migrations/012_vacancy_crm.js";
@@ -39,6 +40,7 @@ const migrations: readonly Migration[] = [
   migration013,
   migration014,
   migration015,
+  migration016,
 ];
 
 export function migrateDatabase(db: Database.Database): void {

@@ -45,14 +45,20 @@ export class ManagedApplicationDocumentLibrary implements ApplicationDocumentLib
       this.verified(version);
     });
   }
+  rename(input:{documentId:string;requestId:string;name:string}):void {this.repository.changeLifecycle({...input,operation:"RENAME"},this.now());}
+  archive(input:{documentId:string;requestId:string}):void {this.repository.changeLifecycle({...input,operation:"ARCHIVE"},this.now());}
+  restore(input:{documentId:string;requestId:string}):void {this.repository.changeLifecycle({...input,operation:"RESTORE"},this.now());}
   forVacancy(id:string):ApplicationDocumentsView {
-    const versions=this.repository.versions();
-    return {library:this.repository.list().map(document=>({...document,versions:versions.filter(v=>v.documentId===document.id).map(version=>{
+    return {library:this.list(),associations:this.repository.associations(id)};
+  }
+  list():ApplicationDocumentsView["library"] {
+    const versions=this.repository.versions(), references=this.repository.referenceCounts();
+    return this.repository.list().map(document=>({...document,versions:versions.filter(v=>v.documentId===document.id).map(version=>{
       const {storageKey,...metadata}=version;
       let integrity:"AVAILABLE"|"MISSING"|"CORRUPT"="AVAILABLE";
       try {this.verified(version);} catch(error) {integrity=error instanceof ApplicationDocumentError && error.status===404?"MISSING":"CORRUPT";}
-      return {...metadata,integrity};
-    })})),associations:this.repository.associations(id)};
+      return {...metadata,integrity,...(references.get(version.id)??{referenceCount:0,currentReferenceCount:0})};
+    })}));
   }
   download(id:string) {
     const version=this.repository.findVersion(id);

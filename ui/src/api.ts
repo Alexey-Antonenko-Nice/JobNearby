@@ -289,3 +289,15 @@ export async function associateVacancyDocument(id:string,versionId:string,reques
 export function documentDownloadUrl(versionId:string):string {
   return API_ORIGIN+"/documents/versions/"+encodeURIComponent(versionId)+"/content";
 }
+
+export type DocumentLibrary = Serialized<import("../../src/domain/user/ApplicationDocument.js").ApplicationDocumentsView["library"]>;
+async function libraryRequest(path:string,body?:unknown):Promise<DocumentLibrary> {
+  const response=await fetch(API_ORIGIN+path,body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!response.ok) throw await apiError(response);
+  return (await response.json() as {library:DocumentLibrary}).library;
+}
+export const getDocumentLibrary=()=>libraryRequest("/documents");
+export const importLibraryDocument=(input:Record<string,unknown>)=>libraryRequest("/documents/import",input);
+export const renameLibraryDocument=(id:string,name:string,requestId:string)=>libraryRequest("/documents/"+encodeURIComponent(id)+"/rename",{name,requestId});
+export const archiveLibraryDocument=(id:string,requestId:string)=>libraryRequest("/documents/"+encodeURIComponent(id)+"/archive",{requestId});
+export const restoreLibraryDocument=(id:string,requestId:string)=>libraryRequest("/documents/"+encodeURIComponent(id)+"/restore",{requestId});

@@ -5,6 +5,7 @@ export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 export interface ApplicationDocument {
   readonly id:string;
   readonly kind:ApplicationDocumentKind;
+  readonly archivedAt:Date|null;
   readonly name:string;
   readonly createdAt:Date;
 }
@@ -28,6 +29,8 @@ export interface VacancyApplicationDocument {
 }
 export type DocumentVersionView = Omit<ApplicationDocumentVersion,"storageKey"> & {
   readonly integrity:"AVAILABLE"|"MISSING"|"CORRUPT";
+  readonly referenceCount:number;
+  readonly currentReferenceCount:number;
 };
 export interface ApplicationDocumentsView {
   readonly library:readonly (ApplicationDocument & {readonly versions:readonly DocumentVersionView[]})[];
@@ -43,7 +46,12 @@ export type DocumentImportMetadata = Omit<ImportApplicationDocument,"bytes"> & {
   readonly documentId?:string;readonly name?:string;readonly kind?:ApplicationDocumentKind;
   readonly sizeBytes:number;readonly contentHash:string;readonly createdAt:Date;
 };
+export type DocumentLifecycleCommand = {readonly documentId:string;readonly requestId:string} & (
+  {readonly operation:"RENAME";readonly name:string} | {readonly operation:"ARCHIVE"|"RESTORE"}
+);
 export interface ApplicationDocumentRepository {
+  changeLifecycle(input:DocumentLifecycleCommand,at:Date):void;
+  referenceCounts():ReadonlyMap<string,{referenceCount:number;currentReferenceCount:number}>;
   importVersion(input:DocumentImportMetadata,store:(documentId:string,versionId:string)=>string):ApplicationDocumentVersion;
   list():readonly ApplicationDocument[];
   versions():readonly ApplicationDocumentVersion[];
@@ -56,6 +64,10 @@ export interface ManagedDocumentStorage {
   read(key:string):Uint8Array;
 }
 export interface ApplicationDocumentLibrary {
+  list():ApplicationDocumentsView["library"];
+  rename(input:{documentId:string;requestId:string;name:string}):void;
+  archive(input:{documentId:string;requestId:string}):void;
+  restore(input:{documentId:string;requestId:string}):void;
   importVersion(input:ImportApplicationDocument):ApplicationDocumentVersion;
   associate(input:{canonicalVacancyId:string;versionId:string;requestId:string}):void;
   forVacancy(id:string):ApplicationDocumentsView;
