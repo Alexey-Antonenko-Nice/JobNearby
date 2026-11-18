@@ -1,3 +1,4 @@
+import { ContactError } from "../../domain/user/Contact.js";
 import { ApplicationDocumentError, MAX_DOCUMENT_BYTES, applicationDocumentKinds, type ImportApplicationDocument } from "../../domain/user/ApplicationDocument.js";
 import { VacancyCrmError, validatePriority, validateProcessState } from "../../domain/user/VacancyCrm.js";
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
@@ -13,6 +14,8 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly getContacts?: VacancyReviewWorkflow["getContacts"];
+  readonly contactCommand?: VacancyReviewWorkflow["contactCommand"];
   readonly getApplicationDocuments?: VacancyReviewWorkflow["getApplicationDocuments"];
   readonly importLibraryDocument?: VacancyReviewWorkflow["importLibraryDocument"];
   readonly renameApplicationDocument?: VacancyReviewWorkflow["renameApplicationDocument"];
@@ -59,6 +62,12 @@ export function createBrowserCaptureServer(
     let operation: "capture" | "review" | "interaction" | "route" = "route";
     try {
       const path = requestPath(request);
+      if(path==="/contacts" && request.method==="GET" && dependencies.getContacts){operation="review";sendJson(response,200,{contacts:dependencies.getContacts()});return;}
+      if(path==="/contacts/commands" && request.method==="POST" && dependencies.contactCommand){
+        operation="review";
+        if(!/^application\/json(?:\s*;|$)/iu.test(request.headers["content-type"]??"")) throw new InvalidRequestError("Contact commands require JSON.");
+        sendJson(response,200,dependencies.contactCommand(await readJsonBody(request,"Contact")));return;
+      }
       if (request.method === "GET" && path === "/vacancies" && dependencies.getVacancyInbox !== undefined) {
         operation = "review";
         const limit = parseInboxLimit(request);
@@ -285,7 +294,7 @@ export function createBrowserCaptureServer(
       sendJson(response, 404, { success: false, error: "Not found." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Browser capture failed.";
-      const status = error instanceof ApplicationDocumentError || error instanceof VacancyCleanupError || error instanceof VacancyCrmError ? error.status : errorStatus(message, operation, error);
+      const status = error instanceof ContactError || error instanceof ApplicationDocumentError || error instanceof VacancyCleanupError || error instanceof VacancyCrmError ? error.status : errorStatus(message, operation, error);
       sendJson(response, status, { success: false, error: message });
     }
   });

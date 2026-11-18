@@ -32,6 +32,7 @@ import {
 } from "./recordUserVacancyInteraction.js";
 
 export interface VacancyReviewWorkflowDependencies {
+  readonly contactLibrary?: import("./ContactLibrary.js").ContactLibrary;
   readonly documentLibrary?: ApplicationDocumentLibrary;
   readonly crmRepository?: VacancyCrmRepository;
   readonly employerIdentityDecisionStore?: EmployerIdentityDecisionStore;
@@ -55,6 +56,7 @@ export function createVacancyReviewWorkflow(
   dependencies: VacancyReviewWorkflowDependencies,
 ) {
   const reviewDependencies = {
+    ...(dependencies.contactLibrary ? {contactLibrary:dependencies.contactLibrary}:{}),
     ...(dependencies.documentLibrary ? {documentLibrary:dependencies.documentLibrary} : {}),
     ...(dependencies.now ? {now:dependencies.now} : {}),
     ...(dependencies.crmRepository ? {crmRepository:dependencies.crmRepository} : {}),
@@ -81,6 +83,12 @@ export function createVacancyReviewWorkflow(
   }
   type ActionTarget = {canonicalVacancyId:string;actionId:string;requestId:string};
   return {
+    getContacts: () => dependencies.contactLibrary?.list() ?? [],
+    contactCommand: (input:unknown) => {
+      if(!dependencies.contactLibrary) throw new Error("Contacts unavailable.");
+      const resultId=dependencies.contactLibrary.execute(input);
+      return {resultId,contacts:dependencies.contactLibrary.list()};
+    },
     getApplicationDocuments: () => documentLibrary().list(),
     importLibraryDocument: (input:ImportApplicationDocument) => {documentLibrary().importVersion(input);return documentLibrary().list();},
     renameApplicationDocument: (input:{documentId:string;requestId:string;name:string}) => {documentLibrary().rename(input);return documentLibrary().list();},

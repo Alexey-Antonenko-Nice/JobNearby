@@ -91,6 +91,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly contacts?: import("../../src/domain/user/Contact.js").ContactsView;
   readonly documents?: Serialized<import("../../src/domain/user/ApplicationDocument.js").ApplicationDocumentsView>;
   readonly nextActions?: Serialized<import("../../src/domain/user/VacancyNextAction.js").NextActionsView>;
   readonly crm?: Serialized<import("../../src/domain/user/VacancyCrm.js").VacancyCrmState>;
@@ -301,3 +302,14 @@ export const importLibraryDocument=(input:Record<string,unknown>)=>libraryReques
 export const renameLibraryDocument=(id:string,name:string,requestId:string)=>libraryRequest("/documents/"+encodeURIComponent(id)+"/rename",{name,requestId});
 export const archiveLibraryDocument=(id:string,requestId:string)=>libraryRequest("/documents/"+encodeURIComponent(id)+"/archive",{requestId});
 export const restoreLibraryDocument=(id:string,requestId:string)=>libraryRequest("/documents/"+encodeURIComponent(id)+"/restore",{requestId});
+
+export async function getContacts():Promise<import("../../src/domain/user/Contact.js").Contact[]> {
+  const response=await fetch(API_ORIGIN+"/contacts");
+  if(!response.ok)throw await apiError(response);
+  return (await response.json()).contacts;
+}
+export async function contactCommand(input:import("../../src/domain/user/Contact.js").ContactCommand):Promise<{resultId:string;contacts:import("../../src/domain/user/Contact.js").Contact[]}> {
+  const response=await fetch(API_ORIGIN+"/contacts/commands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)});
+  if(!response.ok)throw await apiError(response);
+  return response.json();
+}

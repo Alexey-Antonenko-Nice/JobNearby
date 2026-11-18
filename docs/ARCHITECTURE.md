@@ -2584,3 +2584,11 @@ Lifecycle metadata uses no new physical path. Restoring the database and managed
 file subtree under another configured root preserves identity, lifecycle and verified
 downloads. Complete backup still means SQLite **plus** managed files; backup/restore
 implementation and filesystem reconciliation are not part of this milestone.
+
+## M20.1 — Private contact boundary
+
+ContactLibrary validates explicit commands; ContactRepository persists independent private CRM people, methods and vacancy relationships. SqliteContactRepository uses transactional command receipts for retry safety. HTTP accepts bounded JSON commands, never arbitrary field PATCH or permanent delete. Contacts and Review use this application path; neither captured evidence nor employer inference reads contacts. Organization linkage awaits stable reusable organization identity rather than conflating recognition clusters with CRM organizations.
+
+All data remains in local SQLite. No external service, logging of method values, enrichment or synchronization is introduced. Existing interactions and next actions are not rewritten or linked automatically.
+
+Guarded whole-vacancy cleanup counts/removes vacancy_contacts only, including ended links. Link/end mutations invalidate cleanup approval snapshots. Shared contact metadata edits do not change deletion scope because contacts/methods are retained. Single-capture deletion, recapture and vacancy archive/restore preserve contacts and links. Contact archive is independent of vacancy archive. Permanent contact/method deletion is unavailable. Command receipts retain only fingerprints/result IDs, not historical personal field contents.

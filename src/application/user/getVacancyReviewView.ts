@@ -30,6 +30,7 @@ import { employerConfirmationCandidate, isEmployerConfirmationRedundant } from "
 export async function getVacancyReviewView(
   canonicalVacancyId: CanonicalVacancyId,
   dependencies: {
+    readonly contactLibrary?: import("./ContactLibrary.js").ContactLibrary;
     readonly documentLibrary?: import("../../domain/user/ApplicationDocument.js").ApplicationDocumentLibrary;
     readonly now?: () => Date;
     readonly crmRepository?: import("../../domain/user/VacancyCrm.js").VacancyCrmRepository;
@@ -119,6 +120,7 @@ export async function getVacancyReviewView(
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    ...(dependencies.contactLibrary ? {contacts:dependencies.contactLibrary.forVacancy(canonicalVacancyId)}:{}),
     ...(dependencies.documentLibrary ? {documents:dependencies.documentLibrary.forVacancy(canonicalVacancyId)} : {}),
     ...(dependencies.crmRepository ? {crm: await dependencies.crmRepository.get(canonicalVacancyId), nextActions: deriveNextActions(await dependencies.crmRepository.getNextActions(canonicalVacancyId),dependencies.now?.() ?? new Date())} : {}),
     ...(dependencies.employerIdentityDecisionStore && dependencies.organizationRoleDecisionRepository ? { employerIdentityReview: await getEmployerIdentityReview(canonicalVacancyId, {...dependencies, organizationRoleDecisionRepository:dependencies.organizationRoleDecisionRepository}) } : {}),

@@ -1,3 +1,5 @@
+import { ContactLibrary } from "../../application/user/ContactLibrary.js";
+import { SqliteContactRepository } from "../persistence/SqliteContactRepository.js";
 import { ManagedApplicationDocumentLibrary } from "../../application/user/ApplicationDocumentLibrary.js";
 import { SqliteApplicationDocumentRepository } from "../persistence/SqliteApplicationDocumentRepository.js";
 import { LocalManagedDocumentStorage } from "../storage/LocalManagedDocumentStorage.js";
@@ -30,6 +32,7 @@ const runtime = createCaptureProcessingRuntime(database, {
   },
 });
 const reviewWorkflow = createVacancyReviewWorkflow({
+  contactLibrary: new ContactLibrary(new SqliteContactRepository(database)),
   documentLibrary: new ManagedApplicationDocumentLibrary(new SqliteApplicationDocumentRepository(database),new LocalManagedDocumentStorage(documentDataDirectory())),
   crmRepository: new SqliteVacancyCrmRepository(database),
   employerIdentityDecisionStore: new SqliteEmployerIdentityDecisionStore(database),
@@ -47,6 +50,8 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
 const server = createBrowserCaptureServer({
+  getContacts: reviewWorkflow.getContacts,
+  contactCommand: reviewWorkflow.contactCommand,
   getApplicationDocuments: reviewWorkflow.getApplicationDocuments,
   importLibraryDocument: reviewWorkflow.importLibraryDocument,
   renameApplicationDocument: reviewWorkflow.renameApplicationDocument,
