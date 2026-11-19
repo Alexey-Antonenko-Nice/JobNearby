@@ -2518,6 +2518,14 @@ reference count but does not delete library metadata, lifecycle history or files
 
 `VacancyContact` links a canonical vacancy to a contact with its own role: RECRUITER, HIRING_MANAGER, HR, INTERVIEWER, REFERRAL, EMPLOYEE_CONTACT, AGENCY_CONSULTANT or OTHER. Ending sets endedAt and preserves earlier links. Contacts may be edited, archived and restored, but not permanently deleted.
 
-Contact != Organization; contact role != VacancyOrganizationRoleDecision; contact method != Interaction. Older RecruitmentContact/ContactPoint sections are conceptual. Organization links are deferred: current optional organization IDs lack a reusable organization table/FK; employer clusters and agency-role memory are not interchangeable with organization identities. Interaction/contact and action/contact links are deferred; historical metadata remains unchanged.
+Contact != Organization; contact role != VacancyOrganizationRoleDecision; contact method != Interaction. Older RecruitmentContact/ContactPoint sections are conceptual. Organization links are deferred: current optional organization IDs lack a reusable organization table/FK; employer clusters and agency-role memory are not interchangeable with organization identities. Interaction/contact and action/contact links were deferred in M20.1 and are implemented in M20.2 below; historical metadata remains unchanged.
 
 Migration 017 adds contacts, contact_methods, vacancy_contacts and contact_requests (retry fingerprints/result IDs). Each command uses an IMMEDIATE transaction. Identical retries do not replay earlier edits; conflicting request reuse fails. Captured person evidence never populates this library automatically.
+
+## M20.2 — Contact references on private activity
+
+Interactions and next actions optionally reference Contact. Migration 018 adds immutable `interaction_contact_references` and `action_contact_references` with contact FKs (RESTRICT), plus interaction request receipts. Existing event/action tables, timestamps and metadata are unchanged; old records remain contactless. No backfill or name matching occurs.
+
+New references require an active contact and an active VacancyContact link for the same vacancy. Existing references survive contact archive, relationship ending and vacancy archive/restore. Contact is fixed at event/action creation; lifecycle changes cannot reassign it. Reads resolve the current contact name and archive status, not a historical name snapshot. Renaming therefore changes the displayed name while retaining the same person ID.
+
+CONTACTED, APPLIED, INTERVIEW, OFFER, REJECTED, WITHDRAWN and CLOSED may reference people; REVIEWED and INTERESTED remain personal review decisions. No new interaction taxonomy is introduced. Existing metadata is retained unchanged. Reminder ownership stays with the action. Contact identity != interaction != vacancy relationship != next action.

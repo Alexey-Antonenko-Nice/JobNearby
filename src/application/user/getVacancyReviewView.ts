@@ -120,6 +120,7 @@ export async function getVacancyReviewView(
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   return {
+    interactions: history.events,
     ...(dependencies.contactLibrary ? {contacts:dependencies.contactLibrary.forVacancy(canonicalVacancyId)}:{}),
     ...(dependencies.documentLibrary ? {documents:dependencies.documentLibrary.forVacancy(canonicalVacancyId)} : {}),
     ...(dependencies.crmRepository ? {crm: await dependencies.crmRepository.get(canonicalVacancyId), nextActions: deriveNextActions(await dependencies.crmRepository.getNextActions(canonicalVacancyId),dependencies.now?.() ?? new Date())} : {}),

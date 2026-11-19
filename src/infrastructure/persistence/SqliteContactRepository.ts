@@ -1,3 +1,5 @@
+import { readNextActions } from "./sqliteVacancyNextActions.js";
+import type { ContactActivity } from "../../domain/user/Contact.js";
 import type Database from "better-sqlite3";
 import { createHash, randomUUID } from "node:crypto";
 import { ContactError, type Contact, type ContactCommand, type ContactRepository, type ContactMethod, type VacancyContact } from "../../domain/user/Contact.js";
@@ -7,7 +9,13 @@ export class SqliteContactRepository implements ContactRepository {
     const contacts=this.db.prepare("SELECT id,display_name displayName,job_title jobTitle,notes,created_at createdAt,archived_at archivedAt FROM contacts ORDER BY rowid").all() as Omit<Contact,"methods"|"relationships">[];
     const methods=this.db.prepare("SELECT id,contact_id contactId,type,value,label,created_at createdAt FROM contact_methods ORDER BY rowid").all() as (ContactMethod & {contactId:string})[];
     const links=this.db.prepare("SELECT id,canonical_vacancy_id canonicalVacancyId,contact_id contactId,role,created_at createdAt,ended_at endedAt FROM vacancy_contacts ORDER BY rowid").all() as VacancyContact[];
-    return contacts.map(c=>({...c,methods:methods.filter(m=>m.contactId===c.id),relationships:links.filter(r=>r.contactId===c.id)}));
+    const events=this.db.prepare("SELECT r.contact_id contactId,e.id,e.canonical_vacancy_id canonicalVacancyId,e.event_type description,e.occurred_at at FROM interaction_contact_references r JOIN user_vacancy_interaction_events e ON e.id=r.event_id ORDER BY e.occurred_at DESC,e.id").all() as (Omit<ContactActivity,"kind"|"status"> & {contactId:string})[];
+    const vacancyIds=this.db.prepare("SELECT DISTINCT canonical_vacancy_id id FROM action_contact_references").all() as {id:string}[];
+    const actions=vacancyIds.flatMap(v=>readNextActions(this.db,v.id)).filter(a=>a.contactId);
+    return contacts.map(c=>({...c,activities:[
+      ...events.filter(e=>e.contactId===c.id).map(e=>({kind:"INTERACTION" as const,id:e.id,canonicalVacancyId:e.canonicalVacancyId,description:e.description,at:e.at,status:"Recorded"})),
+      ...actions.filter(a=>a.contactId===c.id).map(a=>({kind:"ACTION" as const,id:a.id,canonicalVacancyId:a.canonicalVacancyId,description:a.description,at:a.createdAt.toISOString(),status:a.completedAt?"COMPLETED":a.cancelledAt?"CANCELLED":"ACTIVE"}))
+    ].sort((a,b)=>b.at.localeCompare(a.at)||a.id.localeCompare(b.id)),methods:methods.filter(m=>m.contactId===c.id),relationships:links.filter(r=>r.contactId===c.id)}));
   }
   execute(c:ContactCommand,at:string):string {
     const fingerprint=createHash("sha256").update(JSON.stringify(Object.entries(c).sort(([a],[b])=>a.localeCompare(b)))).digest("hex");

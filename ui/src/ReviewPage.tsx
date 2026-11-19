@@ -1,3 +1,5 @@
+import { ActivityContactPicker } from "./ActivityContactPicker";
+import { personInteractionTypes, type UserVacancyInteractionType } from "../../src/domain/user/UserVacancyInteractionEvent";
 import { VacancyContactsSection } from "./VacancyContactsSection";
 import { VacancyDocumentsSection } from "./VacancyDocumentsSection";
 import { VacancyNextActionsSection } from "./VacancyNextActionsSection";
@@ -8,7 +10,7 @@ import { OrganizationRoleSection } from "./OrganizationRoleSection";
 import { EmployerAssignmentStatus, employerRoleAction } from "./EmployerAssignmentStatus";
 import { RecruitingAgencySection } from "./RecruitingAgencySection";
 import { PublicationCampaignContextSection } from "./PublicationCampaignContextSection";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { decideEmployerAlias, decideNamedClientEmployer, decideEmployerMemory, confirmEmployer, getReview, recordInteraction, type OrganizationRelationship, type ReviewView } from "./api";
 import { formatCompensation, formatEngagement, formatLanguageRequirement, formatLocation, formatWorkMode } from "./formatVacancyFacts";
@@ -28,6 +30,8 @@ export function ReviewPage(): React.JSX.Element {
   const [notFound, setNotFound] = useState(false);
   const [selectedAliasCluster, setSelectedAliasCluster] = useState("");
   const [pending, setPending] = useState(false);
+  const [interactionContact,setInteractionContact]=useState("");
+  const interactionRequests=useRef(new Map<string,string>());
 
   useEffect(() => {
     if (canonicalVacancyId === null) { setError("A canonical vacancy ID is required."); return; }
@@ -40,7 +44,9 @@ export function ReviewPage(): React.JSX.Element {
   async function submit(type: string): Promise<void> {
     if (canonicalVacancyId === null) return;
     setPending(true); setError(null);
-    try { setReview(await recordInteraction(canonicalVacancyId, type)); }
+    const key=JSON.stringify([type,interactionContact]),requestId=interactionRequests.current.get(key)??crypto.randomUUID();
+    interactionRequests.current.set(key,requestId);
+    try { setReview(await recordInteraction(canonicalVacancyId, type, requestId, interactionContact||undefined));interactionRequests.current.delete(key);setInteractionContact(""); }
     catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Unable to record interaction.";
       setError(message || "Unable to record interaction.");
@@ -140,7 +146,8 @@ export function ReviewPage(): React.JSX.Element {
     {review.organizationRoleReview !== undefined ? <OrganizationRoleSection review={review} onConfirmed={setReview} disabled={pending} /> : <RecruitingAgencySection review={review} onConfirmed={setReview} disabled={pending} />}
     <section><h2>Organization context</h2>{organizationGroups.map(([label, key]) => <Organizations key={key} label={label} values={review.organizations[key] ?? []} required={key === "employerRelationships"} />)}</section>
     <section><h2>Review signals</h2><ul className="signals">{signals(review).map((signal) => <li key={signal}>{signal}</li>)}</ul></section>
-    <section><h2>Actions</h2><div className="actions">{actions.map((action) => <button key={action} type="button" disabled={pending} onClick={() => void submit(action)}>{action}</button>)}</div></section>
+    <section><h2>Actions</h2><ActivityContactPicker review={review} value={interactionContact} onChange={setInteractionContact} disabled={pending} label="Interaction contact (optional)"/><p>A contact can be linked to application, contact, interview and outcome events.</p><div className="actions">{actions.map((action) => <button key={action} type="button" disabled={pending || Boolean(interactionContact && !personInteractionTypes.includes(action as UserVacancyInteractionType))} onClick={() => void submit(action)}>{action}</button>)}</div></section>
+    {review.interactions && <section aria-label="Interaction history"><h2>Interaction history</h2><ol>{review.interactions.map(event=><li key={event.id}>{event.type} - {date(event.occurredAt)}{event.contact && <span> - {event.contact.displayName}{event.contact.archived?" (Archived contact)":""}</span>}{event.metadata && <span> - {Object.entries(event.metadata).map(([key,value])=>key+": "+value).join(", ")}</span>}</li>)}</ol></section>}
   </main>;
 }
 

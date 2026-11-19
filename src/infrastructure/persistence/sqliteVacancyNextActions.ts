@@ -1,3 +1,4 @@
+import { requireSelectableContact, resolveContact } from "./sqliteContactReferences.js";
 import type Database from "better-sqlite3";
 import { VacancyCrmError } from "../../domain/user/VacancyCrm.js";
 import { validateActionRequest, type ActionRequest, type ActionChange, type VacancyNextAction, type VacancyActionReminder } from "../../domain/user/VacancyNextAction.js";
@@ -31,7 +32,8 @@ export function readNextActions(db:Database.Database,id:string): readonly Vacanc
       }
       if(row.kind==="DISMISS_REMINDER") reminders=reminders.map(r=>r.id===row.reminder_id ? {...r,dismissedAt:createdAt} : r);
     }
-    return {id:action.id,canonicalVacancyId:id,description:action.description,createdAt:new Date(action.created_at),
+    const reference=db.prepare("SELECT contact_id FROM action_contact_references WHERE action_id=?").get(action.id) as {contact_id:string}|undefined;
+    return {...(reference?{contactId:reference.contact_id,contact:resolveContact(db,reference.contact_id)}:{}),id:action.id,canonicalVacancyId:id,description:action.description,createdAt:new Date(action.created_at),
       dueAt,completedAt,cancelledAt,reminders,changes};
   });
 }
@@ -46,6 +48,7 @@ export function changeNextAction(db:Database.Database,input:ActionRequest,at:Dat
     if(priorAction || priorChange) {
       const same=priorAction ? input.kind==="CREATE" && priorAction.canonical_vacancy_id===input.canonicalVacancyId
         && priorAction.description===input.description && priorAction.due_at===input.dueAt
+        && ((db.prepare("SELECT contact_id FROM action_contact_references WHERE action_id=?").get(priorAction.id) as {contact_id:string}|undefined)?.contact_id??null)===(input.contactId??null)
         : priorChange!.canonical_vacancy_id===input.canonicalVacancyId && priorChange!.action_id===input.actionId
         && priorChange!.kind===input.kind
         && priorChange!.due_at===("dueAt" in input ? input.dueAt : null)
@@ -55,8 +58,10 @@ export function changeNextAction(db:Database.Database,input:ActionRequest,at:Dat
       return;
     }
     if(input.kind==="CREATE") {
+      if(input.contactId!==undefined)requireSelectableContact(db,input.canonicalVacancyId,input.contactId);
       db.prepare("INSERT INTO vacancy_next_actions VALUES (?,?,?,?,?)")
         .run(input.actionId,input.canonicalVacancyId,input.description,input.dueAt,at.toISOString());
+      if(input.contactId!==undefined)db.prepare("INSERT INTO action_contact_references VALUES(?,?,?)").run(input.actionId,input.canonicalVacancyId,input.contactId);
       return;
     }
     const action=readNextActions(db,input.canonicalVacancyId).find(action=>action.id===input.actionId);

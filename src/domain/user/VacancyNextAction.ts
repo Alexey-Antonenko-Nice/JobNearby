@@ -1,7 +1,8 @@
+import { validateContactId, type ResolvedContact } from "./Contact.js";
 import { VacancyCrmError } from "./VacancyCrm.js";
 
 export type ActionCommand =
-  | { kind: "CREATE"; description: string; dueAt: string | null }
+  | { kind: "CREATE"; contactId?:string; description: string; dueAt: string | null }
   | { kind: "COMPLETE" | "CANCEL" }
   | { kind: "RESCHEDULE"; dueAt: string | null }
   | { kind: "SET_REMINDER"; remindAt: string }
@@ -26,6 +27,8 @@ export interface VacancyActionReminder {
   readonly supersededAt: Date | null;
 }
 export interface VacancyNextAction {
+  readonly contactId?:string;
+  readonly contact?:ResolvedContact;
   readonly id: string;
   readonly canonicalVacancyId: string;
   readonly description: string;
@@ -64,9 +67,11 @@ export function validateUtcInstant(value: unknown): asserts value is string {
     throw new VacancyCrmError("Use a valid UTC timestamp including milliseconds and Z.",400);
 }
 export function validateActionRequest(input: ActionRequest): void {
+  if(input.kind!=="CREATE" && "contactId" in input)throw new VacancyCrmError("Action contact is fixed at creation.",400);
   for(const value of [input.canonicalVacancyId,input.actionId,input.requestId])
     if(typeof value !== "string" || !value.trim() || value.length > 200) throw new VacancyCrmError("Action request identity is invalid.",400);
   if(input.kind === "CREATE") {
+    if(input.contactId!==undefined)validateContactId(input.contactId);
     if(typeof input.description !== "string" || !input.description.trim() || input.description.length > 2000)
       throw new VacancyCrmError("An action needs 1 to 2000 characters.",400);
     if(input.actionId !== input.requestId) throw new VacancyCrmError("Creation identity must match its request ID.",400);

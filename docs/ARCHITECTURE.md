@@ -2589,6 +2589,14 @@ implementation and filesystem reconciliation are not part of this milestone.
 
 ContactLibrary validates explicit commands; ContactRepository persists independent private CRM people, methods and vacancy relationships. SqliteContactRepository uses transactional command receipts for retry safety. HTTP accepts bounded JSON commands, never arbitrary field PATCH or permanent delete. Contacts and Review use this application path; neither captured evidence nor employer inference reads contacts. Organization linkage awaits stable reusable organization identity rather than conflating recognition clusters with CRM organizations.
 
-All data remains in local SQLite. No external service, logging of method values, enrichment or synchronization is introduced. Existing interactions and next actions are not rewritten or linked automatically.
+All data remains in local SQLite. No external service, logging of method values, enrichment or synchronization is introduced. Existing interactions and next actions are not rewritten or linked automatically; M20.2 adds explicit references for new activity.
 
 Guarded whole-vacancy cleanup counts/removes vacancy_contacts only, including ended links. Link/end mutations invalidate cleanup approval snapshots. Shared contact metadata edits do not change deletion scope because contacts/methods are retained. Single-capture deletion, recapture and vacancy archive/restore preserve contacts and links. Contact archive is independent of vacancy archive. Permanent contact/method deletion is unavailable. Command receipts retain only fingerprints/result IDs, not historical personal field contents.
+
+## M20.2 — Immutable activity references
+
+Contact references are stored separately from existing immutable event/action rows. References and interaction request receipts are inserted atomically with activity in an IMMEDIATE transaction. Eligibility is checked within that transaction after retry lookup: an identical retry succeeds even if a contact was subsequently archived or unlinked; a different contact with the same request ID conflicts. Legacy interaction callers without a request ID retain their prior append behavior; Review now supplies retry IDs. Existing duplicate-event-ID protection is unchanged.
+
+The SQLite read path resolves current contact identity centrally; Review and contact-detail summaries do not fetch names individually or copy contact-method values into activities. Contact detail reuses action history interpretation. No employer recognition, process-state or source-identity semantics change.
+
+Cleanup snapshots include activity references/receipts. New events/actions invalidate stale approvals; contact renames alone do not. Guarded whole-vacancy deletion removes its activity references/receipts while retaining shared contacts. Single-capture deletion and recapture preserve the references. Organization linkage remains deferred.

@@ -22,6 +22,7 @@ export function ContactsPage(){
     <section aria-label="Contact detail"><h2>{contact?.displayName??"New contact"}</h2><ContactForm key={contact?.id??"new"} {...(contact?{contact}:{})} save={save} disabled={pending}/>
     {contact&&<><button disabled={pending} onClick={()=>void save({operation:contact.archivedAt?"RESTORE":"ARCHIVE",contactId:contact.id})}>{contact.archivedAt?"Restore contact":"Archive contact"}</button>
       <h3>Contact methods</h3>{contact.methods.map(m=><ContactMethodForm key={m.id} contactId={contact.id} method={m} save={save} disabled={pending}/>)}<ContactMethodForm key={contact.id} contactId={contact.id} save={save} disabled={pending}/>
+      <h3>Linked activity</h3><ul>{contact.activities?.map(a=><li key={a.kind+a.id}><a href={"/review/"+encodeURIComponent(a.canonicalVacancyId)}>{a.description}</a> - {a.kind} - {a.status} - {new Date(a.at).toLocaleString()}</li>)}</ul>
       <h3>Linked vacancies</h3><ul>{contact.relationships.map(r=><li key={r.id}><a href={"/review/"+encodeURIComponent(r.canonicalVacancyId)}>{r.canonicalVacancyId}</a> — {r.role} — {r.endedAt?"Ended "+r.endedAt:"Active"}</li>)}</ul>
     </>}</section></main>;
 }

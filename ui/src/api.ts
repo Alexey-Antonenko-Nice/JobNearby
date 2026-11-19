@@ -91,6 +91,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly interactions?: Serialized<readonly import("../../src/domain/user/UserVacancyInteractionEvent.js").UserVacancyInteractionEvent[]>;
   readonly contacts?: import("../../src/domain/user/Contact.js").ContactsView;
   readonly documents?: Serialized<import("../../src/domain/user/ApplicationDocument.js").ApplicationDocumentsView>;
   readonly nextActions?: Serialized<import("../../src/domain/user/VacancyNextAction.js").NextActionsView>;
@@ -141,9 +142,9 @@ export async function getReview(canonicalVacancyId: string): Promise<ReviewView>
   return (await response.json() as { review: ReviewView }).review;
 }
 
-export async function recordInteraction(canonicalVacancyId: string, type: string): Promise<ReviewView> {
+export async function recordInteraction(canonicalVacancyId: string, type: string, requestId?:string, contactId?:string): Promise<ReviewView> {
   const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/interactions`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, ...(requestId?{requestId}:{}), ...(contactId?{contactId}:{}) }),
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;
@@ -262,8 +263,8 @@ export async function setVacancyProcessState(id: string, requestId: string, stat
   return (await cleanupRequest<{review:ReviewView}>(id,"crm/process-state",{requestId,state})).review;
 }
 
-export async function createVacancyNextAction(id:string,requestId:string,description:string,dueAt:string|null):Promise<ReviewView> {
-  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions",{requestId,description,dueAt})).review;
+export async function createVacancyNextAction(id:string,requestId:string,description:string,dueAt:string|null,contactId?:string):Promise<ReviewView> {
+  return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions",{requestId,description,dueAt,...(contactId?{contactId}:{})})).review;
 }
 export async function completeVacancyNextAction(id:string,actionId:string,requestId:string):Promise<ReviewView> {
   return (await cleanupRequest<{review:ReviewView}>(id,"crm/actions/"+encodeURIComponent(actionId)+"/complete",{requestId})).review;

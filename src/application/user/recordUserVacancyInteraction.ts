@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { ContactError, validateContactId } from "../../domain/user/Contact.js";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { UserVacancyInteractionMetadataByType, UserVacancyInteractionEvent, UserVacancyInteractionType } from "../../domain/user/UserVacancyInteractionEvent.js";
 import { createUserVacancyInteractionEvent } from "../../domain/user/UserVacancyInteractionEvent.js";
@@ -10,6 +11,8 @@ import { getUserVacancyHistory, type UserVacancyHistory } from "./getUserVacancy
 type RecordInputFor<T extends UserVacancyInteractionType> = {
   readonly canonicalVacancyId: CanonicalVacancyId;
   readonly type: T;
+  readonly requestId?: string;
+  readonly contactId?: string;
   readonly occurredAt?: Date;
 } & (UserVacancyInteractionMetadataByType[T] extends never
   ? { readonly metadata?: never }
@@ -40,15 +43,21 @@ export async function recordUserVacancyInteraction(
     throw new Error(`CanonicalVacancy "${input.canonicalVacancyId}" does not exist.`);
   }
   const recordedAt = new Date((dependencies.now ?? (() => new Date()))());
-  const event = createUserVacancyInteractionEvent({
+  if(input.requestId!==undefined)validateContactId(input.requestId);
+  let event = createUserVacancyInteractionEvent({
     id: (dependencies.generateId ?? randomUUID)(),
     canonicalVacancyId: input.canonicalVacancyId,
     type: input.type,
+    ...(input.contactId===undefined?{}:{contactId:input.contactId}),
     occurredAt: new Date(input.occurredAt ?? recordedAt),
     recordedAt,
     ...(input.metadata === undefined ? {} : { metadata: input.metadata }),
   } as UserVacancyInteractionEvent);
-  await dependencies.interactionRepository.append(event);
+  if(input.requestId!==undefined){
+    if(!dependencies.interactionRepository.appendRequested)throw new ContactError("Interaction retries are unavailable.",409);
+    const fingerprint=createHash("sha256").update(JSON.stringify([input.canonicalVacancyId,input.type,input.contactId??null,input.occurredAt?.toISOString()??null,Object.entries(input.metadata??{}).sort(([a],[b])=>a.localeCompare(b))])).digest("hex");
+    event=await dependencies.interactionRepository.appendRequested(event,input.requestId,fingerprint);
+  }else await dependencies.interactionRepository.append(event);
   return {
     event,
     history: await getUserVacancyHistory(input.canonicalVacancyId, dependencies.interactionRepository),
