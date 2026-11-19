@@ -1,4 +1,4 @@
-import { requireSelectableContact, resolveContact } from "./sqliteContactReferences.js";
+import { requireSelectableContact } from "./sqliteContactReferences.js";
 import type Database from "better-sqlite3";
 import { VacancyCrmError } from "../../domain/user/VacancyCrm.js";
 import { validateActionRequest, type ActionRequest, type ActionChange, type VacancyNextAction, type VacancyActionReminder } from "../../domain/user/VacancyNextAction.js";
@@ -12,15 +12,18 @@ const date = (value:string|null) => value === null ? null : new Date(value);
 function requireVacancy(db:Database.Database,id:string) {
   if(!db.prepare("SELECT 1 FROM canonical_vacancies WHERE id=?").get(id)) throw new VacancyCrmError("Vacancy no longer exists.",404);
 }
-export function readNextActions(db:Database.Database,id:string): readonly VacancyNextAction[] {
-  requireVacancy(db,id);
-  const actions=db.prepare("SELECT * FROM vacancy_next_actions WHERE canonical_vacancy_id=? ORDER BY created_at,rowid").all(id) as ActionRow[];
-  const rows=db.prepare("SELECT * FROM vacancy_action_changes WHERE canonical_vacancy_id=? ORDER BY rowid").all(id) as ChangeRow[];
+export function readNextActions(db:Database.Database,id?:string): readonly VacancyNextAction[] {
+  if(id!==undefined)requireVacancy(db,id);
+  const actions=db.prepare("SELECT * FROM vacancy_next_actions"+(id===undefined?"":" WHERE canonical_vacancy_id=?")+" ORDER BY created_at,rowid").all(...(id===undefined?[]:[id])) as ActionRow[];
+  const rows=db.prepare("SELECT * FROM vacancy_action_changes"+(id===undefined?"":" WHERE canonical_vacancy_id=?")+" ORDER BY rowid").all(...(id===undefined?[]:[id])) as ChangeRow[];
+  const references=new Map((db.prepare("SELECT r.action_id,c.id,c.display_name,c.archived_at FROM action_contact_references r JOIN contacts c ON c.id=r.contact_id"+(id===undefined?"":" WHERE r.canonical_vacancy_id=?")).all(...(id===undefined?[]:[id])) as {action_id:string;id:string;display_name:string;archived_at:string|null}[]).map(r=>[r.action_id,r]));
+  const changesByAction=new Map<string,ChangeRow[]>();
+  for(const row of rows){const group=changesByAction.get(row.action_id)??[];group.push(row);changesByAction.set(row.action_id,group);}
   return actions.map(action => {
     let dueAt=date(action.due_at), completedAt:Date|null=null, cancelledAt:Date|null=null;
     let reminders:VacancyActionReminder[]=[];
     const changes:ActionChange[]=[{id:action.id,kind:"CREATE",createdAt:new Date(action.created_at),dueAt:date(action.due_at),remindAt:null,reminderId:null}];
-    for(const row of rows.filter(row=>row.action_id===action.id)) {
+    for(const row of changesByAction.get(action.id)??[]) {
       const createdAt=new Date(row.created_at);
       changes.push({id:row.id,kind:row.kind,createdAt,dueAt:date(row.due_at),remindAt:date(row.remind_at),reminderId:row.reminder_id});
       if(row.kind==="RESCHEDULE") dueAt=date(row.due_at);
@@ -32,8 +35,8 @@ export function readNextActions(db:Database.Database,id:string): readonly Vacanc
       }
       if(row.kind==="DISMISS_REMINDER") reminders=reminders.map(r=>r.id===row.reminder_id ? {...r,dismissedAt:createdAt} : r);
     }
-    const reference=db.prepare("SELECT contact_id FROM action_contact_references WHERE action_id=?").get(action.id) as {contact_id:string}|undefined;
-    return {...(reference?{contactId:reference.contact_id,contact:resolveContact(db,reference.contact_id)}:{}),id:action.id,canonicalVacancyId:id,description:action.description,createdAt:new Date(action.created_at),
+    const reference=references.get(action.id);
+    return {...(reference?{contactId:reference.id,contact:{id:reference.id,displayName:reference.display_name,archived:reference.archived_at!==null}}:{}),id:action.id,canonicalVacancyId:action.canonical_vacancy_id,description:action.description,createdAt:new Date(action.created_at),
       dueAt,completedAt,cancelledAt,reminders,changes};
   });
 }

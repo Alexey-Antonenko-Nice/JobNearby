@@ -2535,3 +2535,14 @@ CONTACTED, APPLIED, INTERVIEW, OFFER, REJECTED, WITHDRAWN and CLOSED may referen
 VacancyActivityItem is a read model, not a persisted entity. It retains a namespaced stable ID, vacancy ID, kind, source model/record ID, source timestamp, presentation text and optional resolved Contact. Interactions use occurredAt; notes, process transitions, actions/changes and document associations use createdAt. Contact link/end events use createdAt/endedAt. Equal timestamps sort by code-point activity ID; default ordering is newest-first.
 
 No event is inferred from current priority, default DISCOVERED state, recognition state, document/contact archive flags or derived reminder-due status. Vacancy archive stores only its current archived_at/revision, so archive/restore history cannot be reconstructed and is omitted. No archive-history table is added.
+
+
+### M21.1 — Daily work queue
+
+Today is a read-only, non-persisted operational view across unarchived opportunities. It is not a scheduler or a second task/reminder system; edits remain in Review. Browser timezone defines calendar days; stored instants remain UTC. Refresh recomputes against server time, without background jobs or notifications.
+
+Action precedence is overdue, reminder due, due today, then upcoming through the next seven local calendar days (including that day's end). Existing action/reminder derivation remains authoritative. Distinct actions stay distinct. Missing-action precedence is HIGH priority, stale awaiting response, then general active opportunity. REJECTED, WITHDRAWN and NO_LONGER_RELEVANT suppress missing-action prompts; OFFER remains active. Explicit active actions still surface even in terminal process states.
+
+Awaiting response is stale after seven local calendar-day boundaries without private activity, and only without an active action. This configurable review heuristic is not a universal follow-up deadline and creates no task. Activity uses interaction occurredAt, transition/note/action/change/document-selection createdAt and contact relationship creation/end timestamps, matching the activity timeline sources. Canonical createdAt is the fallback. Public recapture, priority edits, recognition churn, contact renames and document-library lifecycle edits do not reset this clock.
+
+Category ordering: overdue, reminder due, today, HIGH without action, stale awaiting response, upcoming, general without action. Within categories: earliest relevant instant, HIGH/NORMAL/LOW/NONE priority, stable ID. Equal-time ordering is deterministic. The SQLite adapter batch-loads a consistent snapshot without loading Review per vacancy, source payloads or document bytes. No queue records, migrations or cleanup-token inputs are introduced. Archive excludes; restore reuses preserved CRM state. Company labels use existing canonical employer/displayed-company projections and imply no new confirmation.

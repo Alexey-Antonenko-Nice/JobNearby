@@ -1,0 +1,14 @@
+import {cleanup,render,screen,fireEvent} from "@testing-library/react";
+import {afterEach,it,expect,vi} from "vitest";
+import {TodayPage} from "./TodayPage";
+import {getDailyWorkQueue,type DailyWorkQueue} from "./api";
+vi.mock("./api",()=>({getDailyWorkQueue:vi.fn()}));
+afterEach(()=>{cleanup();vi.resetAllMocks();});
+const counts={OVERDUE_ACTION:1,REMINDER_DUE:0,DUE_TODAY:0,HIGH_PRIORITY_NO_ACTION:0,AWAITING_RESPONSE_STALE:0,UPCOMING_ACTION:0,ACTIVE_WITHOUT_NEXT_ACTION:0};
+const data:DailyWorkQueue={generatedAt:"2026-11-19T12:00:00Z",timeZone:"Europe/Paris",upcomingDays:7,staleDays:7,counts,items:[{id:"overdue-action:a",category:"OVERDUE_ACTION",vacancyId:"v",title:"Engineer",company:"Company",priority:"HIGH",processState:"APPLIED",reviewUrl:"/review/v",action:{id:"a",description:"Call recruiter",contact:{id:"c",displayName:"Person",archived:false}},dueAt:"2026-11-18T12:00:00Z",remindAt:"2026-11-17T12:00:00Z",lastActivityAt:"2026-11-01T12:00:00Z"}]};
+it("shows summary and overdue item",async()=>{vi.mocked(getDailyWorkQueue).mockResolvedValue(data);render(<TodayPage/>);expect(await screen.findByRole("region",{name:"Work queue summary"})).toHaveTextContent("overdue action: 1");expect(screen.getByText("Call recruiter")).toBeVisible();expect(screen.getByText("Company: Company")).toBeVisible();});
+it("shows due/reminder instants and linked contact",async()=>{vi.mocked(getDailyWorkQueue).mockResolvedValue(data);render(<TodayPage/>);expect(await screen.findByText("Contact: Person")).toBeVisible();expect(document.querySelectorAll("time")).toHaveLength(2);expect(document.querySelector("time")).toHaveAttribute("datetime",data.items[0]!.dueAt);});
+it("links directly to Review with no mutation controls",async()=>{vi.mocked(getDailyWorkQueue).mockResolvedValue(data);render(<TodayPage/>);expect(await screen.findByRole("link",{name:"Open Review"})).toHaveAttribute("href","/review/v");expect(screen.getAllByRole("button").map(b=>b.textContent)).toEqual(["Refresh"]);});
+it("neutral empty state",async()=>{vi.mocked(getDailyWorkQueue).mockResolvedValue({...data,items:[]});render(<TodayPage/>);expect(await screen.findByText("Nothing currently requires attention.")).toBeVisible();});
+it("refreshes using local IANA timezone",async()=>{vi.mocked(getDailyWorkQueue).mockResolvedValue(data);render(<TodayPage/>);await screen.findByText("Call recruiter");fireEvent.click(screen.getByRole("button",{name:"Refresh"}));expect(getDailyWorkQueue).toHaveBeenCalledTimes(2);expect(getDailyWorkQueue).toHaveBeenCalledWith(Intl.DateTimeFormat().resolvedOptions().timeZone);});
+it("reports read errors",async()=>{vi.mocked(getDailyWorkQueue).mockRejectedValue(Error());render(<TodayPage/>);expect(await screen.findByRole("alert")).toHaveTextContent("Could not load");});

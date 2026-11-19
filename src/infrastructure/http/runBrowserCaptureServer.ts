@@ -1,3 +1,4 @@
+import { SqliteDailyWorkQueue } from "../persistence/SqliteDailyWorkQueue.js";
 import { ContactLibrary } from "../../application/user/ContactLibrary.js";
 import { SqliteContactRepository } from "../persistence/SqliteContactRepository.js";
 import { ManagedApplicationDocumentLibrary } from "../../application/user/ApplicationDocumentLibrary.js";
@@ -49,7 +50,9 @@ const reviewWorkflow = createVacancyReviewWorkflow({
   employerMemoryPublicDataSource: new SqliteEmployerMemoryPublicDataSource(database),
   assignmentRepository: new SqliteObservationClusterAssignmentRepository(database),
 });
+const dailyQueue = new SqliteDailyWorkQueue(database);
 const server = createBrowserCaptureServer({
+  getDailyWorkQueue: timeZone=>dailyQueue.get({now:new Date(),timeZone}),
   getContacts: reviewWorkflow.getContacts,
   contactCommand: reviewWorkflow.contactCommand,
   getApplicationDocuments: reviewWorkflow.getApplicationDocuments,

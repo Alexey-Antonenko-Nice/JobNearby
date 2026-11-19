@@ -315,3 +315,10 @@ export async function contactCommand(input:import("../../src/domain/user/Contact
   if(!response.ok)throw await apiError(response);
   return response.json();
 }
+
+export type DailyWorkQueue = Serialized<import("../../src/application/user/deriveWorkQueue.js").DailyWorkQueue>;
+export async function getDailyWorkQueue(timeZone:string):Promise<DailyWorkQueue>{
+  const response=await fetch(API_ORIGIN+"/work-queue?timeZone="+encodeURIComponent(timeZone));
+  if(!response.ok)throw new Error("Could not load the work queue.");
+  return response.json();
+}

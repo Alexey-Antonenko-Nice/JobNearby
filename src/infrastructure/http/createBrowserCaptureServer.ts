@@ -14,6 +14,7 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly getDailyWorkQueue?: (timeZone:string)=>import("../../application/user/deriveWorkQueue.js").DailyWorkQueue;
   readonly getContacts?: VacancyReviewWorkflow["getContacts"];
   readonly contactCommand?: VacancyReviewWorkflow["contactCommand"];
   readonly getApplicationDocuments?: VacancyReviewWorkflow["getApplicationDocuments"];
@@ -62,6 +63,11 @@ export function createBrowserCaptureServer(
     let operation: "capture" | "review" | "interaction" | "route" = "route";
     try {
       const path = requestPath(request);
+      if(path==="/work-queue" && request.method==="GET" && dependencies.getDailyWorkQueue){
+        const zone=new URL(request.url??"/","http://localhost").searchParams.get("timeZone")??"UTC";
+        try { new Intl.DateTimeFormat("en-US",{timeZone:zone}); } catch { throw new InvalidRequestError("Invalid timezone."); }
+        sendJson(response,200,dependencies.getDailyWorkQueue(zone));return;
+      }
       if(path==="/contacts" && request.method==="GET" && dependencies.getContacts){operation="review";sendJson(response,200,{contacts:dependencies.getContacts()});return;}
       if(path==="/contacts/commands" && request.method==="POST" && dependencies.contactCommand){
         operation="review";
