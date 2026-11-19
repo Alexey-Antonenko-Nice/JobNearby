@@ -3,6 +3,7 @@ import type { UserVacancyInteractionEvent } from "./UserVacancyInteractionEvent.
 
 export interface UserVacancyInteractionRepository {
   findByCanonicalVacancyIds?(ids: readonly CanonicalVacancyId[]): Promise<readonly UserVacancyInteractionEvent[]>;
+  appendRequested?(event:UserVacancyInteractionEvent,requestId:string,fingerprint:string):Promise<UserVacancyInteractionEvent>;
   append(event: UserVacancyInteractionEvent): Promise<void>;
   findByCanonicalVacancyId(
     canonicalVacancyId: CanonicalVacancyId,

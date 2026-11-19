@@ -5,7 +5,8 @@ export type ContactRole = typeof contactRoles[number];
 export type ContactMethodType = typeof contactMethodTypes[number];
 export interface ContactMethod { id:string; type:ContactMethodType; value:string; label:string; createdAt:string }
 export interface VacancyContact { id:string; canonicalVacancyId:string; contactId:string; role:ContactRole; createdAt:string; endedAt:string|null }
-export interface Contact { id:string; displayName:string; jobTitle:string; notes:string; createdAt:string; archivedAt:string|null; methods:ContactMethod[]; relationships:VacancyContact[] }
+export interface ContactActivity { kind:"INTERACTION"|"ACTION"; id:string; canonicalVacancyId:string; description:string; at:string; status:string }
+export interface Contact { activities?:ContactActivity[]; id:string; displayName:string; jobTitle:string; notes:string; createdAt:string; archivedAt:string|null; methods:ContactMethod[]; relationships:VacancyContact[] }
 export type ContactCommand = {requestId:string} & (
   {operation:"CREATE";displayName:string;jobTitle:string;notes:string} |
   {operation:"UPDATE";contactId:string;displayName:string;jobTitle:string;notes:string} |
@@ -21,3 +22,8 @@ export interface ContactRepository {
 }
 export interface ContactsView { library:Contact[]; relationships:VacancyContact[] }
 export class ContactError extends Error { constructor(message:string,readonly status:400|404|409=400){super(message);} }
+
+export interface ResolvedContact { readonly id:string; readonly displayName:string; readonly archived:boolean }
+export function validateContactId(value:unknown):asserts value is string {
+  if(typeof value!=="string" || !value.trim() || value.length>200 || /[\u0000-\u001f]/u.test(value)) throw new ContactError("Invalid contact ID.");
+}

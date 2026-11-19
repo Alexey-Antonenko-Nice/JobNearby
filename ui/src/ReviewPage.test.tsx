@@ -719,3 +719,31 @@ describe("Review next actions",()=>{
     expect(fetchMock.mock.calls[1]?.[1]?.body).toEqual(fetchMock.mock.calls[2]?.[1]?.body);
   });
 });
+
+
+describe("Contact-linked Review activity",()=>{
+ const instant="2026-11-19T12:00:00.000Z";
+ function view(){
+   const person=(id:string,archived=false,ended=false)=>({id,displayName:"Person "+id,jobTitle:"",notes:"",createdAt:instant,archivedAt:archived?instant:null,methods:[],relationships:[{id:"link-"+id,contactId:id,canonicalVacancyId:"canonical-1",role:"RECRUITER",createdAt:instant,endedAt:ended?instant:null}]});
+   const library=[person("active"),person("archived",true),person("ended",false,true)];
+   return {...review({status:"UNRESOLVED"}),contacts:{library,relationships:library.flatMap(c=>c.relationships)},interactions:[],nextActions:{evaluatedAt:instant,actions:[],overdueCount:0}};
+ }
+ it("selects a linked contact when recording an interaction and displays resolved history",async()=>{
+   const initial=view();respond({review:initial});respond({review:{...initial,interactions:[{id:"event",type:"CONTACTED",occurredAt:instant,recordedAt:instant,contactId:"active",contact:{id:"active",displayName:"Current name",archived:false},metadata:{contactMethod:"PHONE",direction:"INBOUND"}}]}});
+   render(<ReviewPage/>);await userEvent.selectOptions(await screen.findByLabelText("Interaction contact (optional)"),"active");
+   expect(screen.getByRole("button",{name:"REVIEWED"})).toBeDisabled();await userEvent.click(screen.getByRole("button",{name:"CONTACTED"}));
+   expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toMatchObject({type:"CONTACTED",contactId:"active",requestId:expect.any(String)});
+   const history=await screen.findByRole("region",{name:"Interaction history"});expect(history).toHaveTextContent("Current name");expect(history).toHaveTextContent("PHONE");
+ });
+ it("excludes archived and ended links from both new selection lists",async()=>{respond({review:view()});render(<ReviewPage/>);for(const label of ["Interaction contact (optional)","Action contact (optional)"]){const select=await screen.findByLabelText(label);expect(within(select).getAllByRole("option")).toHaveLength(2);expect(within(select).queryByRole("option",{name:/archived|ended/})).toBeNull();}});
+ it("creates an action with explicit contact without changing reminder semantics",async()=>{
+   const initial=view();respond({review:initial});respond({review:{...initial,nextActions:{evaluatedAt:instant,overdueCount:1,actions:[{id:"action",description:"Call person",createdAt:instant,dueAt:instant,completedAt:null,cancelledAt:null,status:"ACTIVE",dueState:"OVERDUE",reminderDue:true,contactId:"active",contact:{id:"active",displayName:"Person active",archived:false},reminders:[{id:"r",remindAt:instant,dismissedAt:null,supersededAt:null}],changes:[]}]}}});
+   render(<ReviewPage/>);await userEvent.type(await screen.findByLabelText("Next action description"),"Call person");await userEvent.selectOptions(screen.getByLabelText("Action contact (optional)"),"active");await userEvent.click(screen.getByRole("button",{name:"Create action"}));
+   expect(JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)).toMatchObject({description:"Call person",contactId:"active",requestId:expect.any(String)});const card=await screen.findByRole("article",{name:"Call person"});expect(card).toHaveTextContent("Contact: Person active");expect(card).toHaveTextContent("Overdue");expect(card).toHaveTextContent("Reminder due");
+ });
+ it("displays archived/ended contacts on existing interactions and completed actions",async()=>{
+   const initial=view(),contact={id:"archived",displayName:"Historical person",archived:true};respond({review:{...initial,interactions:[{id:"e",type:"INTERVIEW",occurredAt:instant,contact}],nextActions:{evaluatedAt:instant,overdueCount:0,actions:[{id:"a",description:"Follow-up completed",contact,status:"COMPLETED",dueState:"INACTIVE",createdAt:instant,dueAt:null,completedAt:instant,cancelledAt:null,reminders:[],changes:[]}]}}});render(<ReviewPage/>);
+   expect(await screen.findByRole("region",{name:"Interaction history"})).toHaveTextContent("Historical person (Archived contact)");expect(screen.getByRole("article",{name:"Follow-up completed"})).toHaveTextContent("Historical person (Archived contact)");
+ });
+ it("retries the same interaction request after a failed response",async()=>{respond({review:view()});fetchMock.mockRejectedValueOnce(new Error("Offline"));respond({review:view()});render(<ReviewPage/>);await userEvent.selectOptions(await screen.findByLabelText("Interaction contact (optional)"),"active");await userEvent.click(screen.getByRole("button",{name:"CONTACTED"}));expect(await screen.findByRole("alert")).toHaveTextContent("Offline");await userEvent.click(screen.getByRole("button",{name:"CONTACTED"}));expect(fetchMock.mock.calls[1]![1]!.body).toBe(fetchMock.mock.calls[2]![1]!.body);});
+});

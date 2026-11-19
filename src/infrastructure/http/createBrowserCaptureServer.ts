@@ -1,4 +1,4 @@
-import { ContactError } from "../../domain/user/Contact.js";
+import { ContactError, validateContactId } from "../../domain/user/Contact.js";
 import { ApplicationDocumentError, MAX_DOCUMENT_BYTES, applicationDocumentKinds, type ImportApplicationDocument } from "../../domain/user/ApplicationDocument.js";
 import { VacancyCrmError, validatePriority, validateProcessState } from "../../domain/user/VacancyCrm.js";
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
@@ -139,7 +139,7 @@ export function createBrowserCaptureServer(
         if(!isRecord(body) || typeof body.requestId!=="string") throw new InvalidRequestError("An action request ID is required.");
         const operationName=actionMatch[3] ?? "create";
         const fields:Record<string,string[]> = {
-          create:["requestId","description","dueAt"], complete:["requestId"], cancel:["requestId"],
+          create:["requestId","description","dueAt","contactId"], complete:["requestId"], cancel:["requestId"],
           reschedule:["requestId","dueAt"], reminder:["requestId","remindAt"], "dismiss-reminder":["requestId","reminderId"]
         };
         if(Object.keys(body).some(key=>!fields[operationName]!.includes(key))) throw new InvalidRequestError("Unexpected action field.");
@@ -149,7 +149,8 @@ export function createBrowserCaptureServer(
         let review;
         if(operationName==="create" && dependencies.createVacancyNextAction) {
           if(typeof body.description!=="string") throw new InvalidRequestError("An action description is required.");
-          review=await dependencies.createVacancyNextAction({...target,description:body.description,dueAt});
+          if(body.contactId!==undefined)validateContactId(body.contactId);
+          review=await dependencies.createVacancyNextAction({...target,description:body.description,dueAt,...(body.contactId===undefined?{}:{contactId:body.contactId})});
         } else if(operationName==="complete" && dependencies.completeVacancyNextAction) review=await dependencies.completeVacancyNextAction(target);
         else if(operationName==="cancel" && dependencies.cancelVacancyNextAction) review=await dependencies.cancelVacancyNextAction(target);
         else if(operationName==="reschedule" && dependencies.rescheduleVacancyNextAction) {
@@ -339,7 +340,7 @@ function parseInteractionPayload(
   value: unknown,
 ): RecordUserVacancyInteractionInput {
   if (!isRecord(value)) throw new InvalidRequestError("Vacancy interaction payload must be an object.");
-  const allowed = new Set(["type", "occurredAt", "metadata"]);
+  const allowed = new Set(["type", "occurredAt", "metadata", "requestId", "contactId"]);
   const unsupported = Object.keys(value).find((key) => !allowed.has(key));
   if (unsupported !== undefined) {
     throw new InvalidRequestError(`Vacancy interaction payload contains unsupported field "${unsupported}".`);
@@ -352,6 +353,8 @@ function parseInteractionPayload(
   if (typeof value.type !== "string" || !types.includes(value.type as typeof types[number])) {
     throw new InvalidRequestError("Vacancy interaction type is invalid.");
   }
+  if(value.contactId!==undefined)validateContactId(value.contactId);
+  if(value.requestId!==undefined)validateContactId(value.requestId);
   let occurredAt: Date | undefined;
   if (value.occurredAt !== undefined) {
     if (typeof value.occurredAt !== "string") throw new InvalidRequestError("Vacancy interaction occurredAt must be an ISO date string.");
@@ -364,6 +367,8 @@ function parseInteractionPayload(
   return {
     canonicalVacancyId,
     type: value.type,
+    ...(value.contactId===undefined?{}:{contactId:value.contactId}),
+    ...(value.requestId===undefined?{}:{requestId:value.requestId}),
     ...(occurredAt === undefined ? {} : { occurredAt }),
     ...(value.metadata === undefined ? {} : { metadata: value.metadata }),
   } as RecordUserVacancyInteractionInput;

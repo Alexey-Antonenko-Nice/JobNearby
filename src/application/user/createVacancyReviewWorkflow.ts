@@ -109,7 +109,7 @@ export function createVacancyReviewWorkflow(
       if(!dependencies.documentLibrary) throw new ApplicationDocumentError("Document library unavailable.",500);
       return dependencies.documentLibrary.download(versionId);
     },
-    createVacancyNextAction: (input:{canonicalVacancyId:string;requestId:string;description:string;dueAt:string|null}) =>
+    createVacancyNextAction: (input:{canonicalVacancyId:string;requestId:string;description:string;dueAt:string|null;contactId?:string}) =>
       actionCommand({...input,actionId:input.requestId,kind:"CREATE"}),
     completeVacancyNextAction: (input:ActionTarget) => actionCommand({...input,kind:"COMPLETE"}),
     cancelVacancyNextAction: (input:ActionTarget) => actionCommand({...input,kind:"CANCEL"}),

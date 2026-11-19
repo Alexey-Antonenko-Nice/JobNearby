@@ -1,3 +1,4 @@
+import { ActivityContactPicker } from "./ActivityContactPicker";
 import { useRef, useState } from "react";
 import {
   createVacancyNextAction, completeVacancyNextAction, cancelVacancyNextAction,
@@ -20,6 +21,7 @@ export function localActionTime(value:string): string|null {
 export function VacancyNextActionsSection({review,onSaved,disabled}:{
   readonly review:ReviewView;readonly onSaved:(view:ReviewView)=>void;readonly disabled:boolean;
 }) {
+  const [contactId,setContactId]=useState("");
   const [description,setDescription]=useState("");
   const [due,setDue]=useState("");
   const [pending,setPending]=useState(false);
@@ -38,8 +40,8 @@ export function VacancyNextActionsSection({review,onSaved,disabled}:{
   async function create() {
     try {
       const dueAt=localActionTime(due);
-      if(await run(JSON.stringify(["create",description,dueAt]),requestId=>createVacancyNextAction(id,requestId,description,dueAt))) {
-        setDescription("");setDue("");
+      if(await run(JSON.stringify(["create",description,dueAt,contactId]),requestId=>createVacancyNextAction(id,requestId,description,dueAt,contactId||undefined))) {
+        setDescription("");setDue("");setContactId("");
       }
     } catch(failure) {setError((failure as Error).message);}
   }
@@ -57,6 +59,7 @@ export function VacancyNextActionsSection({review,onSaved,disabled}:{
     <form onSubmit={event=>{event.preventDefault();void create();}}>
       <label>Next action description <textarea maxLength={2000} value={description} disabled={busy} onChange={event=>setDescription(event.target.value)}/></label>
       <label>Due date and time (optional) <input type="datetime-local" value={due} disabled={busy} onChange={event=>setDue(event.target.value)}/></label>
+      <ActivityContactPicker review={review} value={contactId} onChange={setContactId} disabled={busy} label="Action contact (optional)"/>
       <button disabled={busy||!description.trim()}>Create action</button>
     </form>
     <h3>Active actions</h3>
@@ -87,6 +90,7 @@ function ActionCard({action,disabled,run,vacancyId}:{action:Action;disabled:bool
   }
   return <article aria-label={action.description}>
     <h4 style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{action.description}</h4>
+    {action.contact && <p>Contact: {action.contact.displayName}{action.contact.archived?" (Archived contact)":""}</p>}
     <p>{action.status==="ACTIVE"?"Active":action.status==="COMPLETED"?"Completed":"Cancelled"}
       {action.dueState==="OVERDUE" && " — Overdue"}{action.dueState==="DUE" && " — Due now"}
       {action.dueState==="UPCOMING" && " — Upcoming"}</p>

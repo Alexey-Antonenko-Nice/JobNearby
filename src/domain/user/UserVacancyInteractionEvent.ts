@@ -1,3 +1,4 @@
+import { ContactError, validateContactId, type ResolvedContact } from "./Contact.js";
 import type { SourceObservationId } from "../capture/SourceObservation.js";
 import type { CanonicalVacancyId } from "../vacancies/CanonicalVacancy.js";
 
@@ -36,6 +37,8 @@ type EventFor<T extends UserVacancyInteractionType> = {
   readonly id: UserVacancyInteractionEventId;
   readonly canonicalVacancyId: CanonicalVacancyId;
   readonly type: T;
+  readonly contactId?: string;
+  readonly contact?: ResolvedContact;
   readonly occurredAt: Date;
   readonly recordedAt: Date;
 } & (UserVacancyInteractionMetadataByType[T] extends never
@@ -55,6 +58,7 @@ export function createUserVacancyInteractionEvent(
   requireText(event.canonicalVacancyId, "Canonical vacancy ID");
   requireDate(event.occurredAt, "Interaction occurredAt");
   requireDate(event.recordedAt, "Interaction recordedAt");
+  if(event.contactId!==undefined){validateContactId(event.contactId);if(!personInteractionTypes.includes(event.type))throw new ContactError("This interaction type does not involve a contact.");}
   validateMetadata(event);
   return structuredClone(event);
 }
@@ -113,3 +117,5 @@ function requireText(value: string, label: string): void {
 function requireDate(value: Date, label: string): void {
   if (Number.isNaN(value.getTime())) throw new Error(`${label} must be a valid date.`);
 }
+
+export const personInteractionTypes:readonly UserVacancyInteractionType[]=["APPLIED","CONTACTED","INTERVIEW","OFFER","REJECTED","WITHDRAWN","CLOSED"];
