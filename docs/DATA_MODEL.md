@@ -2529,3 +2529,9 @@ Interactions and next actions optionally reference Contact. Migration 018 adds i
 New references require an active contact and an active VacancyContact link for the same vacancy. Existing references survive contact archive, relationship ending and vacancy archive/restore. Contact is fixed at event/action creation; lifecycle changes cannot reassign it. Reads resolve the current contact name and archive status, not a historical name snapshot. Renaming therefore changes the displayed name while retaining the same person ID.
 
 CONTACTED, APPLIED, INTERVIEW, OFFER, REJECTED, WITHDRAWN and CLOSED may reference people; REVIEWED and INTERESTED remain personal review decisions. No new interaction taxonomy is introduced. Existing metadata is retained unchanged. Reminder ownership stays with the action. Contact identity != interaction != vacancy relationship != next action.
+
+## M20.3 — Unified vacancy activity projection
+
+VacancyActivityItem is a read model, not a persisted entity. It retains a namespaced stable ID, vacancy ID, kind, source model/record ID, source timestamp, presentation text and optional resolved Contact. Interactions use occurredAt; notes, process transitions, actions/changes and document associations use createdAt. Contact link/end events use createdAt/endedAt. Equal timestamps sort by code-point activity ID; default ordering is newest-first.
+
+No event is inferred from current priority, default DISCOVERED state, recognition state, document/contact archive flags or derived reminder-due status. Vacancy archive stores only its current archived_at/revision, so archive/restore history cannot be reconstructed and is omitted. No archive-history table is added.

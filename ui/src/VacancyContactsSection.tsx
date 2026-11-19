@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { contactRoles, type ContactRole } from "../../src/domain/user/Contact";
-import { contactCommand, type ReviewView } from "./api";
+import { contactCommand, getReview, type ReviewView } from "./api";
 import { ContactForm, type ContactInput } from "./ContactForms";
 export function VacancyContactsSection({review,onSaved,disabled}:{review:ReviewView;onSaved:(r:ReviewView)=>void;disabled:boolean}){
   const [selected,setSelected]=useState(""),[role,setRole]=useState<ContactRole>("RECRUITER"),[creating,setCreating]=useState(false),[pending,setPending]=useState(false),[error,setError]=useState<string|null>(null);
@@ -9,7 +9,7 @@ export function VacancyContactsSection({review,onSaved,disabled}:{review:ReviewV
   async function save(input:ContactInput){setPending(true);setError(null);try{
     let result=await send(input);
     if(input.operation==="CREATE")result=await send({operation:"LINK",contactId:result.resultId,canonicalVacancyId:review.vacancy.canonicalVacancyId,role});
-    onSaved({...review,contacts:{library:result.contacts,relationships:result.contacts.flatMap(c=>c.relationships.filter(r=>r.canonicalVacancyId===review.vacancy.canonicalVacancyId))}});
+    onSaved(await getReview(review.vacancy.canonicalVacancyId));
     retry.current.clear();setCreating(false);setSelected("");
   }catch(e){setError(e instanceof Error?e.message:"Unable to save contact.");}finally{setPending(false);}}
   return <section aria-label="Vacancy contacts"><h2>Contacts</h2><a href="/contacts">Manage contacts</a>{error&&<p role="alert">{error}</p>}

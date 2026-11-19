@@ -1,3 +1,4 @@
+import { buildVacancyActivityTimeline } from "./buildVacancyActivityTimeline.js";
 import { deriveNextActions } from "../../domain/user/VacancyNextAction.js";
 import { getEmployerIdentityReview } from "./employerIdentityReview.js";
 import { buildOrganizationRoleReview, effectiveRoleDecisions, projectOrganizationRoleDecisions } from "./vacancyOrganizationRoles.js";
@@ -119,11 +120,17 @@ export async function getVacancyReviewView(
   const employerCandidates: EmployerReviewCandidate[] = [...memoryCandidates.map((candidate) => ({ ...candidate, type: "CONFIRMED_MEMORY" as const })), ...(namedClient ? [namedClient] : []), ...(aliasSelection ? [aliasSelection] : [])];
   const rejectedMemory = await hasRejectedEmployerMemory(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
   const redundantConfirmation = await isEmployerConfirmationRedundant(vacancy, employerConfirmationCandidate(vacancy.organizationRelationships), dependencies);
+  const contacts=dependencies.contactLibrary?.forVacancy(canonicalVacancyId);
+  const documents=dependencies.documentLibrary?.forVacancy(canonicalVacancyId);
+  const crm=await dependencies.crmRepository?.get(canonicalVacancyId);
+  const actions=await dependencies.crmRepository?.getNextActions(canonicalVacancyId);
+  const activityTimeline=buildVacancyActivityTimeline(canonicalVacancyId,{interactions:history.events,...(contacts?{contacts}:{}),...(documents?{documents}:{}),...(crm?{crm}:{}),...(actions?{actions}:{})});
   return {
+    activityTimeline,
     interactions: history.events,
-    ...(dependencies.contactLibrary ? {contacts:dependencies.contactLibrary.forVacancy(canonicalVacancyId)}:{}),
-    ...(dependencies.documentLibrary ? {documents:dependencies.documentLibrary.forVacancy(canonicalVacancyId)} : {}),
-    ...(dependencies.crmRepository ? {crm: await dependencies.crmRepository.get(canonicalVacancyId), nextActions: deriveNextActions(await dependencies.crmRepository.getNextActions(canonicalVacancyId),dependencies.now?.() ?? new Date())} : {}),
+    ...(contacts ? {contacts}:{}),
+    ...(documents ? {documents} : {}),
+    ...(crm && actions ? {crm, nextActions: deriveNextActions(actions,dependencies.now?.() ?? new Date())} : {}),
     ...(dependencies.employerIdentityDecisionStore && dependencies.organizationRoleDecisionRepository ? { employerIdentityReview: await getEmployerIdentityReview(canonicalVacancyId, {...dependencies, organizationRoleDecisionRepository:dependencies.organizationRoleDecisionRepository}) } : {}),
     ...(dependencies.organizationRoleDecisionRepository ? { organizationRoleReview: await buildOrganizationRoleReview(storedVacancy, observations, { ...dependencies, organizationRoleDecisionRepository: dependencies.organizationRoleDecisionRepository }) } : {}),
     ...(dependencies.agencyMemoryRepository ? { agencyContext: {

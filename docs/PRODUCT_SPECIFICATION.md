@@ -304,3 +304,7 @@ Contacts is a manual local CRM library: create/edit people, maintain multiple co
 ## M20.2 — Who an interaction or action concerns
 
 Review supports an optional linked contact when recording applicable interactions or creating next actions. Only active contacts with active vacancy relationships appear in normal selection. History still displays contacts whose relationship ended or whose contact record was archived. Activity displays the contact's current name. Contact detail lists its recorded interactions and active/completed/cancelled actions with links to their vacancies. There is no automatic contact selection, message sending, email synchronization or external integration.
+
+## M20.3 — Vacancy activity overview
+
+Review provides a read-only, newest-first Activity timeline across interactions, process transitions, notes, action/reminder history, document selections and contact relationships. Existing specialized sections retain their management controls. Documents remain selected, not necessarily sent; contact/document names are current display metadata while exact identities and version numbers remain historical. Contact renames do not create vacancy activity. Archive/restore events are unavailable because only current archive state is stored. No global timeline, synchronization or advanced filtering is introduced.

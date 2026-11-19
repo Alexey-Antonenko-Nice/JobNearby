@@ -79,3 +79,20 @@ describe("Contact-linked activity",()=>{
  const post=(path:string,body:unknown)=>fetch(base+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
  try{for(const [path,input] of [["/interactions",{type:"CONTACTED"}],["/crm/actions",{description:"Call",dueAt:null}]] as const){const body={...input,requestId:path,contactId:x.contactId};expect((await post(path,body)).ok).toBe(true);expect((await post(path,body)).ok).toBe(true);expect((await post(path,{...body,contactId:"missing"})).status).toBe(409);expect((await post(path,{...body,requestId:"invalid"+path,contactId:123})).status).toBe(400);}}finally{await new Promise<void>(r=>server.close(()=>r()));}});
 });
+
+it("unified timeline is read-only, stable through recapture/archive and uses persisted history",async()=>{
+ const x=await setup();await x.event(x.contactId);await x.action(x.contactId);
+ await x.workflow.addVacancyNote({canonicalVacancyId:x.vacancyId,requestId:"timeline-note",text:"Keep this note"});
+ await x.workflow.setVacancyProcessState({canonicalVacancyId:x.vacancyId,requestId:"timeline-process",state:"APPLIED"});
+ x.end();x.archive();
+ const cleanup=new SqliteVacancyCleanup(x.db),token=cleanup.state(x.vacancyId).token;
+ const read=()=>x.workflow.getVacancyReview(x.vacancyId);const first=(await read()).activityTimeline!;
+ expect(first.map(i=>i.kind)).toEqual(expect.arrayContaining(["INTERACTION","NOTE","PROCESS_TRANSITION","ACTION_CREATED","CONTACT_LINKED","CONTACT_RELATIONSHIP_ENDED"]));
+ expect((await read()).activityTimeline).toEqual(first);expect(cleanup.state(x.vacancyId).token).toBe(token);
+ await x.capture(html.replaceAll("Manufacturing Engineer (m/f/d)","Updated Engineer (m/f/d)"));
+ cleanup.setArchived(x.vacancyId,true,cleanup.state(x.vacancyId).token);expect((await read()).activityTimeline).toEqual(first);
+ cleanup.setArchived(x.vacancyId,false,cleanup.state(x.vacancyId).token);expect((await read()).activityTimeline).toEqual(first);
+ cleanup.setArchived(x.vacancyId,true,cleanup.state(x.vacancyId).token);
+ await cleanup.delete({canonicalVacancyId:x.vacancyId,token:cleanup.preview(x.vacancyId).token,confirmation:"DELETE",acknowledgeApplicationHistory:false});
+ await expect(read()).rejects.toThrow();expect(x.library.list()).toHaveLength(1);
+});
