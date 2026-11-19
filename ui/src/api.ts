@@ -91,6 +91,7 @@ export interface EmployerActionContext {
 }
 
 export interface ReviewView {
+  readonly activityTimeline?: Serialized<readonly import("../../src/domain/user/VacancyActivityItem.js").VacancyActivityItem[]>;
   readonly interactions?: Serialized<readonly import("../../src/domain/user/UserVacancyInteractionEvent.js").UserVacancyInteractionEvent[]>;
   readonly contacts?: import("../../src/domain/user/Contact.js").ContactsView;
   readonly documents?: Serialized<import("../../src/domain/user/ApplicationDocument.js").ApplicationDocumentsView>;

@@ -406,3 +406,12 @@ describe("Document library lifecycle",()=>{
     } finally {await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
   });
 });
+
+it("Review timeline preserves superseded document selections and loads document metadata once",async()=>{
+ const x=await setup(),v1=x.library.importVersion(importInput());x.library.associate({canonicalVacancyId:x.first.id,versionId:v1.id,requestId:"first-selection"});
+ const v2=x.library.importVersion({documentId:v1.documentId,requestId:"second-version",originalFileName:"cv2.pdf",mediaType:null,bytes:Buffer.from("revision")});
+ x.library.associate({canonicalVacancyId:x.first.id,versionId:v2.id,requestId:"second-selection"});
+ const spy=vi.spyOn(x.library,"forVacancy");const view=await x.workflow.getVacancyReview(x.first.id);
+ expect(spy).toHaveBeenCalledTimes(1);const selections=view.activityTimeline!.filter(i=>i.kind==="DOCUMENT_SELECTED");expect(selections).toHaveLength(2);expect(selections.map(i=>i.summary)).toEqual(expect.arrayContaining(["Engineering CV - v1","Engineering CV - v2"]));
+ expect(selections.every(i=>i.title==="CV selected")).toBe(true);
+});

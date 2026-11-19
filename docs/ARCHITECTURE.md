@@ -2600,3 +2600,9 @@ Contact references are stored separately from existing immutable event/action ro
 The SQLite read path resolves current contact identity centrally; Review and contact-detail summaries do not fetch names individually or copy contact-method values into activities. Contact detail reuses action history interpretation. No employer recognition, process-state or source-identity semantics change.
 
 Cleanup snapshots include activity references/receipts. New events/actions invalidate stale approvals; contact renames alone do not. Guarded whole-vacancy deletion removes its activity references/receipts while retaining shared contacts. Single-capture deletion and recapture preserve the references. Organization linkage remains deferred.
+
+## M20.3 — Vacancy activity read path
+
+Review loads each existing private CRM view once and passes those records to the pure buildVacancyActivityTimeline projection. Contact/document display lookup uses in-memory maps, without a query per timeline item. No clock, random identity, mutation, new persistence, generic event table or cleanup token is introduced. Underlying record cleanup removes history naturally.
+
+The projection includes interaction metadata, explicit process transitions, notes, action lifecycle/reminder changes, all document selections and contact link/end records. It uses original action-creation due time rather than the current rescheduled value. Reminder replacement remains one event per persisted SET_REMINDER change. Invalid event timestamps are omitted rather than invented. Recognition churn and human organization-role decisions remain outside this milestone. Contact detail's existing reverse view is unchanged. Contact linking/ending refreshes Review so the server projection is immediately current.

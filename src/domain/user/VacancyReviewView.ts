@@ -21,6 +21,7 @@ export interface VacancyReviewOrganizationRelationship {
 }
 
 export interface VacancyReviewView {
+  readonly activityTimeline?: readonly import("./VacancyActivityItem.js").VacancyActivityItem[];
   readonly interactions?: readonly import("./UserVacancyInteractionEvent.js").UserVacancyInteractionEvent[];
   readonly contacts?: import("./Contact.js").ContactsView;
   readonly documents?: import("./ApplicationDocument.js").ApplicationDocumentsView;

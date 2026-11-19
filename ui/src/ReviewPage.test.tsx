@@ -747,3 +747,8 @@ describe("Contact-linked Review activity",()=>{
  });
  it("retries the same interaction request after a failed response",async()=>{respond({review:view()});fetchMock.mockRejectedValueOnce(new Error("Offline"));respond({review:view()});render(<ReviewPage/>);await userEvent.selectOptions(await screen.findByLabelText("Interaction contact (optional)"),"active");await userEvent.click(screen.getByRole("button",{name:"CONTACTED"}));expect(await screen.findByRole("alert")).toHaveTextContent("Offline");await userEvent.click(screen.getByRole("button",{name:"CONTACTED"}));expect(fetchMock.mock.calls[1]![1]!.body).toBe(fetchMock.mock.calls[2]![1]!.body);});
 });
+
+it("Review renders projected activity alongside existing management sections",async()=>{
+ const initial={...review({status:"UNRESOLVED"}),activityTimeline:[{id:"note:n",vacancyId:"canonical-1",kind:"NOTE",occurredAt:"2026-11-19T12:00:00.000Z",title:"Note",summary:"Timeline context",details:[],source:{model:"VacancyNote",recordId:"n"}}]};
+ respond({review:initial});render(<ReviewPage/>);expect(await screen.findByRole("region",{name:"Vacancy activity timeline"})).toHaveTextContent("Timeline context");expect(screen.getByRole("button",{name:"CONTACTED"})).toBeEnabled();
+});
