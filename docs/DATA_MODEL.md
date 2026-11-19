@@ -2539,10 +2539,17 @@ No event is inferred from current priority, default DISCOVERED state, recognitio
 
 ### M21.1 — Daily work queue
 
-Today is a read-only, non-persisted operational view across unarchived opportunities. It is not a scheduler or a second task/reminder system; edits remain in Review. Browser timezone defines calendar days; stored instants remain UTC. Refresh recomputes against server time, without background jobs or notifications.
+Today is a non-persisted operational view across unarchived opportunities. It is not a scheduler or a second task/reminder system; most edits remain in Review. Browser timezone defines calendar days; stored instants remain UTC. Refresh recomputes against server time, without background jobs or notifications.
 
 Action precedence is overdue, reminder due, due today, then upcoming through the next seven local calendar days (including that day's end). Existing action/reminder derivation remains authoritative. Distinct actions stay distinct. Missing-action precedence is HIGH priority, stale awaiting response, then general active opportunity. REJECTED, WITHDRAWN and NO_LONGER_RELEVANT suppress missing-action prompts; OFFER remains active. Explicit active actions still surface even in terminal process states.
 
 Awaiting response is stale after seven local calendar-day boundaries without private activity, and only without an active action. This configurable review heuristic is not a universal follow-up deadline and creates no task. Activity uses interaction occurredAt, transition/note/action/change/document-selection createdAt and contact relationship creation/end timestamps, matching the activity timeline sources. Canonical createdAt is the fallback. Public recapture, priority edits, recognition churn, contact renames and document-library lifecycle edits do not reset this clock.
 
 Category ordering: overdue, reminder due, today, HIGH without action, stale awaiting response, upcoming, general without action. Within categories: earliest relevant instant, HIGH/NORMAL/LOW/NONE priority, stable ID. Equal-time ordering is deterministic. The SQLite adapter batch-loads a consistent snapshot without loading Review per vacancy, source payloads or document bytes. No queue records, migrations or cleanup-token inputs are introduced. Archive excludes; restore reuses preserved CRM state. Company labels use existing canonical employer/displayed-company projections and imply no new confirmation.
+
+
+### M21.2 — Existing commands from Today
+
+Today remains a derived queue and now offers Complete action, Cancel action and Dismiss reminder through the same application commands and HTTP endpoints as Review. An action-backed item represents an active action; an optional exact current due reminder ID enables dismissal independently of queue category. Vacancy-level attention items remain navigation-only. No dashboard mutation model, schema or scheduler is added.
+
+Each command attempt is followed by a full queue read, including failures whose response may have been lost. Summary counts, category changes and ordering come only from that read. Per-action pending guards prevent duplicate clicks; uncertain retries retain the request ID, including when the command succeeded but refresh failed. Conflicts remain visible and trigger refresh. Cancellation uses no modal, consistent with Review; history is retained. Dismissal never completes an action. Existing action-change history naturally updates private staleness. Archive races obey existing commands without unarchiving. Contact-detail deep links remain deferred because Contacts has no detail route.

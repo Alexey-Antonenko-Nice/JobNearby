@@ -29,3 +29,52 @@ it("HTTP read validates timezone and serializes queue without mutations",async()
  await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
  try {const base="http://127.0.0.1:"+(server.address() as AddressInfo).port;const before=x.db.serialize();const response=await fetch(base+"/work-queue?timeZone=Europe%2FParis");expect(response.status).toBe(200);expect((await response.json()).items[0].category).toBe("AWAITING_RESPONSE_STALE");expect((await fetch(base+"/work-queue?timeZone=invalid")).status).toBe(400);expect(x.db.serialize()).toEqual(before);}finally{await new Promise<void>((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
 });
+import {createVacancyReviewWorkflow} from "../../src/application/user/createVacancyReviewWorkflow.js";
+import {SqliteCanonicalVacancyRepository} from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
+import {SqliteSourceObservationRepository} from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
+import {SqliteEmployerClusterRepository} from "../../src/infrastructure/persistence/SqliteEmployerClusterRepository.js";
+import {SqliteEmployerMemoryPublicDataSource} from "../../src/infrastructure/persistence/SqliteEmployerMemoryPublicDataSource.js";
+import {SqliteUserVacancyInteractionRepository} from "../../src/infrastructure/persistence/SqliteUserVacancyInteractionRepository.js";
+function commands(x:Awaited<ReturnType<typeof setup>>){return createVacancyReviewWorkflow({crmRepository:x.crm,canonicalVacancyRepository:new SqliteCanonicalVacancyRepository(x.db),sourceObservationRepository:new SqliteSourceObservationRepository(x.db),employerClusterRepository:new SqliteEmployerClusterRepository(x.db),employerMemoryPublicDataSource:new SqliteEmployerMemoryPublicDataSource(x.db),interactionRepository:new SqliteUserVacancyInteractionRepository(x.db),now:()=>now});}
+async function pending(x:Awaited<ReturnType<typeof setup>>,dueAt:string|null=old.toISOString(),id="a"){
+ await x.crm.changeNextAction({canonicalVacancyId:x.id,kind:"CREATE",actionId:id,requestId:id,description:"Follow up",dueAt},old);
+ return {canonicalVacancyId:x.id,actionId:id,requestId:"command-"+id};
+}
+it.each(["complete","cancel"] as const)("%s existing command reclassifies and retries without duplicate history",async operation=>{
+ const x=await setup(),target=await pending(x),workflow=commands(x);
+ const before=x.read();expect(before.counts.OVERDUE_ACTION).toBe(1);
+ const command=operation==="complete"?workflow.completeVacancyNextAction:workflow.cancelVacancyNextAction;
+ await command(target);await command(target);
+ const after=x.read();expect(after.counts.OVERDUE_ACTION).toBe(0);expect(after.items[0]?.category).toBe("ACTIVE_WITHOUT_NEXT_ACTION");expect(after.items[0]?.lastActivityAt).toEqual(now);
+ expect((await x.crm.getNextActions(x.id))[0]?.changes).toHaveLength(2);
+ await expect(command({...target,requestId:"stale"})).rejects.toThrow(/already completed or cancelled/);
+ await expect((operation==="complete"?workflow.cancelVacancyNextAction:workflow.completeVacancyNextAction)(target)).rejects.toThrow(/already used/);
+});
+it.each(["complete","cancel"] as const)("%s last action exposes high priority without changing private/public data",async operation=>{
+ const x=await setup();await x.crm.setPriority(x.id,"HIGH");const target=await pending(x),workflow=commands(x);
+ const tables=(x.db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all() as {name:string}[]).map(r=>r.name).filter(n=>n!=="vacancy_action_changes");
+ const snapshot=()=>Object.fromEntries(tables.map(t=>[t,x.db.prepare('SELECT * FROM "'+t+'"').all()]));const before=snapshot();
+ await (operation==="complete"?workflow.completeVacancyNextAction:workflow.cancelVacancyNextAction)(target);
+ expect(x.read().items[0]?.category).toBe("HIGH_PRIORITY_NO_ACTION");expect(snapshot()).toEqual(before);
+ expect((x.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {name:string}[]).some(r=>/today|dashboard|queue/.test(r.name))).toBe(false);
+});
+it.each([null,old.toISOString(),"2026-11-21T12:00:00.000Z",now.toISOString()])("dismiss reminder preserves underlying action classification for due %s",async due=>{
+ const x=await setup(),target=await pending(x,due),workflow=commands(x);
+ await x.crm.changeNextAction({...target,kind:"SET_REMINDER",requestId:"reminder",remindAt:old.toISOString()},old);
+ expect(x.read().items[0]?.action?.dismissibleReminderId).toBe("reminder");
+ const input={...target,reminderId:"reminder"};await workflow.dismissVacancyActionReminder(input);await workflow.dismissVacancyActionReminder(input);
+ const q=x.read();expect(q.items[0]?.action?.dismissibleReminderId).toBeUndefined();
+ expect(q.items.map(i=>i.category)).toEqual(due===null?[]:[due===old.toISOString()?"OVERDUE_ACTION":due===now.toISOString()?"DUE_TODAY":"UPCOMING_ACTION"]);
+ const action=(await x.crm.getNextActions(x.id))[0]!;expect(action.completedAt).toBeNull();expect(action.dueAt?.toISOString()??null).toBe(due);expect(action.changes.filter(c=>c.kind==="DISMISS_REMINDER")).toHaveLength(1);
+ expect((await x.crm.get(x.id)).processState).toBe("AWAITING_RESPONSE");
+ await expect(workflow.dismissVacancyActionReminder({...input,requestId:"stale"})).rejects.toThrow(/no longer active/);
+ await expect(workflow.dismissVacancyActionReminder({...input,reminderId:"different"})).rejects.toThrow(/already used/);
+});
+it("other actions retain IDs; archive race follows existing commands and hides vacancy",async()=>{
+ const x=await setup(),target=await pending(x);await pending(x,old.toISOString(),"b");
+ x.db.prepare("INSERT INTO canonical_vacancies(id,canonicalization_status,derivation_algorithm,derivation_algorithm_version,derived_at,created_at,updated_at) SELECT 'unrelated',canonicalization_status,derivation_algorithm,derivation_algorithm_version,derived_at,created_at,updated_at FROM canonical_vacancies WHERE id=?").run(x.id);
+ const unrelated=x.read().items.find(i=>i.vacancyId==="unrelated");const before=x.read().items.find(i=>i.action?.id==="b");await commands(x).completeVacancyNextAction(target);
+ const after=x.read().items.find(i=>i.action?.id==="b");expect(x.read().items.find(i=>i.vacancyId==="unrelated")).toEqual(unrelated);expect(after?.id).toBe(before?.id);expect(after?.action).toEqual(before?.action);
+ const cleanup=new SqliteVacancyCleanup(x.db);cleanup.setArchived(x.id,true,cleanup.state(x.id).token);
+ await commands(x).cancelVacancyNextAction({canonicalVacancyId:x.id,actionId:"b",requestId:"cancel-b"});expect(x.read().items.filter(i=>i.vacancyId===x.id)).toEqual([]);expect(cleanup.state(x.id).archived).toBe(true);
+});
