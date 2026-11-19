@@ -11,7 +11,7 @@ export function InboxPage(): React.JSX.Element {
   useEffect(() => { setVacancies(null); setError(false); let current = true; getVacancyInbox(undefined, archived).then(v => { if (current) setVacancies(v); }).catch(() => { if (current) setError(true); }); return () => { current = false; }; }, [archived]);
   if (error) return <main className="page"><p role="alert">Unable to load vacancy inbox.</p></main>;
   if (vacancies === null) return <main className="page"><p>Loading...</p></main>;
-  return <main className="page"><header><a href="/contacts">Contacts</a><h1>Vacancy inbox</h1><a href="/documents">Documents</a><button onClick={() => setArchived(!archived)}>{archived ? "Show active vacancies" : "Show archived vacancies"}</button><p>{archived ? "Archived vacancies" : "Active vacancies"}</p></header>{vacancies.length === 0 && <p>{archived ? "No archived vacancies." : "No captured vacancies yet."}</p>}<div className="inbox-list">{vacancies.map((vacancy) => <InboxItem key={vacancy.canonicalVacancyId} vacancy={vacancy} />)}</div></main>;
+  return <main className="page"><header><a href="/today">Today</a> <a href="/contacts">Contacts</a><h1>Vacancy inbox</h1><a href="/documents">Documents</a><button onClick={() => setArchived(!archived)}>{archived ? "Show active vacancies" : "Show archived vacancies"}</button><p>{archived ? "Archived vacancies" : "Active vacancies"}</p></header>{vacancies.length === 0 && <p>{archived ? "No archived vacancies." : "No captured vacancies yet."}</p>}<div className="inbox-list">{vacancies.map((vacancy) => <InboxItem key={vacancy.canonicalVacancyId} vacancy={vacancy} />)}</div></main>;
 }
 
 function InboxItem({ vacancy }: { readonly vacancy: VacancyInboxItem }): React.JSX.Element {

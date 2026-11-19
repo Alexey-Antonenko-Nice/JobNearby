@@ -86,7 +86,7 @@ export function ReviewPage(): React.JSX.Element {
     finally { setPending(false); }
   }
 
-  if (deleted) return <main className="page"><p role="status">Vacancy permanently deleted.</p><a href="/">Back to inbox</a></main>;
+  if (deleted) return <main className="page"><p role="status">Vacancy permanently deleted.</p><a href="/today">Today</a> <a href="/">Back to inbox</a></main>;
   if (notFound) return <main className="page"><p>Vacancy not found.</p></main>;
   if (error !== null && review === null) return <main className="page"><p role="alert">{error}</p></main>;
   if (review === null) return <main className="page"><p>Loading...</p></main>;
