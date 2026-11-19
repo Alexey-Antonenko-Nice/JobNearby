@@ -9,7 +9,8 @@ export interface WorkQueueOpportunity {
 export interface WorkQueueItem {
   id:string; category:QueueCategory; vacancyId:string; title:string|null; company:string|null;
   priority:VacancyPriority; processState:VacancyProcessState; reviewUrl:string;
-  action?:{id:string;description:string;contact?:VacancyNextAction["contact"]};
+  /** Present only for active actions; exact due reminder ID grants dismissal, regardless of category. */
+  action?:{id:string;description:string;dismissibleReminderId?:string;contact?:VacancyNextAction["contact"]};
   dueAt:Date|null; remindAt:Date|null; lastActivityAt:Date;
 }
 export interface DailyWorkQueue { generatedAt:Date; timeZone:string; upcomingDays:number; staleDays:number; items:readonly WorkQueueItem[]; counts:Record<QueueCategory,number> }
@@ -33,7 +34,7 @@ export function deriveWorkQueue(opportunities:readonly WorkQueueOpportunity[],op
     const lastActivityAt=v.lastActivityAt??v.createdAt;
     const add=(category:QueueCategory,action?:typeof active[number])=>{
       const reminder=action?.reminders.find(r=>!r.dismissedAt&&!r.supersededAt);
-      items.push({id:category.toLowerCase().replaceAll("_","-")+":"+(action?.id??v.id),category,vacancyId:v.id,title:v.title,company:v.company,priority:v.priority,processState:v.processState,reviewUrl:"/review/"+encodeURIComponent(v.id),lastActivityAt,dueAt:action?.dueAt??null,remindAt:reminder?.remindAt??null,...(action?{action:{id:action.id,description:action.description,...(action.contact?{contact:action.contact}:{})}}:{})});
+      items.push({id:category.toLowerCase().replaceAll("_","-")+":"+(action?.id??v.id),category,vacancyId:v.id,title:v.title,company:v.company,priority:v.priority,processState:v.processState,reviewUrl:"/review/"+encodeURIComponent(v.id),lastActivityAt,dueAt:action?.dueAt??null,remindAt:reminder?.remindAt??null,...(action?{action:{id:action.id,description:action.description,...(reminder&&action.reminderDue?{dismissibleReminderId:reminder.id}:{}),...(action.contact?{contact:action.contact}:{})}}:{})});
     };
     for(const a of active){
       if(a.dueState==="OVERDUE")add("OVERDUE_ACTION",a);

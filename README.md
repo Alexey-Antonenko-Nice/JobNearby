@@ -107,4 +107,4 @@ instructions, supported platforms, reproducible build/release procedures and a p
 review of source history, fixtures and release artifacts. See architecture sections
 68, 90 and 91. No release automation or installer is implemented by this documentation.
 
-The **Today** page (`/today`) provides a read-only daily CRM work queue: overdue actions, due reminders, today/upcoming work and opportunities needing a next action. It uses the browser timezone and refreshes on demand. Open Review to act; this is not a background scheduler or notification service.
+The **Today** page (`/today`) provides a derived daily CRM work queue: overdue actions, due reminders, today/upcoming work and opportunities needing a next action. It uses the browser timezone and refreshes on demand. Complete/cancel actions or dismiss due reminders directly in Today using the existing CRM commands; the entire queue refreshes afterward. Open Review for other changes. This is not a background scheduler or notification service.
