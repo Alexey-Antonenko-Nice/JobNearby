@@ -1,6 +1,8 @@
 import { ContactError, validateContactId } from "../../domain/user/Contact.js";
 import type { BackupArchiveInput, BackupService } from "../../application/backup/backupTypes.js";
+import type { UserDataExportService } from "../../application/export/exportTypes.js";
 import { BackupError } from "../backup/LocalBackupService.js";
+import { ExportError } from "../export/LocalUserDataExportService.js";
 import { ApplicationDocumentError, MAX_DOCUMENT_BYTES, applicationDocumentKinds, type ImportApplicationDocument } from "../../domain/user/ApplicationDocument.js";
 import { VacancyCrmError, validatePriority, validateProcessState } from "../../domain/user/VacancyCrm.js";
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
@@ -17,6 +19,7 @@ export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
   readonly backupService?: BackupService;
+  readonly exportService?: UserDataExportService;
   readonly getDailyWorkQueue?: (timeZone:string)=>import("../../application/user/deriveWorkQueue.js").DailyWorkQueue;
   readonly getContacts?: VacancyReviewWorkflow["getContacts"];
   readonly contactCommand?: VacancyReviewWorkflow["contactCommand"];
@@ -66,6 +69,31 @@ export function createBrowserCaptureServer(
     let operation: "capture" | "review" | "interaction" | "route" = "route";
     try {
       const path = requestPath(request);
+      const exportMatch = /^\/export\/(json|csv)$/u.exec(path);
+      if (request.method === "POST" && exportMatch && dependencies.exportService) {
+        operation = "review";
+        const body = await readJsonBody(request, "Data export");
+        if (
+          !isRecord(body) ||
+          (body.destinationPath !== undefined && (typeof body.destinationPath !== "string" || !body.destinationPath.trim())) ||
+          (body.includeArchived !== undefined && typeof body.includeArchived !== "boolean") ||
+          Object.keys(body).some(k => k !== "destinationPath" && k !== "includeArchived")
+        ) {
+          throw new InvalidRequestError("Invalid data export payload.");
+        }
+        const format = exportMatch[1] as "json" | "csv";
+        const result = dependencies.exportService.exportUserData({
+          format,
+          ...(typeof body.destinationPath === "string" ? { destinationPath: body.destinationPath.trim() } : {}),
+          ...(typeof body.includeArchived === "boolean" ? { includeArchived: body.includeArchived } : {}),
+        });
+        const { contentBytes, ...summary } = result;
+        sendJson(response, 200, {
+          export: summary,
+          ...(contentBytes ? { contentBase64: Buffer.from(contentBytes).toString("base64") } : {}),
+        });
+        return;
+      }
       if (request.method === "POST" && path === "/backup/create" && dependencies.backupService) {
         operation = "review";
         const body = await readJsonBody(request, "Backup create");
@@ -335,7 +363,7 @@ export function createBrowserCaptureServer(
       sendJson(response, 404, { success: false, error: "Not found." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Browser capture failed.";
-      const status = error instanceof ContactError || error instanceof ApplicationDocumentError || error instanceof VacancyCleanupError || error instanceof VacancyCrmError || error instanceof BackupError ? error.status : errorStatus(message, operation, error);
+      const status = error instanceof ContactError || error instanceof ApplicationDocumentError || error instanceof VacancyCleanupError || error instanceof VacancyCrmError || error instanceof BackupError || error instanceof ExportError ? error.status : errorStatus(message, operation, error);
       sendJson(response, status, { success: false, error: message });
     }
   });

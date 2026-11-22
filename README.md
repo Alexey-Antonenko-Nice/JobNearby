@@ -31,8 +31,15 @@ distinct from user-data export; restore validates first, creates an automatic
 pre-restore safety backup, replaces local state (never merging), preserves IDs and
 history, and migrates older schemas forward. No cloud backup or scheduler is included.
 
-Planned: richer activity/submission tracking, contacts, a daily work queue, broader
-search, user-data export, and ordinary-user desktop installation.
+M22.2 adds manual user-data **Data Export** (`/backup` or `/export`) in human-readable
+**JSON** (`job-nearby-export` v1) and spreadsheet-friendly **CSV** (UTF-8 with BOM,
+packaged as a `.zip` of relational CSV tables). Export includes archived user data by
+default, excludes internal persistence/cleanup/retry metadata and document binaries in v1,
+and is strictly for inspection/portability—JSON/CSV exports cannot be used as backups
+or for restore.
+
+Planned: richer activity/submission tracking, broader search, manual vacancies, field
+overrides, and ordinary-user desktop installation.
 See [the implementation roadmap](docs/ARCHITECTURE.md#91-crm-implementation-roadmap).
 
 ## Desktop and privacy direction

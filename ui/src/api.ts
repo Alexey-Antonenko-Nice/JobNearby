@@ -357,3 +357,20 @@ export async function restoreBackup(input: { archivePath?: string; archiveBase64
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { restore: RestoreBackupResult }).restore;
 }
+
+export type ExportUserDataResult = Serialized<Omit<import("../../src/application/export/exportTypes.js").ExportUserDataResult, "contentBytes">> & {
+  readonly contentBase64?: string;
+};
+
+export async function exportUserData(
+  format: "json" | "csv",
+  destinationPath?: string,
+): Promise<{ export: ExportUserDataResult; contentBase64?: string }> {
+  const response = await fetch(`${API_ORIGIN}/export/${format}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(destinationPath ? { destinationPath } : {}),
+  });
+  if (!response.ok) throw await apiError(response);
+  return await response.json() as { export: ExportUserDataResult; contentBase64?: string };
+}

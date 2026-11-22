@@ -1,4 +1,5 @@
 import { LocalBackupService } from "../backup/LocalBackupService.js";
+import { LocalUserDataExportService } from "../export/LocalUserDataExportService.js";
 import { resolveApplicationDataPaths } from "../storage/applicationDataPaths.js";
 import { SqliteDailyWorkQueue } from "../persistence/SqliteDailyWorkQueue.js";
 import { ContactLibrary } from "../../application/user/ContactLibrary.js";
@@ -77,8 +78,14 @@ const backupService = new LocalBackupService({
   },
 });
 
+const exportService = new LocalUserDataExportService({
+  getDatabase: () => state.database,
+  documentDataDir: dataPaths.documentDataDir,
+});
+
 const server = createBrowserCaptureServer({
   backupService,
+  exportService,
   getDailyWorkQueue: timeZone => state.dailyQueue.get({ now: new Date(), timeZone }),
   getContacts: () => state.reviewWorkflow.getContacts(),
   contactCommand: input => state.reviewWorkflow.contactCommand(input),

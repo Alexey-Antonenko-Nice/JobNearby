@@ -263,6 +263,18 @@ user-data export):
 - Cloud backup, sync, scheduled/periodic backup, and user-data export are not part
   of M22.1.
 
+M22.2 implements manual **User-Data Export** (distinct from Backup & Restore):
+- Exports readable, interoperable CRM data in **JSON** (`format: "job-nearby-export"`,
+  `formatVersion: 1`) and **CSV** (UTF-8 with BOM, multi-file `.zip` package with
+  relational IDs).
+- Includes archived vacancies, contacts, and documents by default; excludes managed
+  document binary files in v1, internal retry/cleanup/migration metadata, and derived
+  operational views (Today queue, duplicated timeline).
+- Separates `source` provenance, `canonical` facts, `employer` presentation, and private
+  `crm` state so future **manual vacancies** (`USER_CREATED`) and **field-level user
+  overrides** remain compatible without conflating captured and user-entered values.
+- Export has **no restore semantics** and cannot be used as a Job Nearby backup.
+
 ## 15. Current delivery and remaining scope
 
 Audited from code at the baseline above, without opening the live database:

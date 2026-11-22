@@ -10,5 +10,5 @@ import { InboxPage } from "./InboxPage";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>{window.location.pathname === "/today" ? <TodayPage /> : window.location.pathname === "/contacts" ? <ContactsPage /> : window.location.pathname === "/documents" ? <DocumentLibraryPage /> : window.location.pathname === "/backup" ? <BackupRestorePage /> : window.location.pathname.startsWith("/review/") ? <ReviewPage /> : <InboxPage />}</StrictMode>,
+  <StrictMode>{window.location.pathname === "/today" ? <TodayPage /> : window.location.pathname === "/contacts" ? <ContactsPage /> : window.location.pathname === "/documents" ? <DocumentLibraryPage /> : window.location.pathname === "/backup" || window.location.pathname === "/export" ? <BackupRestorePage /> : window.location.pathname.startsWith("/review/") ? <ReviewPage /> : <InboxPage />}</StrictMode>,
 );

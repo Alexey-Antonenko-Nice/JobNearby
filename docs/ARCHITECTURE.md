@@ -2030,6 +2030,22 @@ in `src/infrastructure/backup/`):
   safety backup; closes/reopens the live DB cleanly around an atomic swap with
   deterministic rollback on failure. Does not merge installations or include a scheduler.
 
+M22.2 implements the user-data export foundation (`LocalUserDataExportService` in
+`src/infrastructure/export/`):
+- **Coherent read snapshot**: reads all user-visible CRM, contact, action/reminder,
+  interaction, and document metadata within a single SQLite `DEFERRED` read transaction
+  without mutating state.
+- **Explicit DTO separation**: projects `canonical`, `source`, `employer`, and `crm`
+  sections independently (future-compatible with `USER_CREATED` vacancies and
+  field-level `userOverrides`), excluding internal `request_id`, `storage_key`,
+  `schema_migrations`, cleanup tokens, and document binary bytes in v1.
+- **Formats & atomicity**: outputs pretty-printed UTF-8 JSON (`job-nearby-export` v1)
+  or a ZIP of UTF-8 BOM RFC-4180 CSV tables (`vacancies.csv`, `notes.csv`,
+  `process_transitions.csv`, `interactions.csv`, `actions.csv`, `reminders.csv`,
+  `contacts.csv`, `contact_methods.csv`, `vacancy_contacts.csv`, `documents.csv`,
+  `document_versions.csv`, `document_associations.csv`), written atomically via
+  staging when targeting a filesystem path.
+
 ---
 
 # 86. Observability of Recognition

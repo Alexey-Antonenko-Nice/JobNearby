@@ -1,10 +1,12 @@
 import { useState } from "react";
 import {
   createBackup,
+  exportUserData,
   restoreBackup,
   validateBackup,
   type BackupValidationResult,
   type CreateBackupResult,
+  type ExportUserDataResult,
   type RestoreBackupResult,
 } from "./api";
 
@@ -15,6 +17,21 @@ function toBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   }
   return btoa(binary);
+}
+
+function triggerDownload(base64: string, fileName: string, mimeType: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export function BackupRestorePage(): React.JSX.Element {
@@ -34,6 +51,28 @@ export function BackupRestorePage(): React.JSX.Element {
   const [restoring, setRestoring] = useState(false);
   const [restoreResult, setRestoreResult] = useState<RestoreBackupResult | null>(null);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  const [exportDestination, setExportDestination] = useState("");
+  const [exporting, setExporting] = useState<"json" | "csv" | null>(null);
+  const [exportResult, setExportResult] = useState<ExportUserDataResult | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function handleExport(format: "json" | "csv") {
+    setExporting(format);
+    setExportError(null);
+    setExportResult(null);
+    try {
+      const response = await exportUserData(format, exportDestination.trim() || undefined);
+      setExportResult(response.export);
+      if (response.contentBase64) {
+        triggerDownload(response.contentBase64, response.export.fileName, response.export.mimeType);
+      }
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Failed to export user data.");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   async function handleCreateBackup(event: React.FormEvent) {
     event.preventDefault();
@@ -234,6 +273,68 @@ export function BackupRestorePage(): React.JSX.Element {
             {restoreResult.safetyBackupPath && (
               <p>Safety backup saved at: <code>{restoreResult.safetyBackupPath}</code></p>
             )}
+          </div>
+        )}
+      </section>
+
+      <section aria-label="Data Export">
+        <h2>Data Export</h2>
+        <p>
+          Export your CRM data in human-readable JSON or spreadsheet-friendly CSV (ZIP package)
+          formats, including archived items. Managed document binary files are not included in
+          exports.
+        </p>
+        <p>
+          <strong>Important:</strong> JSON/CSV exports cannot be used as Job Nearby backups. For
+          exact restore, use Backup &amp; Restore above.
+        </p>
+        <p role="note">
+          Privacy notice: Exported files may contain personal notes, contact details, interaction
+          history, and job-search information. Store them securely.
+        </p>
+        <label>
+          Export file path (optional)
+          <input
+            type="text"
+            placeholder="Leave blank to download in browser"
+            value={exportDestination}
+            disabled={exporting !== null}
+            onChange={(e) => setExportDestination(e.target.value)}
+          />
+        </label>
+        <div>
+          <button
+            type="button"
+            disabled={exporting !== null}
+            onClick={() => void handleExport("json")}
+          >
+            {exporting === "json" ? "Exporting JSON..." : "Export JSON"}
+          </button>
+          <button
+            type="button"
+            disabled={exporting !== null}
+            onClick={() => void handleExport("csv")}
+          >
+            {exporting === "csv" ? "Exporting CSV package..." : "Export CSV package"}
+          </button>
+        </div>
+        {exportError && <p role="alert">{exportError}</p>}
+        {exportResult && (
+          <div role="status" aria-label="Export summary">
+            <p>Export completed ({exportResult.format.toUpperCase()}).</p>
+            {exportResult.destinationPath ? (
+              <p>Saved to: <code>{exportResult.destinationPath}</code></p>
+            ) : (
+              <p>File: <code>{exportResult.fileName}</code></p>
+            )}
+            <ul>
+              <li>Vacancies: {exportResult.counts.vacancies}</li>
+              <li>Notes: {exportResult.counts.notes}</li>
+              <li>Interactions: {exportResult.counts.interactions}</li>
+              <li>Actions: {exportResult.counts.actions}</li>
+              <li>Contacts: {exportResult.counts.contacts}</li>
+              <li>Documents: {exportResult.counts.documents}</li>
+            </ul>
           </div>
         )}
       </section>

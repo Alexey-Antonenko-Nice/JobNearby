@@ -129,4 +129,69 @@ describe("BackupRestorePage", () => {
     expect(screen.getByText(/reload or restart/i)).toBeInTheDocument();
     expect(screen.getByText(/pre-restore\.zip/)).toBeInTheDocument();
   });
+
+  it("renders Data Export section with privacy warning, backup distinction, JSON/CSV buttons, and summary counts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          export: {
+            format: "json",
+            formatVersion: 1,
+            exportedAt: "2026-11-22T08:30:00.000Z",
+            destinationPath: "C:/Exports/job-nearby-export.json",
+            fileName: "job-nearby-export-2026-11-22.json",
+            mimeType: "application/json; charset=utf-8",
+            counts: {
+              vacancies: 4,
+              notes: 2,
+              processTransitions: 3,
+              interactions: 5,
+              actions: 1,
+              reminders: 1,
+              contacts: 2,
+              contactMethods: 3,
+              vacancyContacts: 2,
+              documents: 1,
+              documentVersions: 2,
+              documentAssociations: 1,
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ success: false, error: "Export destination must be outside managed documents." }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    render(<BackupRestorePage />);
+    const exportSection = screen.getByRole("region", { name: "Data Export" });
+    expect(exportSection).toHaveTextContent(/cannot be used as Job Nearby backups/i);
+    expect(exportSection).toHaveTextContent(/personal notes, contact details, interaction history/i);
+
+    const jsonButton = screen.getByRole("button", { name: "Export JSON" });
+    const csvButton = screen.getByRole("button", { name: "Export CSV package" });
+    expect(jsonButton).toBeInTheDocument();
+    expect(csvButton).toBeInTheDocument();
+
+    fireEvent.click(jsonButton);
+    await waitFor(() => {
+      expect(screen.getByText(/Export completed \(JSON\)/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText("Vacancies: 4")).toBeInTheDocument();
+    expect(screen.getByText("Notes: 2")).toBeInTheDocument();
+    expect(screen.getByText("Interactions: 5")).toBeInTheDocument();
+    expect(screen.getByText("Actions: 1")).toBeInTheDocument();
+    expect(screen.getByText("Contacts: 2")).toBeInTheDocument();
+    expect(screen.getByText("Documents: 1")).toBeInTheDocument();
+
+    fireEvent.click(csvButton);
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("Export destination must be outside managed documents.");
+    });
+  });
 });
