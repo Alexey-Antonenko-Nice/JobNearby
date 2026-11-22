@@ -1,4 +1,6 @@
 {
+  "name": "job-nearby",
+  "version": "0.1.0",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "capture:server": "npm run build && node dist/infrastructure/http/runBrowserCaptureServer.js",
@@ -6,6 +8,8 @@
     "desktop:build": "npm run build && npm run ui:build",
     "desktop:rebuild-native": "electron-rebuild -f -w better-sqlite3",
     "desktop": "npm run desktop:build && npm run desktop:rebuild-native && electron desktop/main.cjs",
+    "desktop:clean": "node tools/cleanDesktopArtifacts.cjs",
+    "desktop:package": "npm run desktop:clean && npm run desktop:build && npm run desktop:rebuild-native && electron-builder --win nsis --x64 --publish never && node tools/writeInstallerChecksum.cjs",
     "ui:dev": "vite --config ui/vite.config.ts",
     "ui:build": "vite build --config ui/vite.config.ts",
     "test:ui": "vitest run --config ui/vitest.config.ts",
@@ -25,7 +29,8 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "electron": "^40.10.6",
+    "electron": "^42.11.18",
+    "electron-builder": "^26.18.0",
     "jsdom": "^28.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -38,8 +43,62 @@
     "zod": "^4.4.3"
   },
   "main": "desktop/main.cjs",
+  "build": {
+    "appId": "com.jobnearby.desktop",
+    "productName": "Job Nearby",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/main.cjs",
+      "dist/**/*",
+      "ui/dist/**/*",
+      "package.json",
+      "!**/*.map",
+      "!**/*.test.*",
+      "!tests/**",
+      "!**/fixtures/**",
+      "!node_modules/better-sqlite3/build/**",
+      "!node_modules/better-sqlite3/src/**",
+      "!node_modules/better-sqlite3/deps/**",
+      "!node_modules/better-sqlite3/binding.gyp",
+      "!node_modules/better-sqlite3/prebuilds/darwin-*.node",
+      "!node_modules/better-sqlite3/prebuilds/linux*.node",
+      "!node_modules/better-sqlite3/prebuilds/win32-arm64.node",
+      "!**/*.sqlite",
+      "!**/*.db",
+      "!**/.env*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "executableName": "Job Nearby",
+      "artifactName": "Job-Nearby-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "Job Nearby"
+    }
+  },
   "allowScripts": {
     "better-sqlite3@13.0.3": true,
-    "electron@40.10.6": true
+    "electron@42.11.18": true
   }
 }

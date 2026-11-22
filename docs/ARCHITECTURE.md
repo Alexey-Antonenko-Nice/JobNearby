@@ -1653,11 +1653,11 @@ M23.1 audit baseline: `d5732bea57f594c094dac32418c251a172f5c5ce`.
 
 | Component | Observed implementation | Distribution consequence |
 | --- | --- | --- |
-| Desktop | Electron main process (`desktop/main.cjs`) owns the backend lifecycle and one window; the single-instance lock focuses the existing window | One local desktop process; installer and release packaging remain deferred |
+| Desktop | Electron main process (`desktop/main.cjs`) owns the backend lifecycle and one window; the single-instance lock focuses the existing window | Windows x64 per-user NSIS installer and unpacked package are built by `npm run desktop:package` |
 | API/UI | `startJobNearbyServer.ts` starts the API and serves `ui/dist` from one same-origin loopback server on an OS-assigned port | Vite is development-only; API and SPA routes are hosted together without a permanent UI/API port |
 | Data | Desktop defaults to `%LOCALAPPDATA%/JobNearby/job-nearby.sqlite`; managed documents and Electron profile share the persistent app-data root | No cwd/install-resource writes and no automatic relocation of existing developer data; environment overrides remain available |
 | Capture | The UI/API use the assigned port; a separate capture-only server reserves `127.0.0.1:4317` for the existing extension | Capture behavior and manifest permissions remain unchanged; a port conflict fails startup instead of misrouting extension writes |
-| Native dependency | `better-sqlite3` is loaded in the Electron main process and rebuilt for Electron with `@electron/rebuild` | Local desktop startup requires a compatible native build toolchain; per-OS packaging and clean-machine tests remain open |
+| Native dependency | `better-sqlite3` is loaded in the Electron main process and rebuilt for Electron with `@electron/rebuild`; packaging keeps ASAR enabled and unpacks native `.node` files | Build machines require the native build prerequisites; the installed app carries its Electron-compatible SQLite binary |
 | Shutdown | `JobNearbyServerRuntime.close()` closes HTTP listeners and SQLite; Electron awaits it before exiting | Backend runs in-process, so no child server can be orphaned |
 | Development | Vite remains on `127.0.0.1:5173` and proxies API requests to the CLI server at `127.0.0.1:4317` | Existing browser development and extension flow remain available |
 
@@ -1668,22 +1668,22 @@ still belongs to the user's browser, with provider restrictions and privacy guar
 
 The desktop shell derives built-artifact paths from its own file location rather
 than cwd. The CLI's default database remains cwd-relative for development.
-The desktop runtime has been architecturally selected as Electron; this milestone
-does not establish supported release platforms or installer behavior.
+M23.2 qualifies Windows x64 packaging only; no other operating system or
+architecture is claimed. Installer details and validation limits are recorded in
+`docs/DESKTOP_DISTRIBUTION.md`.
 
 ---
 
-# 68. Desktop packaging and release architecture gaps
+# 68. Remaining desktop distribution and release gaps
 
-M23.1 proves a local Electron runtime from built artifacts, but is not a distributable
-product. Resolve:
+M23.2 produces a Windows x64 distributable, but does not constitute a public release.
+Remaining work includes:
 
-1. Bundle Electron, compiled server, UI assets and native dependencies for explicitly supported OS/CPU versions; test clean-machine install/start.
-2. Provide an in-app installation/configuration path for the browser extension and a more actionable recovery path for its reserved-port startup conflict.
-3. Test first-run and upgrade behavior, filesystem permissions, logging, offline use and data preservation on each supported platform.
-4. Define installer/uninstaller behavior that preserves user data by default, explicit removal choices and rollback boundaries.
-5. Audit dependency/source/fixture redistribution, licenses and notices, checksums and reproducible release instructions.
-6. Decide update policy. Auto-update, code signing and release publication are explicitly out of scope for M23.1.
+1. Provide an in-app installation/configuration path for the optional browser extension.
+2. Expand clean-machine and upgrade validation on disposable Windows environments.
+3. Add a final application icon/branding and code signing; unsigned installers may trigger SmartScreen warnings.
+4. Select the project license and complete dependency/license and redistribution review.
+5. Add auto-update strategy, release automation, end-user install/upgrade documentation, and public release policy.
 
 Backup/restore, schema migrations and managed document storage remain independent
 application services and are not moved into packaged resources by this runtime.

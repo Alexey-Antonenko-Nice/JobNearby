@@ -38,27 +38,29 @@ default, excludes internal persistence/cleanup/retry metadata and document binar
 and is strictly for inspection/portability—JSON/CSV exports cannot be used as backups
 or for restore.
 
-Planned: richer activity/submission tracking, broader search, manual vacancies, field
-overrides, and ordinary-user desktop installation.
+Planned: richer activity/submission tracking, broader search, manual vacancies, and
+field overrides.
 See [the implementation roadmap](docs/ARCHITECTURE.md#91-crm-implementation-roadmap).
 
-## Desktop runtime
+## Windows desktop package
 
-M23.1 adds an Electron desktop runtime foundation. After installing development
-dependencies, `npm run desktop` builds the backend and UI, rebuilds native SQLite
-for Electron, starts the local server, and opens the desktop window. The desktop
-server binds to loopback on a dynamically assigned port and serves the production
-UI from the same origin. The browser extension retains its stable capture endpoint
-at `127.0.0.1:4317`; it is unavailable in the desktop app only if another process
-already owns that port, in which case desktop startup reports an error rather than
-silently routing extension captures to another runtime. This is not yet a packaged
-installer or ordinary-user release; it requires Node/npm and a native build toolchain.
+M23.2 provides a Windows x64 per-user NSIS installer and an unpacked application.
+Developers with Node/npm and the native build prerequisites can run
+`npm run desktop:package`; it cleans old build outputs, builds the backend and UI,
+rebuilds SQLite for Electron, creates both package artifacts, and writes the
+installer's SHA-256 file under `release/`. The package does not require Node/npm,
+Vite, Git, Python, or build tools on the installed user's machine.
 
-On Windows, the desktop database, managed documents and Electron profile are stored
-under `%LOCALAPPDATA%/JobNearby`; backups remain in the existing sibling backup
-directory by default. `JOB_NEARBY_APP_DATA_DIR`, `JOB_NEARBY_DATABASE_PATH`,
-`JOB_NEARBY_DOCUMENT_DATA_DIR` and `JOB_NEARBY_BACKUP_DIR` remain available for
-explicit configuration. Existing developer data is not relocated automatically.
+The installer creates a Start Menu shortcut (no Desktop shortcut by default), is
+unsigned, and may trigger a SmartScreen warning. Uninstall removes installed
+application files and shortcuts but preserves `%LOCALAPPDATA%\\JobNearby` and
+`%LOCALAPPDATA%\\JobNearby-Backups`; reinstalling uses the same app data. Existing
+developer data is not relocated automatically. The browser extension remains
+optional and must be installed separately; it uses `127.0.0.1:4317`.
+Auto-update, code signing, and public release distribution are not included.
+
+See [Windows desktop distribution](docs/DESKTOP_DISTRIBUTION.md) for build
+prerequisites, exact outputs, install/data behavior, and current limitations.
 
 Many independent installations do not imply multi-tenant SaaS or a shared database.
 
@@ -82,6 +84,7 @@ for platform defaults, integrity checks and crash-recovery limitations.
 - [Product specification](docs/PRODUCT_SPECIFICATION.md)
 - [Data model and CRM gaps](docs/DATA_MODEL.md#78-crm-core-gap-analysis-m181)
 - [Architecture, packaging gaps and roadmap](docs/ARCHITECTURE.md)
+- [Windows desktop distribution](docs/DESKTOP_DISTRIBUTION.md)
 - [Recognition model](docs/RECOGNITION_MODEL.md)
 
 ## Current development technology

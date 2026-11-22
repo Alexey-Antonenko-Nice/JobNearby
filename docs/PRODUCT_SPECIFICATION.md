@@ -231,13 +231,14 @@ must bundle/install necessary runtime components. Users must not need to install
 Node.js or Python, install development dependencies, clone the repository, run npm,
 configure a development database or understand internal architecture.
 
-M23.1 selects Electron and implements a local desktop runtime foundation: one
-desktop process owns the backend, serves the built UI on a dynamically assigned
-loopback port, and stores its profile/data under the per-user application-data
-root. This is not an installer or ordinary-user release; bundling, signing,
-auto-update, extension onboarding and supported-platform qualification remain
-future work. Browser capture remains an optional intake capability. Many
-independent users means one local application and private data store per
+M23.1 established an Electron runtime in which one desktop process owns the
+backend, serves the built UI on a dynamically assigned loopback port, and stores
+its profile/data under the per-user application-data root. M23.2 adds a Windows
+x64 per-user NSIS installer with an unpacked package, ASAR resources, and an
+Electron-rebuilt SQLite native module. Uninstall preserves user data by default.
+The browser extension remains optional and separately installed. Other platforms,
+code signing, auto-update, and public release distribution are not included.
+Many independent users means one local application and private data store per
 user/machine/profile initially, not a shared server, central database or
 multi-tenant SaaS.
 
