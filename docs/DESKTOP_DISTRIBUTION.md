@@ -31,9 +31,10 @@ runtime, desktop main process, compiled backend, production dependencies, and bu
 UI; tests, fixtures, maps, databases, and environment files are excluded. The build
 does not bundle the browser extension.
 
-## Packaging dependencies
+## Licensing and packaged notices
 
-The locked package metadata reports these licenses:
+Job Nearby is licensed under the MIT License (see `LICENSE`). The locked package
+metadata reports these licenses:
 
 | Dependency | Locked version | License |
 | --- | --- | --- |
@@ -44,11 +45,20 @@ The locked package metadata reports these licenses:
 | builder-util-runtime | 9.7.1 | MIT |
 | @electron/rebuild | 4.2.1 | MIT |
 | better-sqlite3 | 13.0.3 | MIT |
+| TypeScript | 7.0.2 | Apache-2.0 |
 
-electron-builder downloads NSIS and 7-Zip build tools during packaging; their
-redistribution notices remain part of the future full dependency/license audit.
-The project itself still has no selected license, so this table is not a
-redistribution approval.
+electron-builder downloads NSIS and 7-Zip tools during packaging. The produced
+installer embeds the NSIS runtime stub (zlib/libpng, plus the NSIS LZMA module under
+CPL-1.0 with NSIS's explicit linking exception) and the nsis7z 7-Zip extraction
+plugin (LGPL-2.1-or-later); `7za.exe` and `makensis` themselves are build-only.
+All of this is recorded in `THIRD_PARTY_NOTICES.md`, and the full audit with current
+warnings is in `docs/LICENSING.md`.
+
+The package installs `resources\LICENSE.txt` and `resources\THIRD_PARTY_NOTICES.md`
+and keeps Electron's `LICENSE.electron.txt` and `LICENSES.chromium.html` (which
+covers Chromium, Node.js and SQLite) at the install root. `npm run desktop:package`
+finishes with `tools/verifyPackagedLegal.cjs`, which fails the build if those legal
+resources or the bundled package license files are missing.
 
 At this milestone `npm audit --omit=dev` reports zero vulnerabilities. The full
 development dependency audit still reports six moderate findings through
@@ -80,7 +90,8 @@ available for controlled testing and explicit configuration.
 - Browser capture remains optional. Install the browser extension separately; it
   connects to `127.0.0.1:4317` and is not automatically installed or bundled.
 - There is no auto-update service or public release distribution.
-- No project license has been selected; no license-agreement page is presented.
+- No license-acceptance page is presented: the MIT license is installed as a
+  resource, not offered as an end-user agreement.
 - No final Job Nearby icon is tracked; the package uses the packager's default icon.
 - Validation is performed on the available Windows host; a separate clean VM is
   needed to prove behavior without any development toolchain.

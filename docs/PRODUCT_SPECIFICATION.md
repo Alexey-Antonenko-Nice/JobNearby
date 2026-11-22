@@ -16,9 +16,8 @@ The vacancy/opportunity is the central user-facing CRM record. Employer and agen
 views provide reusable context across opportunities. The current implementation is
 a local developer-run application; the ordinary-user desktop distribution is a
 required future deliverable. Source is intended to be publicly available on GitHub
-for inspection and contribution. No open-source license has yet been selected.
-**Open-source license selection required before public release.** Public source
-availability alone does not establish open-source redistribution permissions.
+for inspection and contribution. M24.1 selected the MIT License (`LICENSE`); public
+release distribution is not yet complete.
 
 ## 2. Opportunity lifecycle and lightweight use
 
@@ -298,7 +297,7 @@ Audited from code at the baseline above, without opening the live database:
 | Daily work queue | Future work |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
 | Backup/restore/export and desktop runtime | Backup/restore/export implemented; M23.1 desktop runtime foundation implemented, installer still missing |
-| Public open-source release readiness | Intent documented; license, contribution and release work remain |
+| Public open-source release readiness | MIT license selected (M24.1) with audited dependency/notice handling; contribution, public distribution and privacy review remain |
 
 See [DATA_MODEL.md section 78](DATA_MODEL.md#78-crm-core-gap-analysis-m181) for
 model boundaries and implementation evidence. The Electron runtime does not change

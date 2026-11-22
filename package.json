@@ -1,15 +1,20 @@
 {
   "name": "job-nearby",
   "version": "0.1.0",
+  "license": "MIT",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "audit:licenses": "node tools/auditLicenses.cjs",
+    "audit:licenses:write": "node tools/auditLicenses.cjs --write",
+    "check:repo": "git ls-files | node tools/checkRepositoryHygiene.cjs",
     "capture:server": "npm run build && node dist/infrastructure/http/runBrowserCaptureServer.js",
     "copilot:mcp": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/infrastructure/mcp/runCopilotMcpServer.ts",
     "desktop:build": "npm run build && npm run ui:build",
     "desktop:rebuild-native": "electron-rebuild -f -w better-sqlite3",
     "desktop": "npm run desktop:build && npm run desktop:rebuild-native && electron desktop/main.cjs",
     "desktop:clean": "node tools/cleanDesktopArtifacts.cjs",
-    "desktop:package": "npm run desktop:clean && npm run desktop:build && npm run desktop:rebuild-native && electron-builder --win nsis --x64 --publish never && node tools/writeInstallerChecksum.cjs",
+    "desktop:package": "npm run desktop:clean && npm run desktop:build && npm run desktop:rebuild-native && electron-builder --win nsis --x64 --publish never && node tools/writeInstallerChecksum.cjs && node tools/verifyPackagedLegal.cjs",
+    "verify:packaged-legal": "node tools/verifyPackagedLegal.cjs",
     "ui:dev": "vite --config ui/vite.config.ts",
     "ui:build": "vite build --config ui/vite.config.ts",
     "test:ui": "vitest run --config ui/vitest.config.ts",
@@ -72,6 +77,16 @@
     "asar": true,
     "asarUnpack": [
       "**/*.node"
+    ],
+    "extraResources": [
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.txt"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
+      }
     ],
     "npmRebuild": false,
     "win": {

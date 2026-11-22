@@ -13,6 +13,16 @@ release/
 *.sqlite-shm
 *.sqlite-wal
 
+# Local backup archives, exports and managed application-document stores
+*.zip
+backups/
+exports/
+managed-documents/
+
+# Local logs and temporary Electron profiles
+*.log
+.electron/
+
 coverage/
 
 .DS_Store

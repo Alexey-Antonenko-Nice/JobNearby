@@ -1,0 +1,141 @@
+# Licensing policy
+
+M24.1 establishes the project license and the dependency/redistribution rules used
+before Job Nearby is published. This is release engineering, not legal advice.
+
+## Project license
+
+Job Nearby is licensed under the **MIT License** (see [LICENSE](../LICENSE)):
+`Copyright (c) 2026 Alexey Antonenko`. MIT was selected because it is simple,
+permissive, compatible with commercial and non-commercial reuse, and appropriate for
+a free desktop utility; no distributed component requires a different project
+license.
+
+Contributors keep copyright in their own contributions and submit them under the
+project license. M24.1 introduces no CLA or DCO; contribution guidelines are a later
+milestone.
+
+## What is distributed
+
+| Artifact | Contains |
+| --- | --- |
+| `release/win-unpacked/` and the NSIS installer | Electron 42.11.18 runtime, `app.asar` (compiled backend, built UI, `better-sqlite3`, `node-addon-api`, `zod`), `app.asar.unpacked` native SQLite binary, legal resources |
+| `ui/dist` (inside `app.asar`) | Minified React, React DOM and scheduler code |
+| NSIS installer stub | NSIS runtime plus its LZMA module and the nsis7z (7-Zip) extraction plugin |
+
+Not distributed: TypeScript, Vite, Vitest, jsdom, electron-builder and its
+transitives, `7za.exe`, and `makensis`. The browser extension is not bundled and
+contains no third-party code.
+
+## Dependency audit
+
+Run:
+
+```text
+npm run audit:licenses        # check; exits 1 when shipped code has an unreviewed license
+npm run audit:licenses:write  # regenerate docs/THIRD_PARTY_LICENSES.json
+npm run check:repo            # generated artifacts, local data, high-confidence secrets
+```
+
+`tools/licenseAudit.cjs` reads resolved versions from `package-lock.json` (not
+`package.json` ranges) and falls back to installed package metadata and license
+files. `docs/THIRD_PARTY_LICENSES.json` is deterministic: it has no timestamp and its
+package list is sorted, so regeneration should produce no diff unless dependencies
+changed.
+
+### Acceptance policy
+
+- Accepted without further review: `MIT`, `ISC`, `BSD-2-Clause`, `BSD-3-Clause`,
+  `Apache-2.0`, `0BSD`, `CC0-1.0`, `Unlicense`, `MIT-0`, `BlueOak-1.0.0`.
+- Review tier (flagged, not auto-rejected): `GPL*`, `AGPL*`, `LGPL*`, `MPL*`, `EPL*`,
+  `CDDL*`, `CPL*`, `SSPL*`, `BUSL*`, Elastic, Commons Clause, `CC-BY*`, `OSL`,
+  `Artistic`, `JSON`, `Python-2.0`, `WTFPL`.
+- Everything else, missing license metadata, and unresolved `SEE LICENSE IN` files
+  are `UNKNOWN`.
+
+A review or unknown license in **distributed** code fails the audit. The same
+license in a **dev-only** package is a warning: it does not ship, but it must be
+acceptable for source-repository use. SPDX expressions are parsed: `OR` allows the
+permissive branch, `AND` accumulates obligations, `WITH` requires review.
+
+Current audit result (511 locked packages): 508 accepted, 3 dev-only warnings
+(`argparse` Python-2.0, `caniuse-lite` CC-BY-4.0, `truncate-utf8-bytes` WTFPL), zero
+blockers.
+
+## Binary legal-resource strategy
+
+`electron-builder` installs `LICENSE.txt` and `THIRD_PARTY_NOTICES.md` through
+`build.extraResources`, so they live beside `app.asar` instead of being buried in it.
+It also copies the Electron distribution's own license files automatically, but it
+does not generate notices for npm dependencies or for the NSIS/7-Zip tooling it
+embeds; Job Nearby supplies those in `THIRD_PARTY_NOTICES.md`. Electron's
+`LICENSE.electron.txt` and `LICENSES.chromium.html` stay at the install root
+untouched; `LICENSES.chromium.html` already covers Chromium, Node.js, V8 and SQLite
+and is not duplicated. npm runtime packages keep their own `LICENSE` files inside
+`app.asar`.
+
+`npm run desktop:package` ends with `tools/verifyPackagedLegal.cjs`, which fails the
+build if `LICENSE`, the notices, the Electron notice files, or the bundled package
+license files are missing. No installer license-acceptance page is added: an
+open-source license is not an EULA.
+
+## Release-readiness invariant
+
+Before any public release, all of the following must hold:
+
+1. Root `package.json` declares the project license and `LICENSE` exists.
+2. `npm run audit:licenses` reports zero blockers.
+3. `npm run check:repo` reports no generated artifacts, local data or secrets.
+4. `npm run desktop:package` completes and its legal-resource verification passes.
+5. `docs/THIRD_PARTY_LICENSES.json` is regenerated in the same change as any
+   dependency change.
+6. Fixture/copyright and privacy review (below) is resolved for public history.
+
+## Known warnings (documented, not blocking the MIT choice)
+
+- **NSIS LZMA module (CPL-1.0).** The installer stub contains the NSIS LZMA
+  decompression module. NSIS publishes an explicit linking exception
+  (reproduced in `THIRD_PARTY_NOTICES.md`) that keeps Job Nearby's code outside the
+  CPL. The installer distributes unmodified NSIS code; the notice and exception are
+  included, and the full CPL text remains available from the NSIS project.
+- **nsis7z / 7-Zip (LGPL-2.1-or-later).** The installer extracts its app archive with
+  the `Nsis7z` plugin. The plugin is unmodified and is identified in the notices with
+  its license and upstream source. LGPL-2.1 expects a source offer for the library;
+  the notices point at the upstream source and state it can be provided on request.
+  Before a public release, confirm this "offer + source location" wording is enough
+  for the chosen distribution channel.
+- **`caniuse-lite` (CC-BY-4.0).** Build-time browser data only (browserslist), not
+  distributed. Attribution is satisfied by the locked package and this record.
+- **`argparse` (Python-2.0) and `truncate-utf8-bytes` (WTFPL).** Dev-only transitive
+  tooling dependencies; permissive but on the review list.
+
+## Repository content risk (privacy/copyright, tracked separately from licensing)
+
+These are public-release blockers for the repository as it stands, but they do not
+affect the MIT license choice or the installer:
+
+- `linkedin-diagnostic.txt` at the repository root is a 345 KB diagnostic dump
+  produced from a development database. It contains captured vacancy observations
+  and identifiers. Remove it before publishing history or regenerate a synthetic
+  example.
+- `tests/fixtures/` holds ~8.2 MB of captured provider pages (two LinkedIn captures
+  are ~2.9 MB each, plus Indeed, France Travail, Airbus, Manpower). They are
+  third-party page content, not Job Nearby code: public redistribution may conflict
+  with provider terms/copyright. Most captures are far larger than the assertions
+  need. Replace large captures with minimal synthetic snippets before public release.
+- Some fixtures contain real business contact details from public job ads (company
+  email addresses, switchboard/recruiter phone numbers, and at least one free-mail
+  address in an Indeed capture). These are publicly posted contact data, not CRM
+  user data, but they should be removed or pseudonymised before public release.
+- Captured `.meta.json` files include full provider URLs with tracking parameters.
+  Strip query strings when publishing.
+
+Privacy policy, security documentation and public-history rewriting belong to M24.2
+and later milestones; M24.1 records the findings only.
+
+## Security audit
+
+`npm audit --omit=dev` reports zero vulnerabilities. The full audit reports six
+moderate `minimatch` findings through electron-builder's build-time chain with no
+available fix; this is a build-tool finding, not a distributed-runtime finding, and
+is recorded for follow-up rather than force-fixed.

@@ -1,9 +1,10 @@
 # Job Nearby
 
 Job Nearby is intended to be a completely free, open-source desktop CRM for job
-seekers, with employer-recognition capabilities. Its source is intended to be public
-on GitHub for community inspection and contribution. License selection is pending;
-this is a product direction, not a claim that a license or end-user release exists.
+seekers, with employer-recognition capabilities. It is licensed under the
+[MIT License](LICENSE), and its source is intended to become public on GitHub for
+community inspection and contribution. A local Windows package exists, but public
+release distribution is not complete.
 
 The opportunity is the central CRM record: discover and understand a vacancy,
 prepare an application, track the CV and motivation-letter versions used, maintain
@@ -85,6 +86,7 @@ for platform defaults, integrity checks and crash-recovery limitations.
 - [Data model and CRM gaps](docs/DATA_MODEL.md#78-crm-core-gap-analysis-m181)
 - [Architecture, packaging gaps and roadmap](docs/ARCHITECTURE.md)
 - [Windows desktop distribution](docs/DESKTOP_DISTRIBUTION.md)
+- [Licensing policy and dependency audit](docs/LICENSING.md)
 - [Recognition model](docs/RECOGNITION_MODEL.md)
 
 ## Current development technology
@@ -151,14 +153,22 @@ anywhere itself: the local server only answers the tools Copilot Chat asks for.
 
 ## License and public release
 
-**Open-source license selection required before public release.** No LICENSE file
-is currently tracked. Public GitHub source alone is not sufficient for legally clear
-open-source reuse or redistribution. A separate license/dependency audit is required;
-this document does not select a license or assert dependency compatibility.
+Job Nearby is licensed under the [MIT License](LICENSE), Copyright (c) 2026
+Alexey Antonenko. Third-party components remain under their own licenses: the
+Windows package installs [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) beside the
+application and keeps Electron's canonical `LICENSES.chromium.html` at the install
+root. See the [licensing policy](docs/LICENSING.md) and the generated
+[dependency license inventory](docs/THIRD_PARTY_LICENSES.json).
 
-Release readiness also requires contribution guidance, installer/download and upgrade
-instructions, supported platforms, reproducible build/release procedures and a privacy
-review of source history, fixtures and release artifacts. See architecture sections
-68, 90 and 91. No release automation or installer is implemented by this documentation.
+`npm run audit:licenses` audits resolved dependency licenses and fails when shipped
+code has an unreviewed license; `npm run check:repo` rejects generated artifacts,
+local data and high-confidence secrets in tracked files.
+
+Public release still requires contribution guidance, installer/download and upgrade
+instructions, supported platforms, reproducible build/release procedures, and a
+privacy review of source history, fixtures and release artifacts. Captured provider
+fixtures and a diagnostic dump currently in the repository must be addressed first.
+See architecture sections 68, 90 and 91, and the known warnings in the licensing
+policy.
 
 The **Today** page (`/today`) provides a derived daily CRM work queue: overdue actions, due reminders, today/upcoming work and opportunities needing a next action. It uses the browser timezone and refreshes on demand. Complete/cancel actions or dismiss due reminders directly in Today using the existing CRM commands; the entire queue refreshes afterward. Open Review for other changes. This is not a background scheduler or notification service.
