@@ -322,3 +322,38 @@ export async function getDailyWorkQueue(timeZone:string):Promise<DailyWorkQueue>
   if(!response.ok)throw new Error("Could not load the work queue.");
   return response.json();
 }
+
+export type CreateBackupResult = Serialized<import("../../src/application/backup/backupTypes.js").CreateBackupResult>;
+export type BackupValidationResult = Serialized<import("../../src/application/backup/backupTypes.js").BackupValidationResult>;
+export type RestoreBackupResult = Serialized<import("../../src/application/backup/backupTypes.js").RestoreBackupResult>;
+
+export async function createBackup(destinationPath?: string): Promise<CreateBackupResult> {
+  const response = await fetch(`${API_ORIGIN}/backup/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(destinationPath ? { destinationPath } : {}),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { backup: CreateBackupResult }).backup;
+}
+
+export async function validateBackup(input: { archivePath?: string; archiveBase64?: string }): Promise<BackupValidationResult> {
+  const response = await fetch(`${API_ORIGIN}/backup/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const payload = await response.json() as { validation?: BackupValidationResult; error?: string };
+  if (payload.validation) return payload.validation;
+  throw new Error(payload.error ?? "Backup validation failed.");
+}
+
+export async function restoreBackup(input: { archivePath?: string; archiveBase64?: string; confirm: true }): Promise<RestoreBackupResult> {
+  const response = await fetch(`${API_ORIGIN}/backup/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) throw await apiError(response);
+  return (await response.json() as { restore: RestoreBackupResult }).restore;
+}

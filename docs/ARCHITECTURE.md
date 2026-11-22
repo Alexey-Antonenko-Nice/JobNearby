@@ -2013,6 +2013,23 @@ The one-time `tools/remediate-proman.cjs` backup procedure is not a general user
 or restore API. Backups and exports are private data and must not enter source or
 release artifacts. Optional cloud synchronization is not part of this requirement.
 
+M22.1 implements the whole-application backup/restore foundation (`LocalBackupService`
+in `src/infrastructure/backup/`):
+- **SQLite snapshot**: uses `better-sqlite3`'s `db.backup()` (SQLite Online Backup API)
+  to capture a transactionally consistent snapshot of the live database (including active
+  WAL state) without modifying the production DB or requiring shutdown.
+- **Document consistency**: derives the managed document inventory directly from
+  `application_document_versions` in the snapshot DB, verifies size and SHA-256 against
+  the database metadata, and excludes unreferenced orphan files.
+- **ZIP archive & security**: pure-Node ZIP reader/writer (`zipArchive.ts`) with
+  Zip Slip path-traversal rejection, absolute/drive/UNC/symlink rejection, and bounded
+  entry count, manifest size, and extracted size.
+- **Restore pipeline (`VALIDATE -> STAGE -> VERIFY -> SWAP`)**: validates archive,
+  manifest, SQLite `PRAGMA integrity_check`, and per-document SHA-256 before mutation;
+  migrates older schemas forward (`migrateDatabase`); creates an automatic pre-restore
+  safety backup; closes/reopens the live DB cleanly around an atomic swap with
+  deterministic rollback on failure. Does not merge installations or include a scheduler.
+
 ---
 
 # 86. Observability of Recognition

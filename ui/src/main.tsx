@@ -1,3 +1,4 @@
+import { BackupRestorePage } from "./BackupRestorePage";
 import { TodayPage } from "./TodayPage";
 import { ContactsPage } from "./ContactsPage";
 import { DocumentLibraryPage } from "./DocumentLibraryPage";
@@ -9,5 +10,5 @@ import { InboxPage } from "./InboxPage";
 import "./styles.css";
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>{window.location.pathname === "/today" ? <TodayPage /> : window.location.pathname === "/contacts" ? <ContactsPage /> : window.location.pathname === "/documents" ? <DocumentLibraryPage /> : window.location.pathname.startsWith("/review/") ? <ReviewPage /> : <InboxPage />}</StrictMode>,
+  <StrictMode>{window.location.pathname === "/today" ? <TodayPage /> : window.location.pathname === "/contacts" ? <ContactsPage /> : window.location.pathname === "/documents" ? <DocumentLibraryPage /> : window.location.pathname === "/backup" ? <BackupRestorePage /> : window.location.pathname.startsWith("/review/") ? <ReviewPage /> : <InboxPage />}</StrictMode>,
 );

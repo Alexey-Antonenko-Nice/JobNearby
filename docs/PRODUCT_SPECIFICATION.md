@@ -251,6 +251,18 @@ Portability must include the database and any managed application documents,
 relationships and version history. The final export format is undecided. Open
 source alone is not sufficient portability. Backups remain private user data.
 
+M22.1 implements manual whole-application **Backup & Restore** (distinct from
+user-data export):
+- Backup produces a portable ZIP archive with `manifest.json` (`format: "job-nearby-backup"`,
+  `formatVersion: 1`, `schemaVersion`, SHA-256 checksums), an online SQLite snapshot
+  (`database.sqlite`), and all DB-referenced managed document files (`documents/...`).
+- Restore validates the archive, manifest, SQLite integrity, and document SHA-256
+  hashes before mutating any live state, creates an automatic pre-restore safety
+  backup, replaces local user state (never merges), preserves all IDs and history,
+  and runs forward migrations for older supported schemas (rejecting future schemas).
+- Cloud backup, sync, scheduled/periodic backup, and user-data export are not part
+  of M22.1.
+
 ## 15. Current delivery and remaining scope
 
 Audited from code at the baseline above, without opening the live database:

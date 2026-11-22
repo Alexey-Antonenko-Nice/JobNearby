@@ -8,7 +8,7 @@ export function DocumentLibraryPage() {
   useEffect(()=>{let current=true;getDocumentLibrary().then(data=>{if(current) setLibrary(data);}).catch(()=>{if(current) setError("Unable to load document library.");});return()=>{current=false;};},[]);
   async function imported(input:Record<string,unknown>) {setLibrary(await importLibraryDocument(input));}
   const document=library?.find(d=>d.id===selected);
-  return <main className="page"><a href="/today">Today</a> <a href="/">Back to inbox</a><a href="/contacts">Contacts</a><h1>Documents</h1>
+  return <main className="page"><a href="/today">Today</a> <a href="/">Back to inbox</a><a href="/contacts">Contacts</a> <a href="/backup">Backup &amp; Restore</a><h1>Documents</h1>
     <p>Reusable private CVs and motivation letters. Vacancy associations mean selected, not sent.</p>
     <p>Archive hides a document from future selection; it does not delete files or vacancy history. Permanent deletion is not available, including for unreferenced versions.</p>
     {error && <p role="alert">{error}</p>}

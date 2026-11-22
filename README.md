@@ -23,9 +23,16 @@ Selecting a version does not assert that it was sent.
 The Documents page adds reusable-library management: active/archived/all views,
 rename, archive/restore, version history and reference counts. Archived documents
 remain available to existing history; permanent deletion is intentionally deferred.
+M22.1 adds manual whole-application Backup & Restore (`/backup`): a single portable
+ZIP archive containing a versioned `manifest.json` with SHA-256 checksums, a
+consistent SQLite online backup snapshot (`database.sqlite`), and all DB-referenced
+managed document files (`documents/...`). Backup is machine-restorable state recovery,
+distinct from user-data export; restore validates first, creates an automatic
+pre-restore safety backup, replaces local state (never merging), preserves IDs and
+history, and migrates older schemas forward. No cloud backup or scheduler is included.
 
 Planned: richer activity/submission tracking, contacts, a daily work queue, broader
-search, backup/restore/export, and ordinary-user desktop installation.
+search, user-data export, and ordinary-user desktop installation.
 See [the implementation roadmap](docs/ARCHITECTURE.md#91-crm-implementation-roadmap).
 
 ## Desktop and privacy direction

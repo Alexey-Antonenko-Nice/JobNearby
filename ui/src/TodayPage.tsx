@@ -39,7 +39,7 @@ export function TodayPage(){
    try {await refresh();if(succeeded)requests.current.delete(requestKey);}catch{/* Keep retry ID until both command and read succeed. */}
    finally {inFlight.current.delete(key);setPending(new Set(inFlight.current));}
  }
- return <main className="page"><nav><a href="/">Inbox</a> <a href="/documents">Documents</a> <a href="/contacts">Contacts</a></nav><h1>Today</h1>
+ return <main className="page"><nav><a href="/">Inbox</a> <a href="/documents">Documents</a> <a href="/contacts">Contacts</a> <a href="/backup">Backup &amp; Restore</a></nav><h1>Today</h1>
  <p>Complete or cancel actions and dismiss due reminders here. Open Review for other changes.</p><button disabled={refreshing} onClick={()=>void refresh().catch(()=>{})}>Refresh</button>
  {error&&<p role="alert">{error}</p>}{Object.entries(commandErrors).filter(([,message])=>message).map(([key,message])=><p role="alert" key={key}>{message}</p>)}
  {!queue&&!error&&<p>Loading work queue.</p>}

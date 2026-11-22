@@ -12,7 +12,7 @@ export function ContactsPage(){
     try{const result=await contactCommand({...input,requestId});setContacts(result.contacts);if(input.operation==="CREATE")setSelected(result.resultId);retry.current.delete(key);}catch(e){setError(e instanceof Error?e.message:"Unable to save contact.");}finally{setPending(false);}
   }
   const contact=contacts.find(c=>c.id===selected);
-  return <main className="page"><nav><a href="/today">Today</a> <a href="/">Inbox</a> <a href="/documents">Documents</a></nav><h1>Contacts</h1>
+  return <main className="page"><nav><a href="/today">Today</a> <a href="/">Inbox</a> <a href="/documents">Documents</a> <a href="/backup">Backup &amp; Restore</a></nav><h1>Contacts</h1>
     <p>Private local contacts. No automatic merging, enrichment or synchronization. Archive retains relationships; permanent deletion is unavailable.</p>
     {error&&<p role="alert">{error}</p>}
     <label>Contact search<input value={search} onChange={e=>setSearch(e.target.value)}/></label>

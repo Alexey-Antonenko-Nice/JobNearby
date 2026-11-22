@@ -1,4 +1,6 @@
 import { ContactError, validateContactId } from "../../domain/user/Contact.js";
+import type { BackupArchiveInput, BackupService } from "../../application/backup/backupTypes.js";
+import { BackupError } from "../backup/LocalBackupService.js";
 import { ApplicationDocumentError, MAX_DOCUMENT_BYTES, applicationDocumentKinds, type ImportApplicationDocument } from "../../domain/user/ApplicationDocument.js";
 import { VacancyCrmError, validatePriority, validateProcessState } from "../../domain/user/VacancyCrm.js";
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
@@ -14,6 +16,7 @@ export const BROWSER_CAPTURE_PATH = "/acquisition/browser";
 export const MAX_BROWSER_REQUEST_BYTES = 8 * 1024 * 1024;
 
 export interface BrowserCaptureServerDependencies {
+  readonly backupService?: BackupService;
   readonly getDailyWorkQueue?: (timeZone:string)=>import("../../application/user/deriveWorkQueue.js").DailyWorkQueue;
   readonly getContacts?: VacancyReviewWorkflow["getContacts"];
   readonly contactCommand?: VacancyReviewWorkflow["contactCommand"];
@@ -63,6 +66,37 @@ export function createBrowserCaptureServer(
     let operation: "capture" | "review" | "interaction" | "route" = "route";
     try {
       const path = requestPath(request);
+      if (request.method === "POST" && path === "/backup/create" && dependencies.backupService) {
+        operation = "review";
+        const body = await readJsonBody(request, "Backup create");
+        if (!isRecord(body) || (body.destinationPath !== undefined && (typeof body.destinationPath !== "string" || !body.destinationPath.trim())) || Object.keys(body).some(k => k !== "destinationPath")) {
+          throw new InvalidRequestError("Invalid backup create payload.");
+        }
+        const result = await dependencies.backupService.createBackup(
+          typeof body.destinationPath === "string" ? { destinationPath: body.destinationPath.trim() } : {},
+        );
+        sendJson(response, 201, { backup: result });
+        return;
+      }
+      if (request.method === "POST" && path === "/backup/validate" && dependencies.backupService) {
+        operation = "review";
+        const body = await readJsonBody(request, "Backup validate", 128 * 1024 * 1024);
+        const archiveInput = parseBackupArchiveInput(body, ["archivePath", "archiveBase64"]);
+        const validation = await dependencies.backupService.validateBackup(archiveInput);
+        sendJson(response, validation.valid ? 200 : 400, { validation });
+        return;
+      }
+      if (request.method === "POST" && path === "/backup/restore" && dependencies.backupService) {
+        operation = "review";
+        const body = await readJsonBody(request, "Backup restore", 128 * 1024 * 1024);
+        if (!isRecord(body) || body.confirm !== true) {
+          throw new InvalidRequestError("Restore requires explicit confirmation (confirm: true).");
+        }
+        const archiveInput = parseBackupArchiveInput(body, ["archivePath", "archiveBase64", "confirm"]);
+        const result = await dependencies.backupService.restoreBackup(archiveInput);
+        sendJson(response, 200, { restore: result });
+        return;
+      }
       if(path==="/work-queue" && request.method==="GET" && dependencies.getDailyWorkQueue){
         const zone=new URL(request.url??"/","http://localhost").searchParams.get("timeZone")??"UTC";
         try { new Intl.DateTimeFormat("en-US",{timeZone:zone}); } catch { throw new InvalidRequestError("Invalid timezone."); }
@@ -301,7 +335,7 @@ export function createBrowserCaptureServer(
       sendJson(response, 404, { success: false, error: "Not found." });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Browser capture failed.";
-      const status = error instanceof ContactError || error instanceof ApplicationDocumentError || error instanceof VacancyCleanupError || error instanceof VacancyCrmError ? error.status : errorStatus(message, operation, error);
+      const status = error instanceof ContactError || error instanceof ApplicationDocumentError || error instanceof VacancyCleanupError || error instanceof VacancyCrmError || error instanceof BackupError ? error.status : errorStatus(message, operation, error);
       sendJson(response, status, { success: false, error: message });
     }
   });
@@ -323,14 +357,14 @@ function captureResponseDto(result: CaptureAndProcessBrowserVacancyResult): obje
   return { success: true, capture, processing: result.processing };
 }
 
-async function readJsonBody(request: IncomingMessage, label: string): Promise<unknown> {
+async function readJsonBody(request: IncomingMessage, label: string, maxBytes: number = MAX_BROWSER_REQUEST_BYTES): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > MAX_BROWSER_REQUEST_BYTES) {
-      throw new InvalidRequestError(`${label} request exceeds the ${MAX_BROWSER_REQUEST_BYTES}-byte limit.`);
+    if (size > maxBytes) {
+      throw new InvalidRequestError(`${label} request exceeds the ${maxBytes}-byte limit.`);
     }
     chunks.push(buffer);
   }
@@ -339,6 +373,21 @@ async function readJsonBody(request: IncomingMessage, label: string): Promise<un
   } catch {
     throw new InvalidRequestError(`${label} request must contain valid JSON.`);
   }
+}
+
+function parseBackupArchiveInput(value: unknown, allowedKeys: readonly string[]): BackupArchiveInput {
+  if (!isRecord(value) || Object.keys(value).some(k => !allowedKeys.includes(k))) {
+    throw new InvalidRequestError("Invalid backup archive payload.");
+  }
+  const hasPath = typeof value.archivePath === "string" && value.archivePath.trim().length > 0;
+  const hasBase64 = typeof value.archiveBase64 === "string" && value.archiveBase64.length > 0;
+  if (hasPath === hasBase64) {
+    throw new InvalidRequestError("Provide either archivePath or archiveBase64.");
+  }
+  if (hasPath) {
+    return { archivePath: (value.archivePath as string).trim() };
+  }
+  return { archiveBytes: Buffer.from(value.archiveBase64 as string, "base64") };
 }
 
 function parseInteractionPayload(

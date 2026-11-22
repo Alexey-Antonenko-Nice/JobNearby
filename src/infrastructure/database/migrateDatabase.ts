@@ -47,6 +47,8 @@ const migrations: readonly Migration[] = [
   migration018,
 ];
 
+export const CURRENT_SCHEMA_VERSION = migrations[migrations.length - 1]!.version;
+
 export function migrateDatabase(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
