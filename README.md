@@ -42,13 +42,25 @@ Planned: richer activity/submission tracking, broader search, manual vacancies, 
 overrides, and ordinary-user desktop installation.
 See [the implementation roadmap](docs/ARCHITECTURE.md#91-crm-implementation-roadmap).
 
-## Desktop and privacy direction
+## Desktop runtime
 
-The finished distribution must install/bundle necessary components. Ordinary users
-must not need Git, Node.js/Python installation, development dependencies, npm commands
-or manual database configuration. No installer/download release is currently provided,
-and no desktop shell has been chosen. Many independent installations do not imply
-multi-tenant SaaS or a shared database.
+M23.1 adds an Electron desktop runtime foundation. After installing development
+dependencies, `npm run desktop` builds the backend and UI, rebuilds native SQLite
+for Electron, starts the local server, and opens the desktop window. The desktop
+server binds to loopback on a dynamically assigned port and serves the production
+UI from the same origin. The browser extension retains its stable capture endpoint
+at `127.0.0.1:4317`; it is unavailable in the desktop app only if another process
+already owns that port, in which case desktop startup reports an error rather than
+silently routing extension captures to another runtime. This is not yet a packaged
+installer or ordinary-user release; it requires Node/npm and a native build toolchain.
+
+On Windows, the desktop database, managed documents and Electron profile are stored
+under `%LOCALAPPDATA%/JobNearby`; backups remain in the existing sibling backup
+directory by default. `JOB_NEARBY_APP_DATA_DIR`, `JOB_NEARBY_DATABASE_PATH`,
+`JOB_NEARBY_DOCUMENT_DATA_DIR` and `JOB_NEARBY_BACKUP_DIR` remain available for
+explicit configuration. Existing developer data is not relocated automatically.
+
+Many independent installations do not imply multi-tenant SaaS or a shared database.
 
 Current data is stored in local SQLite. Private CRM use must not require a central
 Job Nearby cloud service. Public source does not make CVs, letters, contacts, notes,
@@ -86,7 +98,8 @@ local database; use a disposable working directory/data store for development ch
 
 ## Developer-run local vacancy review UI
 
-Start the API server in one terminal:
+For the desktop runtime, run `npm run desktop` from an installed checkout.
+For browser-based development, start the API server in one terminal:
 
 ```text
 npm run capture:server
@@ -108,6 +121,30 @@ Vacancy reviews also offer reversible archive/restore and previewed permanent de
 See [Vacancy cleanup](docs/VACANCY_CLEANUP.md) for safeguards, shared evidence retention,
 and migration 011. Starting the server applies pending migrations; implementation
 verification used isolated databases and did not start it against the live database.
+
+## GitHub Copilot integration (VS Code)
+
+`.vscode/mcp.json` registers a local Model Context Protocol server
+(`src/infrastructure/mcp/runCopilotMcpServer.ts`) that GitHub Copilot Chat can start
+over stdio. It exposes three **read-only** repository tools — `search_workspace`,
+`read_workspace_file` and `list_workspace_files` — so Copilot inspects this checkout the
+way the repository agent does instead of guessing at file contents. No edit, delete,
+command-execution or database tool is exposed, and all paths are confined to the
+workspace root.
+
+Enable it once in VS Code: Command Palette → **MCP: List Servers** →
+`job-nearby-repository` → **Start**, then use Copilot Chat agent mode. The server is
+launched with Node's type stripping (`node --experimental-strip-types`, Node 22.6+), so
+no build step is required; `npm run copilot:mcp` starts the same server in a terminal and
+`node dist/infrastructure/mcp/runCopilotMcpServer.js` runs the compiled build instead.
+Repository-wide Copilot conventions live in `.github/copilot-instructions.md`.
+`.vscode/` stays local (it holds machine-specific editor state), so `.gitignore` re-includes
+only `.vscode/mcp.json`; put the same `servers.job-nearby-repository` block in your user-level
+`mcp.json` instead if you prefer not to share it.
+
+This bridge gives Copilot repository context tools. It does not move the repository
+agent, its model or its reasoning into Copilot, and it does not send workspace content
+anywhere itself: the local server only answers the tools Copilot Chat asks for.
 
 ## License and public release
 

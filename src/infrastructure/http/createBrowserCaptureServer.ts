@@ -8,6 +8,8 @@ import { VacancyCrmError, validatePriority, validateProcessState } from "../../d
 import { VacancyCleanupError, type VacancyCleanup } from "../../domain/user/VacancyCleanup.js";
 import { humanOrganizationRoles, type HumanOrganizationRole } from "../../domain/organizations/VacancyOrganizationRoleDecision.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { readFileSync, statSync } from "node:fs";
+import { extname, resolve, sep } from "node:path";
 
 import type { BrowserCapturePayload } from "../../application/acquisition/BrowserCapturePayload.js";
 import type { CaptureAndProcessBrowserVacancyResult } from "../../application/acquisition/captureAndProcessBrowserVacancy.js";
@@ -59,6 +61,7 @@ export interface BrowserCaptureServerDependencies {
 
 export function createBrowserCaptureServer(
   dependencies: BrowserCaptureServerDependencies,
+  options: { readonly staticUiDirectory?: string; readonly captureOnly?: boolean } = {},
 ): Server {
   return createServer(async (request, response) => {
     setCorsHeaders(request, response);
@@ -66,9 +69,22 @@ export function createBrowserCaptureServer(
       response.writeHead(204).end();
       return;
     }
+    const path = requestPath(request);
+    if (options.captureOnly && path !== BROWSER_CAPTURE_PATH) {
+      sendJson(response, 404, { success: false, error: "Not found." });
+      return;
+    }
+    if (options.staticUiDirectory) {
+      try {
+        if (serveProductionUi(request, response, path, options.staticUiDirectory)) return;
+      } catch (error) {
+        console.error("Production UI asset could not be served.", error);
+        sendJson(response, 500, { success: false, error: "Unable to serve the application UI." });
+        return;
+      }
+    }
     let operation: "capture" | "review" | "interaction" | "route" = "route";
     try {
-      const path = requestPath(request);
       const exportMatch = /^\/export\/(json|csv)$/u.exec(path);
       if (request.method === "POST" && exportMatch && dependencies.exportService) {
         operation = "review";
@@ -367,6 +383,60 @@ export function createBrowserCaptureServer(
       sendJson(response, status, { success: false, error: message });
     }
   });
+}
+
+function serveProductionUi(
+  request: IncomingMessage,
+  response: ServerResponse,
+  requestPath: string,
+  uiDirectory: string,
+): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  const root = resolve(uiDirectory);
+  let filePath: string | undefined;
+  if (/^\/assets\/[A-Za-z0-9._/-]+$/u.test(requestPath)) {
+    const candidate = resolve(root, `.${requestPath}`);
+    if (candidate.startsWith(root + sep)) filePath = candidate;
+  } else if (
+    request.headers.accept?.includes("text/html") &&
+    (requestPath === "/" ||
+      ["/today", "/contacts", "/documents", "/backup", "/export"].includes(requestPath) ||
+      /^\/review\/[^/]+$/u.test(requestPath))
+  ) {
+    filePath = resolve(root, "index.html");
+  }
+  if (!filePath) return false;
+  try {
+    if (!statSync(filePath).isFile()) return false;
+    const content = readFileSync(filePath);
+    const contentType = filePath.endsWith("index.html")
+      ? "text/html; charset=utf-8"
+      : staticContentType(extname(filePath));
+    response.writeHead(200, {
+      "Content-Type": contentType,
+      "Content-Length": content.byteLength,
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": filePath.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable",
+    });
+    response.end(request.method === "HEAD" ? undefined : content);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function staticContentType(extension: string): string {
+  switch (extension) {
+    case ".js": return "text/javascript; charset=utf-8";
+    case ".css": return "text/css; charset=utf-8";
+    case ".svg": return "image/svg+xml";
+    case ".png": return "image/png";
+    case ".ico": return "image/x-icon";
+    case ".woff": return "font/woff";
+    case ".woff2": return "font/woff2";
+    default: return "application/octet-stream";
+  }
 }
 
 function captureResponseDto(result: CaptureAndProcessBrowserVacancyResult): object {

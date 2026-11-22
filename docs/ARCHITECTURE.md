@@ -1649,49 +1649,44 @@ A `.env.example` can document required environment variables.
 
 # 67. Current runtime and distribution audit
 
-Audit baseline: `afb16e98d824e6670e74c9e357665fe23efa4041`.
+M23.1 audit baseline: `d5732bea57f594c094dac32418c251a172f5c5ce`.
 
 | Component | Observed implementation | Distribution consequence |
 | --- | --- | --- |
-| API | `runBrowserCaptureServer.ts`; Node/compiled TypeScript, `127.0.0.1:4317` | Bundle runtime and manage process startup/shutdown, single-instance and port conflicts |
-| Data | `better-sqlite3`, local `job-nearby.sqlite` relative to working directory; `createDatabase` applies migrations | Choose per-user writable data directory, safe upgrades and backup; never ship developer databases |
-| UI | React/Vite, dev server `127.0.0.1:5173`; `ui:build` creates static assets | Ship production assets and decide local hosting/shell; Vite dev server is not an installer |
-| Endpoint coupling | Fixed API URL in `ui/src/api.ts` and `browser-extension/popup.js`; fixed UI origin/CORS in HTTP server | Configure endpoint discovery/trust without broadening local API exposure |
-| Capture | Manifest V3 extension, `activeTab`/`scripting`, loopback host permission | Supported-browser install/update and permissions flow required; extension is intake, not a requirement for viewing saved CRM data |
-| Dependencies | `package.json`: Node ecosystem, native `better-sqlite3`, zod; React UI; jsdom is development/test tooling | Audit packaged dependency closure and notices; build native dependencies per supported OS/CPU/Node ABI |
-| Tooling | npm scripts build/start API separately from UI; no installer/release scripts | Pin supported runtime/build environment and build reproducible artifacts |
+| Desktop | Electron main process (`desktop/main.cjs`) owns the backend lifecycle and one window; the single-instance lock focuses the existing window | One local desktop process; installer and release packaging remain deferred |
+| API/UI | `startJobNearbyServer.ts` starts the API and serves `ui/dist` from one same-origin loopback server on an OS-assigned port | Vite is development-only; API and SPA routes are hosted together without a permanent UI/API port |
+| Data | Desktop defaults to `%LOCALAPPDATA%/JobNearby/job-nearby.sqlite`; managed documents and Electron profile share the persistent app-data root | No cwd/install-resource writes and no automatic relocation of existing developer data; environment overrides remain available |
+| Capture | The UI/API use the assigned port; a separate capture-only server reserves `127.0.0.1:4317` for the existing extension | Capture behavior and manifest permissions remain unchanged; a port conflict fails startup instead of misrouting extension writes |
+| Native dependency | `better-sqlite3` is loaded in the Electron main process and rebuilt for Electron with `@electron/rebuild` | Local desktop startup requires a compatible native build toolchain; per-OS packaging and clean-machine tests remain open |
+| Shutdown | `JobNearbyServerRuntime.close()` closes HTTP listeners and SQLite; Electron awaits it before exiting | Backend runs in-process, so no child server can be orphaned |
+| Development | Vite remains on `127.0.0.1:5173` and proxies API requests to the CLI server at `127.0.0.1:4317` | Existing browser development and extension flow remain available |
 
 Provider-specific extraction runs in repository adapters against captured browser
 material. The shipped browser path does not require a Python service, external
 browser-automation service or central recognition API. Source access/authentication
 still belongs to the user's browser, with provider restrictions and privacy guards.
 
-No absolute developer-machine path is required by the reviewed startup files, but
-relative DB/tool/fixture paths assume a repository working directory. Current work
-and native-module testing are Windows-oriented; portable Node/React code is not
-proof of tested macOS/Linux support. Select and test target platforms explicitly.
-Python/compiler tools may be needed for native dependency builds if prebuilt
-binaries are unavailable; these must not become end-user setup requirements.
+The desktop shell derives built-artifact paths from its own file location rather
+than cwd. The CLI's default database remains cwd-relative for development.
+The desktop runtime has been architecturally selected as Electron; this milestone
+does not establish supported release platforms or installer behavior.
 
 ---
 
 # 68. Desktop packaging and release architecture gaps
 
-Desktop installation is required for the product; only implementation is deferred.
-No Electron/Tauri or equivalent choice has been made. Resolve:
+M23.1 proves a local Electron runtime from built artifacts, but is not a distributable
+product. Resolve:
 
-1. Shell versus managed local-browser experience, process lifecycle, production UI hosting and browser opening.
-2. Runtime bundling, native SQLite ABI/platform builds, supported OS/CPU versions and clean-machine installation tests.
-3. Per-profile data/config paths, file permissions, logging, port conflicts and local API access safeguards.
-4. First-run setup, capture extension installation/update, offline CRM use and actionable startup errors.
-5. M19.1 establishes managed immutable document copies (see document storage below); complete backup/restore and actual submission provenance remain to be implemented.
-6. Pre-upgrade backup, transactional schema migration, interrupted-upgrade recovery, version compatibility and rollback limits.
-7. Installer/uninstaller behavior that preserves user data by default, explicit removal choices and update strategy.
-8. Dependency/source/fixture redistribution audit, license/notices, artifact checksums and reproducible release instructions.
+1. Bundle Electron, compiled server, UI assets and native dependencies for explicitly supported OS/CPU versions; test clean-machine install/start.
+2. Provide an in-app installation/configuration path for the browser extension and a more actionable recovery path for its reserved-port startup conflict.
+3. Test first-run and upgrade behavior, filesystem permissions, logging, offline use and data preservation on each supported platform.
+4. Define installer/uninstaller behavior that preserves user data by default, explicit removal choices and rollback boundaries.
+5. Audit dependency/source/fixture redistribution, licenses and notices, checksums and reproducible release instructions.
+6. Decide update policy. Auto-update, code signing and release publication are explicitly out of scope for M23.1.
 
-Architecture feasibility and license audits should begin before implementation
-choices lock in distribution constraints. No installer, migration, release automation
-or file-storage feature is implemented by M18.1.
+Backup/restore, schema migrations and managed document storage remain independent
+application services and are not moved into packaged resources by this runtime.
 
 ---
 

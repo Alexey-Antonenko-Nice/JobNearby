@@ -17,5 +17,6 @@ coverage/
 .DS_Store
 Thumbs.db
 
-.vscode/
+.vscode/*
+!.vscode/mcp.json
 .idea/

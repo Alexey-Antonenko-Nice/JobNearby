@@ -2,6 +2,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "capture:server": "npm run build && node dist/infrastructure/http/runBrowserCaptureServer.js",
+    "copilot:mcp": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/infrastructure/mcp/runCopilotMcpServer.ts",
+    "desktop:build": "npm run build && npm run ui:build",
+    "desktop:rebuild-native": "electron-rebuild -f -w better-sqlite3",
+    "desktop": "npm run desktop:build && npm run desktop:rebuild-native && electron desktop/main.cjs",
     "ui:dev": "vite --config ui/vite.config.ts",
     "ui:build": "vite build --config ui/vite.config.ts",
     "test:ui": "vitest run --config ui/vitest.config.ts",
@@ -12,6 +16,7 @@
     "test:watch": "vitest tests"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -20,6 +25,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^40.10.6",
     "jsdom": "^28.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -31,7 +37,9 @@
     "better-sqlite3": "^13.0.3",
     "zod": "^4.4.3"
   },
+  "main": "desktop/main.cjs",
   "allowScripts": {
-    "better-sqlite3@13.0.3": true
+    "better-sqlite3@13.0.3": true,
+    "electron@40.10.6": true
   }
 }

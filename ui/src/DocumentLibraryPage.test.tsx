@@ -38,7 +38,7 @@ describe("Document library",()=>{
     const rows=within(detail).getAllByRole("listitem");expect(rows[0]).toHaveTextContent("v1 - old.pdf");expect(rows[1]).toHaveTextContent("v2 - new.pdf");
     expect(rows[0]).toHaveTextContent("100 bytes - AVAILABLE");expect(rows[0]).toHaveTextContent("2 references (1 current, 1 historical)");
     expect(rows[0]).toHaveTextContent("Protected by vacancy history");expect(rows[1]).toHaveTextContent("Unreferenced; retained");
-    expect(within(detail).getByRole("link",{name:"Download v1"})).toHaveAttribute("href","http://127.0.0.1:4317/documents/versions/v1/content");
+    expect(within(detail).getByRole("link",{name:"Download v1"})).toHaveAttribute("href","/documents/versions/v1/content");
     expect(within(detail).queryByRole("button",{name:/delete/i})).not.toBeInTheDocument();
   });
   it("renames with stable retry identity and archives/restores explicitly",async()=>{
@@ -61,7 +61,7 @@ describe("Document library",()=>{
     render(<DocumentLibraryPage/>);const detail=await openCv();await userEvent.click(within(detail).getByText("Add version"));
     await userEvent.upload(within(detail).getByLabelText("Document file (maximum 5 MiB)"),new File(["new bytes"],"v3.pdf"));submitImport(detail);
     expect(await screen.findByRole("link",{name:"Download v3"})).toBeInTheDocument();expect(screen.getByRole("link",{name:"Download v1"})).toBeInTheDocument();
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://127.0.0.1:4317/documents/import");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/documents/import");
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({documentId:"cv",requestId:expect.any(String),originalFileName:"v3.pdf",contentBase64:"bmV3IGJ5dGVz"});
   });
   it("creates a reusable library document independently of any vacancy",async()=>{

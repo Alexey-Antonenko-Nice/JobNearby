@@ -15,6 +15,7 @@ export function resolveApplicationDataPaths(options: {
   home?: string;
   repositoryRoot?: string;
   temporaryRoot?: string;
+  applicationDataRoot?: string;
   databasePath?: string;
   documentDataDir?: string;
   defaultBackupDir?: string;
@@ -23,17 +24,22 @@ export function resolveApplicationDataPaths(options: {
   const platform = options.platform ?? process.platform;
   const home = options.home ?? homedir();
 
-  const resolvedDocumentDir = options.documentDataDir
+  const resolvedDocumentDir = options.documentDataDir !== undefined
     ? resolve(options.documentDataDir)
-    : documentDataDirectory({
-        platform,
-        env,
-        home,
-        ...(options.repositoryRoot !== undefined ? { repositoryRoot: options.repositoryRoot } : {}),
-        ...(options.temporaryRoot !== undefined ? { temporaryRoot: options.temporaryRoot } : {}),
-      });
+    : options.applicationDataRoot !== undefined
+      ? resolve(options.applicationDataRoot)
+      : documentDataDirectory({
+          platform,
+          env,
+          home,
+          ...(options.repositoryRoot !== undefined ? { repositoryRoot: options.repositoryRoot } : {}),
+          ...(options.temporaryRoot !== undefined ? { temporaryRoot: options.temporaryRoot } : {}),
+        });
 
-  const configuredDb = options.databasePath ?? env.JOB_NEARBY_DATABASE_PATH ?? "job-nearby.sqlite";
+  const configuredDb =
+    options.databasePath ??
+    env.JOB_NEARBY_DATABASE_PATH ??
+    (options.applicationDataRoot ? join(resolvedDocumentDir, "job-nearby.sqlite") : "job-nearby.sqlite");
   const databasePath = resolve(configuredDb);
 
   const defaultBackupBase =

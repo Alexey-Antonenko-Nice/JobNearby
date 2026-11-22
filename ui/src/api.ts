@@ -135,7 +135,7 @@ export interface ReviewView {
 
 interface ErrorResponse { readonly error?: string; }
 
-const API_ORIGIN = "http://127.0.0.1:4317";
+const API_ORIGIN = "";
 
 export async function getReview(canonicalVacancyId: string): Promise<ReviewView> {
   const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/review`);

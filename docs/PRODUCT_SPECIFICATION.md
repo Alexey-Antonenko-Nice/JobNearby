@@ -2,7 +2,7 @@
 
 **Version:** 0.2 (M18.1, Chapter 2 CRM alignment)
 **Status:** Working product specification; requirements are not claims of delivery
-**Implementation audit baseline:** `afb16e98d824e6670e74c9e357665fe23efa4041`
+**Implementation audit baseline:** `d5732bea57f594c094dac32418c251a172f5c5ce`
 
 ## 1. Product definition
 
@@ -231,11 +231,15 @@ must bundle/install necessary runtime components. Users must not need to install
 Node.js or Python, install development dependencies, clone the repository, run npm,
 configure a development database or understand internal architecture.
 
-No desktop shell technology is selected by this specification. Browser capture is
-an optional intake capability of the CRM; its installation/integration must be
-explained and supported in the eventual distribution. Many independent users means
-one local application and private data store per user/machine/profile initially,
-not a shared server, central database or multi-tenant SaaS.
+M23.1 selects Electron and implements a local desktop runtime foundation: one
+desktop process owns the backend, serves the built UI on a dynamically assigned
+loopback port, and stores its profile/data under the per-user application-data
+root. This is not an installer or ordinary-user release; bundling, signing,
+auto-update, extension onboarding and supported-platform qualification remain
+future work. Browser capture remains an optional intake capability. Many
+independent users means one local application and private data store per
+user/machine/profile initially, not a shared server, central database or
+multi-tenant SaaS.
 
 ## 14. Local data, privacy and portability
 
@@ -292,12 +296,12 @@ Audited from code at the baseline above, without opening the live database:
 | Next actions/reminders | Implemented in Review (M18.4): multiple actions, due times, completion/cancellation and reminder history; due signals calculated on read, no background notifications |
 | Daily work queue | Future work |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
-| Backup/restore/export and desktop installer | Missing ordinary-user workflows |
+| Backup/restore/export and desktop runtime | Backup/restore/export implemented; M23.1 desktop runtime foundation implemented, installer still missing |
 | Public open-source release readiness | Intent documented; license, contribution and release work remain |
 
 See [DATA_MODEL.md section 78](DATA_MODEL.md#78-crm-core-gap-analysis-m181) for
-model boundaries and implementation evidence. This milestone changes documentation
-only. It does not implement any missing capability.
+model boundaries and implementation evidence. The Electron runtime does not change
+CRM/domain semantics.
 
 ## 16. Roadmap and release gates
 
