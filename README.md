@@ -165,10 +165,11 @@ code has an unreviewed license; `npm run check:repo` rejects generated artifacts
 local data and high-confidence secrets in tracked files.
 
 Public release still requires contribution guidance, installer/download and upgrade
-instructions, supported platforms, reproducible build/release procedures, and a
-privacy review of source history, fixtures and release artifacts. Captured provider
-fixtures and a diagnostic dump currently in the repository must be addressed first.
-See architecture sections 68, 90 and 91, and the known warnings in the licensing
-policy.
+instructions, supported platforms and reproducible build/release procedures. M24.2
+reduced the tracked provider fixtures to minimal regression evidence, removed the
+diagnostic dump, and added `npm run check:fixtures` for size, contact-data and
+tracking hygiene. The earlier captures remain in Git history, so a history decision
+is still required before publishing. See architecture sections 68, 90 and 91, and
+the known warnings in the licensing policy.
 
 The **Today** page (`/today`) provides a derived daily CRM work queue: overdue actions, due reminders, today/upcoming work and opportunities needing a next action. It uses the browser timezone and refreshes on demand. Complete/cancel actions or dismiss due reminders directly in Today using the existing CRM commands; the entire queue refreshes afterward. Open Review for other changes. This is not a background scheduler or notification service.

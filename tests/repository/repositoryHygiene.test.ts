@@ -20,8 +20,8 @@ describe(".gitignore covers generated and private runtime data", () => {
     }
   });
 
-  it("ignores local databases, environment files and logs", () => {
-    for (const pattern of ["*.sqlite", "*.sqlite-wal", "*.sqlite-shm", "*.db", "*.db-wal", "*.db-shm", ".env", ".env.*", "*.log"]) {
+  it("ignores local databases, environment files, logs and diagnostic dumps", () => {
+    for (const pattern of ["*.sqlite", "*.sqlite-wal", "*.sqlite-shm", "*.db", "*.db-wal", "*.db-shm", ".env", ".env.*", "*.log", "*-diagnostic.txt"]) {
       expect(ignores(pattern), pattern).toBe(true);
     }
   });
@@ -48,6 +48,7 @@ describe("tracked-path classification", () => {
     expect(classifyTrackedPath("job-nearby.sqlite-wal")?.category).toBe("forbidden-extension");
     expect(classifyTrackedPath("backups/job-nearby-backup.zip")?.category).toBe("forbidden-directory");
     expect(classifyTrackedPath("managed-documents/abc/cv.pdf")?.category).toBe("forbidden-directory");
+    expect(classifyTrackedPath("linkedin-diagnostic.txt")?.category).toBe("diagnostic-dump");
   });
 
   it("allows source, tests and documentation", () => {

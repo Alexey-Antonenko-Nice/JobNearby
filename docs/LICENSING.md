@@ -86,10 +86,12 @@ Before any public release, all of the following must hold:
 1. Root `package.json` declares the project license and `LICENSE` exists.
 2. `npm run audit:licenses` reports zero blockers.
 3. `npm run check:repo` reports no generated artifacts, local data or secrets.
-4. `npm run desktop:package` completes and its legal-resource verification passes.
-5. `docs/THIRD_PARTY_LICENSES.json` is regenerated in the same change as any
+4. `npm run check:fixtures` reports no fixture content blockers.
+5. `npm run desktop:package` completes and its legal-resource verification passes.
+6. `docs/THIRD_PARTY_LICENSES.json` is regenerated in the same change as any
    dependency change.
-6. Fixture/copyright and privacy review (below) is resolved for public history.
+7. A Git-history publication decision is made (the current tree is content-safe, but
+   historical captures remain in commits).
 
 ## Known warnings (documented, not blocking the MIT choice)
 
@@ -109,29 +111,30 @@ Before any public release, all of the following must hold:
 - **`argparse` (Python-2.0) and `truncate-utf8-bytes` (WTFPL).** Dev-only transitive
   tooling dependencies; permissive but on the review list.
 
-## Repository content risk (privacy/copyright, tracked separately from licensing)
+## Repository content hygiene (privacy/copyright, separate from licensing)
 
-These are public-release blockers for the repository as it stands, but they do not
-affect the MIT license choice or the installer:
+M24.2 resolved the tracked-content blockers recorded by the M24.1 audit:
 
-- `linkedin-diagnostic.txt` at the repository root is a 345 KB diagnostic dump
-  produced from a development database. It contains captured vacancy observations
-  and identifiers. Remove it before publishing history or regenerate a synthetic
-  example.
-- `tests/fixtures/` holds ~8.2 MB of captured provider pages (two LinkedIn captures
-  are ~2.9 MB each, plus Indeed, France Travail, Airbus, Manpower). They are
-  third-party page content, not Job Nearby code: public redistribution may conflict
-  with provider terms/copyright. Most captures are far larger than the assertions
-  need. Replace large captures with minimal synthetic snippets before public release.
-- Some fixtures contain real business contact details from public job ads (company
-  email addresses, switchboard/recruiter phone numbers, and at least one free-mail
-  address in an Indeed capture). These are publicly posted contact data, not CRM
-  user data, but they should be removed or pseudonymised before public release.
-- Captured `.meta.json` files include full provider URLs with tracking parameters.
-  Strip query strings when publishing.
+- `linkedin-diagnostic.txt` (345 KB of captured-observation diagnostics) was deleted;
+  nothing referenced it.
+- `tests/fixtures/` was reduced from 56 files / 8.2 MB to 56 files / ~1.6 MB. The two
+  ~2.9 MB LinkedIn captures became 12 KB and 5 KB fixtures containing only the
+  selected-vacancy structure; Indeed, France Travail, Randstad, Michael Page,
+  Synergie and the other large captures were minimized in place and unneeded
+  scripts/styles/chrome/prose removed.
+- Real personal contact data was replaced with synthetic values: the account-holder
+  address and account id in the Indeed capture, two named Manpower recruiters with
+  direct addresses, and company mailboxes/switchboard numbers from Airbus, Actual and
+  Synergie. Emails now use `example.test`; phone numbers use `01 00 00 00 00`.
+- Tracking/session parameters were removed from fixture URLs and from the `.meta.json`
+  sidecars, which now store a canonical provider URL with identity parameters only.
+- `npm run check:fixtures` enforces the policy: size budget, reserved-domain emails,
+  synthetic phones, tracking/session material, diagnostic dumps, tracked databases and
+  high-confidence secrets. `tests/fixtures/README.md` documents the rules.
 
-Privacy policy, security documentation and public-history rewriting belong to M24.2
-and later milestones; M24.1 records the findings only.
+Git history still contains the original captures and the diagnostic dump. Removing
+them from the current tree does not remove them from history; a history decision
+belongs to a dedicated milestone (M24.2 does not rewrite history).
 
 ## Security audit
 

@@ -19,8 +19,9 @@ backups/
 exports/
 managed-documents/
 
-# Local logs and temporary Electron profiles
+# Local logs, temporary Electron profiles and diagnostic dumps
 *.log
+*-diagnostic.txt
 .electron/
 
 coverage/

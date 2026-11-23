@@ -297,7 +297,7 @@ Audited from code at the baseline above, without opening the live database:
 | Daily work queue | Future work |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
 | Backup/restore/export and desktop runtime | Backup/restore/export implemented; M23.1 desktop runtime foundation implemented, installer still missing |
-| Public open-source release readiness | MIT license selected (M24.1) with audited dependency/notice handling; contribution, public distribution and privacy review remain |
+| Public open-source release readiness | MIT license selected (M24.1) with audited dependency/notice handling; M24.2 minimized fixtures and removed captured contact data; contribution, public distribution and a Git-history decision remain |
 
 See [DATA_MODEL.md section 78](DATA_MODEL.md#78-crm-core-gap-analysis-m181) for
 model boundaries and implementation evidence. The Electron runtime does not change

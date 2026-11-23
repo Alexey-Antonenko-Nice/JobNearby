@@ -8,7 +8,7 @@
 // It rejects generated/private artifacts that must never be committed and flags
 // high-confidence secrets in tracked text files (reporting path and category only).
 
-const { readFileSync, statSync } = require("node:fs");
+const { existsSync, readFileSync, statSync } = require("node:fs");
 const path = require("node:path");
 
 const FORBIDDEN_PREFIXES = [
@@ -65,6 +65,9 @@ function classifyTrackedPath(filePath) {
     if (normalized.startsWith(prefix)) return { category: "forbidden-directory", reason };
   }
   const base = normalized.split("/").pop() ?? normalized;
+  if (/(?:^|[-_.])(?:diagnostic|dump)(?:[-_.]|$)/iu.test(base)) {
+    return { category: "diagnostic-dump", reason: "diagnostic dump or database export" };
+  }
   const extension = path.extname(base).toLowerCase();
   const extensionReason = FORBIDDEN_EXTENSIONS.get(extension);
   if (extensionReason) return { category: "forbidden-extension", reason: extensionReason };
@@ -120,8 +123,16 @@ function main() {
   const chunks = [];
   process.stdin.on("data", (chunk) => chunks.push(chunk));
   process.stdin.on("end", () => {
-    const files = Buffer.concat(chunks).toString("utf8").split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
-    const findings = checkTrackedFiles(path.resolve(__dirname, ".."), files);
+    const root = path.resolve(__dirname, "..");
+    const files = Buffer.concat(chunks)
+      .toString("utf8")
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      // A path removed from the working tree but not yet committed is absent from this
+      // checkout; `git status` already reports that pending change.
+      .filter((file) => existsSync(path.join(root, file)));
+    const findings = checkTrackedFiles(root, files);
     process.stdout.write(`Repository hygiene: ${files.length} tracked files checked\n`);
     if (findings.length === 0) {
       process.stdout.write("No generated artifacts, local data, or high-confidence secrets found in tracked files.\n");

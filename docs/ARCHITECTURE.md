@@ -2150,9 +2150,11 @@ invariant.
 No `CONTRIBUTING.md` is tracked, and there are still no ordinary-user
 installer/download or upgrade instructions or a tracked `.github` release workflow.
 Release readiness also requires contribution guidance, reproducible build
-instructions and supported-platform documentation, plus a privacy/copyright review of
-captured fixtures and history: the repository currently tracks large provider page
-captures and a diagnostic database dump. Public source alone is not a substitute for
+instructions and supported-platform documentation. M24.2 completed the tracked-content
+review: provider fixtures were reduced to minimal regression evidence, the diagnostic
+database dump was removed, and `npm run check:fixtures` plus `npm run check:repo`
+enforce the content policy. Earlier captures remain in Git history, so publishing
+still needs an explicit history decision. Public source alone is not a substitute for
 user-data portability.
 
 ---
