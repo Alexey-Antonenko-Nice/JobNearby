@@ -117,7 +117,8 @@ describe("contributor documentation", () => {
     expect(contributing).toContain("tests/infrastructure/DailyWorkQueue.test.ts");
     expect(contributing).toContain("tests/infrastructure/SqliteUserVacancyInteractionRepository.test.ts");
     expect(contributing).toContain("tests/persistence/PromanHistoricalRemediation.test.ts");
-    expect(contributing).toContain("Do not raise timeouts");
+    expect(contributing.toLowerCase()).toContain("raising timeouts");
+    expect(contributing).toContain("no timeout is increased");
   });
 
   it("does not contain machine-specific absolute paths", () => {

@@ -207,6 +207,12 @@ Run the complete backend suite:
 npm run test
 ```
 
+Run the backend suite with the CI timing-sensitive split:
+
+```text
+npm run test:ci
+```
+
 Run the complete UI suite:
 
 ```text
@@ -216,7 +222,7 @@ npm run test:ui
 Focused suites:
 
 ```text
-npx vitest run tests/security
+npm run test:security
 npx vitest run tests/acquisition
 npx vitest run tests/path/to/file.test.ts
 npx vitest run --config ui/vitest.config.ts ui/src/path/to/file.test.tsx
@@ -234,9 +240,11 @@ load. Historically this has affected:
 - `tests/infrastructure/SqliteUserVacancyInteractionRepository.test.ts`
 - `tests/persistence/PromanHistoricalRemediation.test.ts`
 
-If one of these times out in a full run, rerun that exact file independently and
-investigate the failure if it reproduces. Do not raise timeouts or normalize the
-failure away without causal evidence.
+`npm run test:ci` runs those three files independently first, then runs the rest of the
+backend suite with those exact files excluded. Any failure in a timing-sensitive file
+or in the remaining suite fails the command; no timeout is increased and no failure is
+swallowed. If one of these files fails independently, investigate the failure rather
+than raising timeouts or normalizing it away.
 
 ## Required pre-PR checks
 
@@ -265,6 +273,39 @@ npm run test:ui
 
 `check:repo` inspects paths tracked by Git; stage new files before relying on it to
 check them. `check:fixtures` scans the fixture directory in the working tree.
+
+## Continuous integration and packaging artifacts
+
+Pull requests targeting `main` and pushes to `main` run the GitHub Actions **CI**
+workflow. It runs repository hygiene, license, typecheck and build checks, the
+production dependency audit, explicit security regressions, the backend suite using the
+timing-sensitive split, and the UI suite. CI must pass before a pull request is merged.
+
+The **Windows package** workflow is manual (`workflow_dispatch`) on a Windows runner. It
+runs the contributor and security checks, builds the Windows x64 NSIS installer with the
+existing `desktop:package` command, verifies legal resources and the installer checksum,
+and uploads the installer plus `.sha256` file as a workflow artifact. It does not create
+a tag or GitHub Release, and it does not sign the installer.
+
+The artifact is a workflow artifact for validation, not a public release. It is unsigned,
+so Windows SmartScreen may warn. Download it from the workflow run and verify it with:
+
+```powershell
+Get-FileHash .\Job-Nearby-Setup-*.exe -Algorithm SHA256
+Get-Content .\Job-Nearby-Setup-*.exe.sha256
+```
+
+The checksum filename identifies the installer, and the local verification command is:
+
+```text
+npm run package:verify
+```
+
+`npm run package:verify` fails unless exactly one versioned installer and its matching
+checksum exist in `release/` and the hashes agree. Run it after `npm run desktop:package`
+when validating a local package. The manual Windows package workflow is the CI
+equivalent; release publication, signing, tag creation and version bumps are later
+milestones.
 
 ## Packaging check
 

@@ -188,6 +188,16 @@ and desktop/extension workflows, test commands, fixture and privacy rules, and p
 request expectations. Normal bugs are reported through GitHub issues. Do not report a
 vulnerability publicly; follow [SECURITY.md](SECURITY.md).
 
+## Automation
+
+GitHub Actions runs repository quality, security, backend and UI checks on pull
+requests and main-branch pushes. A separate **Windows package** workflow is started
+manually; it builds the unsigned Windows x64 installer and uploads the installer and
+its SHA-256 checksum as workflow artifacts. These artifacts are validation/pre-release
+builds, not published GitHub Releases. See
+[Contributing](CONTRIBUTING.md#continuous-integration-and-packaging-artifacts) for the
+local commands and artifact verification.
+
 ## License and public release
 
 Job Nearby is licensed under the [MIT License](LICENSE), Copyright (c) 2026
@@ -203,15 +213,15 @@ local data and high-confidence secrets in tracked files; `npm run check:history`
 rejects private database or diagnostic paths and oversized blobs in reachable
 history.
 
-Public release still requires installer/download and upgrade instructions, supported
-platform documentation, and reproducible build/release procedures. Contribution
-guidance is now tracked in [CONTRIBUTING.md](CONTRIBUTING.md), issue and pull-request
-templates are under `.github/`, and the contributor checks compose the existing
-repository guards. M24.2 reduced the tracked provider fixtures to minimal regression
-evidence and removed the diagnostic dump; M24.3 rewrote the published history so the
-former databases, diagnostic dump and unsanitized captures are no longer reachable;
-M24.4 adds a canonical LF line-ending policy and `npm run check:history` to keep it
-that way. See architecture sections 68, 90 and 91, and the known warnings in the
-licensing policy.
+Public release still requires automated release publication, signing/SmartScreen work,
+installer/download and upgrade instructions, supported platform documentation, and
+reproducible release procedures. Contribution guidance is tracked in
+[CONTRIBUTING.md](CONTRIBUTING.md), issue and pull-request templates are under
+`.github/`, and the CI/package automation foundation is in `.github/workflows/`. M24.2
+reduced the tracked provider fixtures to minimal regression evidence and removed the
+diagnostic dump; M24.3 rewrote the published history so the former databases,
+diagnostic dump and unsanitized captures are no longer reachable; M24.4 adds a
+canonical LF line-ending policy and `npm run check:history` to keep it that way. See
+architecture sections 68, 90 and 91, and the known warnings in the licensing policy.
 
 The **Today** page (`/today`) provides a derived daily CRM work queue: overdue actions, due reminders, today/upcoming work and opportunities needing a next action. It uses the browser timezone and refreshes on demand. Complete/cancel actions or dismiss due reminders directly in Today using the existing CRM commands; the entire queue refreshes afterward. Open Review for other changes. This is not a background scheduler or notification service.

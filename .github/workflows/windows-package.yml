@@ -1,0 +1,77 @@
+name: Windows package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-package-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Windows x64 installer artifact
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run contributor, hygiene, license and build checks
+        run: npm run check:contributor
+      - name: Run security regression tests
+        run: npm run test:security
+      - name: Build Windows installer
+        run: npm run desktop:package
+      - name: Verify packaged legal resources
+        run: npm run verify:packaged-legal
+      - name: Verify installer and checksum
+        run: npm run package:verify
+      - name: Stage verified installer and checksum
+        shell: pwsh
+        run: |
+          $artifact = node tools/verifyReleaseArtifact.cjs --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $stage = Join-Path "release" "ci-artifact"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item -Path (Join-Path "release" $artifact.installer) -Destination $stage
+          Copy-Item -Path (Join-Path "release" $artifact.checksum) -Destination $stage
+          Add-Content -Path $env:GITHUB_ENV -Value "PACKAGE_VERSION=$($artifact.version)"
+          Add-Content -Path $env:GITHUB_ENV -Value "INSTALLER_NAME=$($artifact.installer)"
+          Add-Content -Path $env:GITHUB_ENV -Value "INSTALLER_SHA=$($artifact.sha256)"
+      - name: Write workflow summary
+        shell: pwsh
+        run: |
+          $lines = @(
+            "## Windows package",
+            "",
+            "- Commit: $env:GITHUB_SHA",
+            "- Version: $env:PACKAGE_VERSION",
+            "- Node: $(node --version)",
+            "- Installer: $env:INSTALLER_NAME",
+            "- SHA-256: $env:INSTALLER_SHA",
+            "- Signing: unsigned; Windows SmartScreen may warn.",
+            "- This is a workflow artifact for validation, not a GitHub Release."
+          )
+          $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-nearby-windows-x64
+          path: release/ci-artifact/*
+          if-no-files-found: error
+          retention-days: 14

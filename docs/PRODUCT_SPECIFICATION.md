@@ -297,7 +297,7 @@ Audited from code at the baseline above, without opening the live database:
 | Daily work queue | Implemented: the Today page derives overdue actions, due reminders, today/upcoming work and opportunities needing an action; no background notification service |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/search beyond the derived work queue |
 | Backup/restore/export and desktop runtime | Backup/restore/export implemented; M23.1 desktop runtime and M23.2 Windows x64 installer/unpacked package implemented; public release distribution remains separate |
-| Public open-source release readiness | MIT license selected (M24.1); M24.2 minimized fixtures and removed captured contact data; M24.3 removed sensitive content from published history; M25.1 adds privacy/data-handling, security-policy and threat-model documentation; M25.2 hardens loopback API authorization (per-session credentials, Host/Origin validation, JSON enforcement, capture rate limiting); M25.3 adds contributor guidance, issue/PR templates and contributor checks. Remaining: installer/download and upgrade guidance, release automation and signing |
+| Public open-source release readiness | MIT license selected (M24.1); M24.2 minimized fixtures and removed captured contact data; M24.3 removed sensitive content from published history; M25.1 adds privacy/data-handling, security-policy and threat-model documentation; M25.2 hardens loopback API authorization (per-session credentials, Host/Origin validation, JSON enforcement, capture rate limiting); M25.3 adds contributor guidance, issue/PR templates and contributor checks; M26.1 adds Windows CI quality/security/test gates and a manual Windows installer artifact workflow. Remaining: automated release publication, signing, and installer/download/upgrade guidance |
 
 See [DATA_MODEL.md section 78](DATA_MODEL.md#78-crm-core-gap-analysis-m181) for
 model boundaries and implementation evidence. The Electron runtime does not change
@@ -312,10 +312,11 @@ reminders; E CRM usability; F portability; G desktop distribution; H public rele
 Licensing/dependency and packaging feasibility investigations start early; their
 release gates cannot wait until public distribution. Storage and portability
 requirements must shape document design before files are accumulated. Public release
-also requires installer/download and upgrade guidance, release automation, and signing;
-loopback API authorization is hardened and documented in
+also requires automated release publication, signing, and installer/download and
+upgrade guidance; loopback API authorization is hardened and documented in
 [SECURITY_MODEL.md](SECURITY_MODEL.md). Contribution guidance and issue/PR templates are
-tracked in [CONTRIBUTING.md](../CONTRIBUTING.md) and `.github/`.
+tracked in [CONTRIBUTING.md](../CONTRIBUTING.md) and `.github/`, and the M26.1 CI plus
+manual Windows packaging foundation is under `.github/workflows/`.
 
 ## 17. Out of scope and foundational invariants
 

@@ -31,6 +31,24 @@ runtime, desktop main process, compiled backend, production dependencies, and bu
 UI; tests, fixtures, maps, databases, and environment files are excluded. The build
 does not bundle the browser extension.
 
+## CI-built installer artifacts
+
+The **Windows package** GitHub Actions workflow is manual (`workflow_dispatch`) and
+runs on a Windows runner. It performs the contributor/security checks, runs
+`npm run desktop:package`, verifies packaged legal resources, verifies the installer
+and checksum, and uploads both files as the `job-nearby-windows-x64` workflow artifact.
+
+- The artifact contains the versioned NSIS installer and its `.sha256` checksum; it does
+  not contain `win-unpacked`, build caches, logs or databases.
+- Artifact retention is 14 days.
+- The installer remains unsigned; Windows SmartScreen may warn. This is not a CI
+  failure.
+- A workflow artifact is **not** a GitHub Release and does not create a tag or publish
+  assets. It is intended for validation and pre-release testing.
+- The version comes from `package.json`; CI does not bump it.
+- Verify a downloaded artifact with `Get-FileHash` and the `.sha256` file, or run
+  `npm run package:verify` against a local `release/` build.
+
 ## Licensing and packaged notices
 
 Job Nearby is licensed under the MIT License (see `LICENSE`). The locked package

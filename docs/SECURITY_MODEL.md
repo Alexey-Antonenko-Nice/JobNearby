@@ -246,6 +246,13 @@ ACLs and any disk encryption the user enables.
 
 - Dependencies are locked in `package-lock.json`; `npm audit --omit=dev` is part of
   release verification.
+- GitHub Actions CI installs with `npm ci`, uses read-only repository permissions and
+  first-party actions, and runs the repository hygiene/license checks, production audit,
+  security regressions, backend tests and UI tests. The manual Windows package workflow
+  runs the same checks before uploading the unsigned installer and checksum as workflow
+  artifacts; it does not publish a release, create a tag, bump a version, or sign the
+  installer. Installer bytes are checksum-verified but byte-for-byte reproducibility is
+  not proven.
 - The Windows installer is currently unsigned and may trigger SmartScreen.
 - The application has no auto-update mechanism and no remote configuration.
 - The browser extension is manually installed and has no store update channel.

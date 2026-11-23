@@ -2171,7 +2171,11 @@ shell and the extension is paired through an authenticated pairing-code flow. Th
 security model records the residual same-user malware limitation. M25.3 adds the
 contributor guide, issue/feature templates, pull-request checklist, fixture/privacy
 routing, and the composed `check:contributor` command without changing runtime
-behavior, schema, backup/export formats, or security architecture.
+behavior, schema, backup/export formats, or security architecture. M26.1 adds
+read-only GitHub Actions CI for repository quality/security/backend/UI validation and a
+manual Windows x64 package workflow that uploads the unsigned installer and checksum as
+workflow artifacts. It does not publish releases, create tags, bump versions, or sign
+installers; those remain later milestones.
 
 ---
 
