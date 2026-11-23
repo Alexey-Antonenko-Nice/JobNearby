@@ -2153,9 +2153,10 @@ Release readiness also requires contribution guidance, reproducible build
 instructions and supported-platform documentation. M24.2 completed the tracked-content
 review: provider fixtures were reduced to minimal regression evidence, the diagnostic
 database dump was removed, and `npm run check:fixtures` plus `npm run check:repo`
-enforce the content policy. Earlier captures remain in Git history, so publishing
-still needs an explicit history decision. Public source alone is not a substitute for
-user-data portability.
+enforce the content policy. M24.3 rewrote the published history so the former
+databases, diagnostic dump and unsanitized captures are unreachable; M24.4 adds
+`npm run check:history` and a root `.gitattributes` LF policy so fresh Windows clones
+stay deterministic. Public source alone is not a substitute for user-data portability.
 
 ---
 

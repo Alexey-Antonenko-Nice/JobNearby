@@ -101,6 +101,10 @@ runtime/platform versions, native dependency setup and contribution instructions
 need a tested development guide. Starting the API applies migrations to its configured
 local database; use a disposable working directory/data store for development checks.
 
+Repository text files are stored and checked out with LF line endings. The root
+`.gitattributes` (`* text=auto eol=lf`) enforces this, so a normal Windows clone works
+with the default `core.autocrlf=true` and does not need special Git configuration.
+
 ## Developer-run local vacancy review UI
 
 For the desktop runtime, run `npm run desktop` from an installed checkout.
@@ -162,14 +166,16 @@ root. See the [licensing policy](docs/LICENSING.md) and the generated
 
 `npm run audit:licenses` audits resolved dependency licenses and fails when shipped
 code has an unreviewed license; `npm run check:repo` rejects generated artifacts,
-local data and high-confidence secrets in tracked files.
+local data and high-confidence secrets in tracked files; `npm run check:history`
+rejects private database or diagnostic paths and oversized blobs in reachable
+history.
 
 Public release still requires contribution guidance, installer/download and upgrade
 instructions, supported platforms and reproducible build/release procedures. M24.2
-reduced the tracked provider fixtures to minimal regression evidence, removed the
-diagnostic dump, and added `npm run check:fixtures` for size, contact-data and
-tracking hygiene. The earlier captures remain in Git history, so a history decision
-is still required before publishing. See architecture sections 68, 90 and 91, and
-the known warnings in the licensing policy.
+reduced the tracked provider fixtures to minimal regression evidence and removed the
+diagnostic dump; M24.3 rewrote the published history so the former databases,
+diagnostic dump and unsanitized captures are no longer reachable; M24.4 adds a
+canonical LF line-ending policy and `npm run check:history` to keep it that way. See
+architecture sections 68, 90 and 91, and the known warnings in the licensing policy.
 
 The **Today** page (`/today`) provides a derived daily CRM work queue: overdue actions, due reminders, today/upcoming work and opportunities needing a next action. It uses the browser timezone and refreshes on demand. Complete/cancel actions or dismiss due reminders directly in Today using the existing CRM commands; the entire queue refreshes afterward. Open Review for other changes. This is not a background scheduler or notification service.

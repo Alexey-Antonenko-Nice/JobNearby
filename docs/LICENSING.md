@@ -132,9 +132,12 @@ M24.2 resolved the tracked-content blockers recorded by the M24.1 audit:
   synthetic phones, tracking/session material, diagnostic dumps, tracked databases and
   high-confidence secrets. `tests/fixtures/README.md` documents the rules.
 
-Git history still contains the original captures and the diagnostic dump. Removing
-them from the current tree does not remove them from history; a history decision
-belongs to a dedicated milestone (M24.2 does not rewrite history).
+M24.3 rewrote the published history: the runtime databases, the diagnostic dump and
+the unsanitized captures are no longer reachable from `main`, and the sanitized tree is
+preserved. `npm run check:history` guards against reintroducing private database or
+diagnostic paths, or oversized blobs, into reachable history. Old local clones, backup
+bundles and forge caches may still contain the removed objects, so they must not be
+pushed or published; GitHub caches/forks remain a separate residual consideration.
 
 ## Security audit
 

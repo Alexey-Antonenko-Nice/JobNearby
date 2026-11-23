@@ -1,0 +1,19 @@
+# Canonical line endings: LF is the repository format and the checkout format.
+# This keeps a default Windows clone (core.autocrlf=true) deterministic without
+# requiring any local Git configuration.
+* text=auto eol=lf
+
+# Binary assets: never convert line endings, diff or merge as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.node binary
+*.sqlite binary
+*.sqlite3 binary
+*.db binary
