@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { archiveLibraryDocument, documentDownloadUrl, getDocumentLibrary, importLibraryDocument, renameLibraryDocument, restoreLibraryDocument, type DocumentLibrary } from "./api";
+﻿import { useEffect, useRef, useState } from "react";
+import { archiveLibraryDocument, downloadDocumentVersion, getDocumentLibrary, importLibraryDocument, renameLibraryDocument, restoreLibraryDocument, type DocumentLibrary } from "./api";
 import { DocumentImportForm } from "./DocumentImportForm";
 
 export function DocumentLibraryPage() {
@@ -44,7 +44,7 @@ function DocumentDetail({document,onSaved,pending,setPending}:{document:Document
     <h3>Version history</h3>
     <ol>{document.versions.map(v=><li key={v.id}>v{v.versionNumber} - {v.originalFileName} - <time dateTime={v.createdAt}>{new Date(v.createdAt).toLocaleString()}</time> - {v.sizeBytes} bytes - {v.integrity}
       <p>{v.referenceCount} references ({v.currentReferenceCount} current, {v.referenceCount-v.currentReferenceCount} historical). {v.referenceCount>0?"Protected by vacancy history.":"Unreferenced; retained until explicit safe deletion is supported."}</p>
-      {v.integrity==="AVAILABLE"?<a href={documentDownloadUrl(v.id)}>Download v{v.versionNumber}</a>:<p role="status">File {v.integrity==="MISSING"?"missing":"failed integrity verification"}; historical record retained. New selection and download unavailable.</p>}
+      {v.integrity==="AVAILABLE"?<button type="button" onClick={()=>void downloadDocumentVersion(v.id,v.originalFileName).catch(failure=>setError(failure instanceof Error?failure.message:"Unable to download this document."))}>Download v{v.versionNumber}</button>:<p role="status">File {v.integrity==="MISSING"?"missing":"failed integrity verification"}; historical record retained. New selection and download unavailable.</p>}
       <details><summary>Integrity details for v{v.versionNumber}</summary><code>SHA-256: {v.contentHash}</code></details>
     </li>)}</ol>
     {document.archivedAt?<p>Restore this document to import or select another version. Existing selections and intact downloads remain available.</p>:<details><summary>Add version</summary><DocumentImportForm key={document.id} documents={[document]} initialDocumentId={document.id} allowNew={false} disabled={pending} onImport={async input=>onSaved(await importLibraryDocument(input))}/></details>}

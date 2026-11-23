@@ -15,7 +15,7 @@ describe("InboxPage", () => {
     fetchMock.mockResolvedValueOnce(response({ vacancies: [item()] })); render(<InboxPage />);
     expect(screen.getByText("Loading...")).toBeInTheDocument();
     expect(await screen.findByText("Developer")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(1); expect(fetchMock.mock.calls[0]![1]).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1); expect(fetchMock.mock.calls[0]![1]?.method).toBeUndefined();
     expect(screen.getByRole("link", { name: "Open review" })).toHaveAttribute("href", "/review/canonical-1");
   });
   it("renders the primary source as a new-tab link", async () => {

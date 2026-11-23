@@ -137,14 +137,51 @@ interface ErrorResponse { readonly error?: string; }
 
 const API_ORIGIN = "";
 
+const SESSION_META_NAME = "job-nearby-session";
+let sessionToken: string | null = null;
+let sessionTokenPromise: Promise<string> | null = null;
+
+function readBootstrapToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const value = document.querySelector(`meta[name="${SESSION_META_NAME}"]`)?.getAttribute("content") ?? "";
+  return value.length > 0 ? value : null;
+}
+
+async function ensureSessionToken(): Promise<string> {
+  if (sessionToken !== null) return sessionToken;
+  sessionToken = readBootstrapToken();
+  if (sessionToken !== null) return sessionToken;
+  sessionTokenPromise ??= (async () => {
+    // Development only: Vite serves the shell, so the dev backend issues a token to
+    // its configured dev origin. The packaged app always bootstraps from the meta tag.
+    if (typeof window !== "undefined" && window.location.origin === "http://127.0.0.1:5173") {
+      const response = await fetch("/dev/session");
+      if (response.ok) {
+        const body = await response.json() as { token?: string };
+        sessionToken = body.token ?? "";
+      }
+    }
+    return sessionToken ?? "";
+  })();
+  return sessionTokenPromise;
+}
+
+/** Adds the per-session desktop credential to every local API request. */
+export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const token = await ensureSessionToken();
+  const headers = new Headers(init.headers);
+  if (token.length > 0) headers.set("X-Job-Nearby-Session", token);
+  return fetch(input, { ...init, headers });
+}
+
 export async function getReview(canonicalVacancyId: string): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/review`);
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/review`);
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;
 }
 
 export async function recordInteraction(canonicalVacancyId: string, type: string, requestId?:string, contactId?:string): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/interactions`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/interactions`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, ...(requestId?{requestId}:{}), ...(contactId?{contactId}:{}) }),
   });
   if (!response.ok) throw await apiError(response);
@@ -177,20 +214,20 @@ export interface VacancyInboxItem {
 
 export async function getVacancyInbox(limit?: number, archived = false): Promise<readonly VacancyInboxItem[]> {
   const query = limit === undefined ? "" : `?limit=${encodeURIComponent(limit)}`;
-  const response = await fetch(`${API_ORIGIN}/vacancies${query}${archived ? (query ? "&archived=true" : "?archived=true") : ""}`);
+  const response = await apiFetch(`${API_ORIGIN}/vacancies${query}${archived ? (query ? "&archived=true" : "?archived=true") : ""}`);
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { vacancies: readonly VacancyInboxItem[] }).vacancies;
 }
 
 export async function confirmEmployer(canonicalVacancyId: string, candidateName: string): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-confirmation`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-confirmation`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidateName }),
   });
   if (!response.ok) throw await apiError(response);
   return (await response.json() as { review: ReviewView }).review;
 }
 export async function decideEmployerMemory(canonicalVacancyId: string, employerClusterId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-memory-review`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-memory-review`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employerClusterId, decision }),
   });
   if (!response.ok) throw await apiError(response);
@@ -198,7 +235,7 @@ export async function decideEmployerMemory(canonicalVacancyId: string, employerC
 }
 
 export async function decideNamedClientEmployer(canonicalVacancyId: string, candidateId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "NAMED_CLIENT", candidateId, decision }),
   });
   if (!response.ok) throw await apiError(response);
@@ -206,7 +243,7 @@ export async function decideNamedClientEmployer(canonicalVacancyId: string, cand
 }
 
 export async function decideEmployerAlias(canonicalVacancyId: string, candidateId: string, employerClusterId: string, decision: "CONFIRM" | "REJECT"): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-review`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "ALIAS_SELECTION", candidateId, employerClusterId, decision }),
   });
   if (!response.ok) throw await apiError(response);
@@ -214,7 +251,7 @@ export async function decideEmployerAlias(canonicalVacancyId: string, candidateI
 }
 
 export async function confirmRecruitingAgency(canonicalVacancyId: string, candidateId: string): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/recruiting-agency-confirmation`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/recruiting-agency-confirmation`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ candidateId }),
   });
   if (!response.ok) throw await apiError(response);
@@ -224,7 +261,7 @@ export async function confirmRecruitingAgency(canonicalVacancyId: string, candid
 export async function decideOrganizationRole(canonicalVacancyId: string, input: {
   requestId: string; identityKey: string; role: string; candidateToken: string; acknowledgeContradiction: boolean;
 }): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/organization-role-decisions`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/organization-role-decisions`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
   });
   if (!response.ok) throw await apiError(response);
@@ -232,7 +269,7 @@ export async function decideOrganizationRole(canonicalVacancyId: string, input: 
 }
 
 export async function searchEmployerIdentities(canonicalVacancyId: string, query: string): Promise<NonNullable<ReviewView["employerIdentityReview"]>> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-identity-search?q=${encodeURIComponent(query)}`);
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-identity-search?q=${encodeURIComponent(query)}`);
   if (!response.ok) throw await apiError(response);
   return (await response.json() as {employerIdentitySearch:NonNullable<ReviewView["employerIdentityReview"]>}).employerIdentitySearch;
 }
@@ -240,7 +277,7 @@ export async function searchEmployerIdentities(canonicalVacancyId: string, query
 export async function decideEmployerIdentity(canonicalVacancyId: string, input: {
   requestId: string; employerClusterId: string; candidateToken: string; decision: "USE_EXISTING" | "KEEP_SEPARATE";
 }): Promise<ReviewView> {
-  const response = await fetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-identity-decisions`, {
+  const response = await apiFetch(`${API_ORIGIN}/vacancies/${encodeURIComponent(canonicalVacancyId)}/employer-identity-decisions`, {
     method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(input),
   });
   if (!response.ok) throw await apiError(response);
@@ -249,7 +286,7 @@ export async function decideEmployerIdentity(canonicalVacancyId: string, input: 
 
 export type { VacancyCleanupState, VacancyDeletionPreview } from "../../src/domain/user/VacancyCleanup.js";
 export async function cleanupRequest<T>(id: string, action: string, body?: unknown): Promise<T> {
-  const response = await fetch(API_ORIGIN + "/vacancies/" + encodeURIComponent(id) + "/" + action, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const response = await apiFetch(API_ORIGIN + "/vacancies/" + encodeURIComponent(id) + "/" + action, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) throw await apiError(response);
   return await response.json() as T;
 }
@@ -289,13 +326,27 @@ export async function importApplicationDocument(id:string, input:Record<string,u
 export async function associateVacancyDocument(id:string,versionId:string,requestId:string):Promise<ReviewView> {
   return (await cleanupRequest<{review:ReviewView}>(id,"documents/associations",{versionId,requestId})).review;
 }
-export function documentDownloadUrl(versionId:string):string {
-  return API_ORIGIN+"/documents/versions/"+encodeURIComponent(versionId)+"/content";
+export async function downloadDocumentVersion(versionId:string,fileName:string):Promise<void> {
+  const response=await apiFetch("/documents/versions/"+encodeURIComponent(versionId)+"/content");
+  if(!response.ok) throw await apiError(response);
+  const blob=await response.blob();
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement("a");
+  anchor.href=url;
+  anchor.download=fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function getExtensionPairingToken():Promise<string> {
+  const response=await apiFetch("/extension/pairing");
+  if(!response.ok) throw await apiError(response);
+  return (await response.json() as {token:string}).token;
 }
 
 export type DocumentLibrary = Serialized<import("../../src/domain/user/ApplicationDocument.js").ApplicationDocumentsView["library"]>;
 async function libraryRequest(path:string,body?:unknown):Promise<DocumentLibrary> {
-  const response=await fetch(API_ORIGIN+path,body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const response=await apiFetch(API_ORIGIN+path,body===undefined?{}:{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!response.ok) throw await apiError(response);
   return (await response.json() as {library:DocumentLibrary}).library;
 }
@@ -306,19 +357,19 @@ export const archiveLibraryDocument=(id:string,requestId:string)=>libraryRequest
 export const restoreLibraryDocument=(id:string,requestId:string)=>libraryRequest("/documents/"+encodeURIComponent(id)+"/restore",{requestId});
 
 export async function getContacts():Promise<import("../../src/domain/user/Contact.js").Contact[]> {
-  const response=await fetch(API_ORIGIN+"/contacts");
+  const response=await apiFetch(API_ORIGIN+"/contacts");
   if(!response.ok)throw await apiError(response);
   return (await response.json()).contacts;
 }
 export async function contactCommand(input:import("../../src/domain/user/Contact.js").ContactCommand):Promise<{resultId:string;contacts:import("../../src/domain/user/Contact.js").Contact[]}> {
-  const response=await fetch(API_ORIGIN+"/contacts/commands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)});
+  const response=await apiFetch(API_ORIGIN+"/contacts/commands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(input)});
   if(!response.ok)throw await apiError(response);
   return response.json();
 }
 
 export type DailyWorkQueue = Serialized<import("../../src/application/user/deriveWorkQueue.js").DailyWorkQueue>;
 export async function getDailyWorkQueue(timeZone:string):Promise<DailyWorkQueue>{
-  const response=await fetch(API_ORIGIN+"/work-queue?timeZone="+encodeURIComponent(timeZone));
+  const response=await apiFetch(API_ORIGIN+"/work-queue?timeZone="+encodeURIComponent(timeZone));
   if(!response.ok)throw new Error("Could not load the work queue.");
   return response.json();
 }
@@ -328,7 +379,7 @@ export type BackupValidationResult = Serialized<import("../../src/application/ba
 export type RestoreBackupResult = Serialized<import("../../src/application/backup/backupTypes.js").RestoreBackupResult>;
 
 export async function createBackup(destinationPath?: string): Promise<CreateBackupResult> {
-  const response = await fetch(`${API_ORIGIN}/backup/create`, {
+  const response = await apiFetch(`${API_ORIGIN}/backup/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(destinationPath ? { destinationPath } : {}),
@@ -338,7 +389,7 @@ export async function createBackup(destinationPath?: string): Promise<CreateBack
 }
 
 export async function validateBackup(input: { archivePath?: string; archiveBase64?: string }): Promise<BackupValidationResult> {
-  const response = await fetch(`${API_ORIGIN}/backup/validate`, {
+  const response = await apiFetch(`${API_ORIGIN}/backup/validate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -349,7 +400,7 @@ export async function validateBackup(input: { archivePath?: string; archiveBase6
 }
 
 export async function restoreBackup(input: { archivePath?: string; archiveBase64?: string; confirm: true }): Promise<RestoreBackupResult> {
-  const response = await fetch(`${API_ORIGIN}/backup/restore`, {
+  const response = await apiFetch(`${API_ORIGIN}/backup/restore`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -366,7 +417,7 @@ export async function exportUserData(
   format: "json" | "csv",
   destinationPath?: string,
 ): Promise<{ export: ExportUserDataResult; contentBase64?: string }> {
-  const response = await fetch(`${API_ORIGIN}/export/${format}`, {
+  const response = await apiFetch(`${API_ORIGIN}/export/${format}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(destinationPath ? { destinationPath } : {}),

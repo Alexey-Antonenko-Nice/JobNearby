@@ -2,7 +2,7 @@ import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";

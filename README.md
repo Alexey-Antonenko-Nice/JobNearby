@@ -70,7 +70,10 @@ stored on your computer (`%LOCALAPPDATA%\JobNearby` and the sibling
 `%LOCALAPPDATA%\JobNearby-Backups`). There is no Job Nearby account, cloud backend or
 application telemetry, and the desktop application does not upload CRM data to a Job
 Nearby service. The optional browser extension captures the active page only when you
-invoke it and sends the capture to the local `127.0.0.1:4317` listener.
+invoke it and sends the capture to the local `127.0.0.1:4317` listener. The extension
+must be paired with the running desktop session; the pairing code is shown in
+**Backup & restore → Browser extension** and stored only in the extension's browser
+session.
 
 Backups and exports contain private CRM data, and backups also contain imported
 documents. They are not encrypted by Job Nearby, so treat them as sensitive files.
@@ -78,9 +81,10 @@ Uninstalling preserves the data directories; deleting local data is a manual ste
 
 Read [Privacy and data handling](docs/PRIVACY.md) for what is stored and how deletion
 works, the [security model](docs/SECURITY_MODEL.md) for trust boundaries and known
-limitations, and [SECURITY.md](SECURITY.md) for vulnerability reporting. The current
-pre-release has a known loopback-API authorization gap that blocks public release; see
-the security model.
+limitations, and [SECURITY.md](SECURITY.md) for vulnerability reporting. The loopback
+HTTP interfaces require a per-session credential and validate the request Host and
+Origin; the browser extension must be paired with the running desktop app before it can
+capture.
 
 Many independent installations do not imply multi-tenant SaaS or a shared database.
 

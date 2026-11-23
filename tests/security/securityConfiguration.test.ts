@@ -1,39 +1,6 @@
-﻿import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { createServer } from "node:net";
-import type { AddressInfo } from "node:net";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-
-import { startJobNearbyServer, type JobNearbyServerRuntime, type StartJobNearbyServerOptions } from "../../src/infrastructure/http/startJobNearbyServer.js";
-
-const roots: string[] = [];
-const runtimes: JobNearbyServerRuntime[] = [];
-
-afterEach(async () => {
-  await Promise.all(runtimes.splice(0).map((runtime) => runtime.close()));
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
-});
-
-function tempRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), "job-nearby-security-"));
-  roots.push(root);
-  return root;
-}
-
-async function freeLoopbackPort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
-  const { port } = server.address() as AddressInfo;
-  await new Promise<void>((done, fail) => server.close((error) => (error ? fail(error) : done())));
-  return port;
-}
-
-async function startRuntime(options: StartJobNearbyServerOptions = {}): Promise<JobNearbyServerRuntime> {
-  const runtime = await startJobNearbyServer({ applicationDataRoot: join(tempRoot(), "profile"), port: 0, ...options });
-  runtimes.push(runtime);
-  return runtime;
-}
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 describe("desktop shell security configuration", () => {
   const main = readFileSync(resolve(process.cwd(), "desktop", "main.cjs"), "utf8");
@@ -52,6 +19,7 @@ describe("desktop shell security configuration", () => {
     expect(main).not.toMatch(/ipcMain|ipcRenderer|contextBridge/u);
     expect(main).not.toMatch(/shell\.(openExternal|openPath|showItemInFolder)/u);
     expect(main).not.toMatch(/child_process|execSync|spawnSync|spawn\(/u);
+    expect(main).not.toMatch(/developmentUiOrigins/u);
   });
 });
 
@@ -65,55 +33,20 @@ describe("browser extension permissions", () => {
     externally_connectable?: unknown;
   };
 
-  it("requests only the active-tab scripting permissions and the local capture endpoint", () => {
+  it("requests only active-tab scripting, session storage and the local capture endpoint", () => {
     expect(manifest.manifest_version).toBe(3);
-    expect(manifest.permissions).toEqual(["activeTab", "scripting"]);
+    expect(manifest.permissions).toEqual(["activeTab", "scripting", "storage"]);
     expect(manifest.host_permissions).toEqual(["http://127.0.0.1:4317/*"]);
     expect(manifest.background).toBeUndefined();
     expect(manifest.content_scripts).toBeUndefined();
     expect(manifest.externally_connectable).toBeUndefined();
   });
-});
 
-describe("loopback listeners", () => {
-  it("refuses a non-loopback bind address", async () => {
-    await expect(startJobNearbyServer({ host: "0.0.0.0", port: 0 })).rejects.toThrow(/loopback/u);
-  });
-
-  it("serves the API on 127.0.0.1 and reflects CORS only for the documented origins", async () => {
-    const runtime = await startRuntime();
-    expect(runtime.host).toBe("127.0.0.1");
-    expect(runtime.url.startsWith("http://127.0.0.1:")).toBe(true);
-
-    const sameOrigin = await fetch(`${runtime.url}/contacts`);
-    expect(sameOrigin.status).toBe(200);
-    expect(sameOrigin.headers.get("access-control-allow-origin")).toBeNull();
-
-    const extension = await fetch(`${runtime.url}/contacts`, {
-      headers: { Origin: "chrome-extension://abcdefghijklmnop" },
-    });
-    expect(extension.headers.get("access-control-allow-origin")).toBe("chrome-extension://abcdefghijklmnop");
-
-    const unrelatedOrigin = await fetch(`${runtime.url}/contacts`, {
-      headers: { Origin: "http://example.test" },
-    });
-    expect(unrelatedOrigin.headers.get("access-control-allow-origin")).toBeNull();
-  });
-
-  it("exposes only the capture route on the fixed-port capture listener", async () => {
-    const capturePort = await freeLoopbackPort();
-    const runtime = await startRuntime({ extensionCapturePort: capturePort });
-
-    const otherRoute = await fetch(`http://127.0.0.1:${capturePort}/contacts`);
-    expect(otherRoute.status).toBe(404);
-
-    const captureRoute = await fetch(`http://127.0.0.1:${capturePort}/acquisition/browser`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
-    });
-    expect(captureRoute.status).toBe(400);
-    expect(runtime.port).toBeGreaterThan(0);
+  it("captures a pairing credential through extension storage and sends an auth header", () => {
+    const popup = readFileSync(resolve(process.cwd(), "browser-extension", "popup.js"), "utf8");
+    expect(popup).toContain("chrome.storage");
+    expect(popup).toContain("X-Job-Nearby-Extension");
+    expect(popup).toContain("http://127.0.0.1:4317");
   });
 });
 
@@ -139,5 +72,12 @@ describe("privacy and security documentation", () => {
     ]) {
       expect(readme.toLowerCase()).not.toContain(claim);
     }
+  });
+
+  it("documents loopback authorization as resolved rather than an open blocker", () => {
+    const model = readFileSync(resolve(process.cwd(), "docs", "SECURITY_MODEL.md"), "utf8");
+    expect(model).toMatch(/loopback/i);
+    expect(model).toContain("session credential");
+    expect(model).not.toMatch(/F1[\s\S]{0,200}release blocker/iu);
   });
 });

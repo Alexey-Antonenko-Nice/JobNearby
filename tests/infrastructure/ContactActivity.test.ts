@@ -4,7 +4,7 @@ import { SqliteEmployerClusterRepository } from "../../src/infrastructure/persis
 import { SqliteEmployerMemoryPublicDataSource } from "../../src/infrastructure/persistence/SqliteEmployerMemoryPublicDataSource.js";
 import { SqliteUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/SqliteUserVacancyInteractionRepository.js";
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import type { AddressInfo } from "node:net";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";

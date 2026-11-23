@@ -5,7 +5,7 @@ import { createDatabase } from "../../src/infrastructure/database/createDatabase
 import { migrateDatabase } from "../../src/infrastructure/database/migrateDatabase.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
 import { SqliteEmployerClusterRepository } from "../../src/infrastructure/persistence/SqliteEmployerClusterRepository.js";

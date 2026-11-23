@@ -17,7 +17,7 @@ import { SqliteEmployerRecognitionPersistence } from "../../src/infrastructure/p
 import { SqliteEmployerMemoryPublicDataSource } from "../../src/infrastructure/persistence/SqliteEmployerMemoryPublicDataSource.js";
 import { SqliteUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/SqliteUserVacancyInteractionRepository.js";
 import { SqliteConfirmedOrganizationRoleRepository } from "../../src/infrastructure/persistence/SqliteConfirmedOrganizationRoleRepository.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import type { VacancyOrganizationRole } from "../../src/domain/vacancies/CanonicalVacancy.js";
 import { createCaptureProcessingRuntime } from "../../src/infrastructure/runtime/createCaptureProcessingRuntime.js";
 import { AgencyMemoryVacancyEvidenceExtractor } from "../../src/application/evidence/AgencyMemoryVacancyEvidenceExtractor.js";

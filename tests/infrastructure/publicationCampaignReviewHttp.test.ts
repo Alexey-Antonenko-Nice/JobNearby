@@ -2,7 +2,7 @@ import type { PublicationCampaignContext } from "../../ui/src/api.js";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { contextFixture, seedPaths } from "../publication-identity/publicationContextFixture.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
 async function start() {

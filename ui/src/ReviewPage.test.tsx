@@ -32,7 +32,7 @@ describe("ReviewPage", () => {
     const initial=documentReview(),archived={...initial,documents:{...initial.documents,library:initial.documents.library.map(d=>({...d,archivedAt:d.id==="cv"?"2026-11-18T09:00:00Z":null})),associations:[{id:"a",canonicalVacancyId:"canonical-1",documentVersionId:"v1",createdAt:"2026-11-18T09:00:00Z",current:true}]}};
     respond({review:archived});render(<ReviewPage/>);
     expect(await screen.findByText(/Document archived; selection preserved/)).toBeInTheDocument();
-    expect(screen.getByRole("link",{name:"Download selected cv"})).toHaveAttribute("href","/documents/versions/v1/content");
+    expect(screen.getByRole("button",{name:"Download selected cv"})).toBeInTheDocument();
     expect(within(screen.getByLabelText("CV version")).queryByRole("option",{name:/Engineering CV/})).not.toBeInTheDocument();
     await userEvent.click(screen.getByText("Import a document version"));
     expect(within(screen.getByLabelText("Logical document")).queryByRole("option",{name:/Engineering CV/})).not.toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("ReviewPage", () => {
     await userEvent.click(screen.getByText("Document association history (3)"));
     expect(screen.getByText(/CV: Engineering CV — v1 — Previously selected/)).toBeInTheDocument();
     expect(screen.getByText(/not proof of sending/)).toBeInTheDocument();
-    expect(screen.getByRole("link",{name:"Download selected cv"})).toHaveAttribute("href","/documents/versions/v2/content");
+    expect(screen.getByRole("button",{name:"Download selected cv"})).toBeInTheDocument();
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({versionId:"v1",requestId:expect.any(String)});
   });
   it("imports a first document version and a later version without automatically selecting either",async()=>{
@@ -94,7 +94,7 @@ describe("ReviewPage", () => {
     const initial=documentReview();const missing={...initial,documents:{...initial.documents,library:initial.documents.library.map(d=>({...d,versions:d.versions.map(v=>({...v,integrity:"MISSING" as const}))})),associations:[{id:"a",canonicalVacancyId:"canonical-1",documentVersionId:"v1",createdAt:"2026-11-18T09:00:00Z",current:true}]}};
     respond({review:missing});render(<ReviewPage/>);
     expect(await screen.findByText("v1.pdf — MISSING")).toBeInTheDocument();
-    expect(screen.queryByRole("link",{name:"Download selected cv"})).not.toBeInTheDocument();
+    expect(screen.queryByRole("button",{name:"Download selected cv"})).not.toBeInTheDocument();
     expect(screen.getByRole("option",{name:/Engineering CV — v1/})).toBeDisabled();
   });
 
@@ -373,7 +373,7 @@ describe("ReviewPage", () => {
     render(<ReviewPage />);
     expect(await screen.findByText("Interaction history state:", { exact: false })).toHaveTextContent("NEW");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]![1]).toBeUndefined();
+    expect(fetchMock.mock.calls[0]![1]?.method).toBeUndefined();
   });
 
   it("renders source links in a new tab and shows Unknown when none are available", async () => {

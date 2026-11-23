@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { associateVacancyDocument, documentDownloadUrl, importApplicationDocument, type ReviewView } from "./api";
+﻿import { useRef, useState } from "react";
+import { associateVacancyDocument, downloadDocumentVersion, importApplicationDocument, type ReviewView } from "./api";
 import { DocumentImportForm } from "./DocumentImportForm";
 
 const labels={CV:"CV",MOTIVATION_LETTER:"Motivation letter"};
@@ -31,7 +31,7 @@ export function VacancyDocumentsSection({review,onSaved,disabled}:{review:Review
         <h3>{labels[role]}</h3>
         <p>{chosen?"Selected: "+chosen.doc.name+" — v"+chosen.version.versionNumber:"No "+labels[role].toLowerCase()+" selected."}</p>
         {chosen && <p>{chosen.version.originalFileName} — {chosen.version.integrity}{chosen.doc.archivedAt && " - Document archived; selection preserved"}
-          {chosen.version.integrity==="AVAILABLE" && <> <a href={documentDownloadUrl(chosen.version.id)}>Download selected {labels[role].toLowerCase()}</a></>}
+          {chosen.version.integrity==="AVAILABLE" && <> <button type="button" disabled={disabled||pending} onClick={()=>void downloadDocumentVersion(chosen.version.id,chosen.version.originalFileName).catch(failure=>setError(failure instanceof Error?failure.message:"Unable to download this document."))}>Download selected {labels[role].toLowerCase()}</button></>}
         </p>}
         <form onSubmit={event=>{event.preventDefault();const versionId=selection[role];if(versionId) void save(async()=>{const signature="select:"+role+":"+versionId;const next=await associateVacancyDocument(review.vacancy.canonicalVacancyId,versionId,idFor(signature));retries.current.delete(signature);return next;});}}>
           <label>{labels[role]} version <select aria-label={labels[role]+" version"} value={selection[role]??""} disabled={disabled||pending} onChange={e=>setSelection({...selection,[role]:e.target.value})}>
@@ -51,7 +51,7 @@ export function VacancyDocumentsSection({review,onSaved,disabled}:{review:Review
       {data.associations.length===0?<p>No document associations yet.</p>:<ol>{data.associations.map(a=>{
         const item=versions.find(v=>v.version.id===a.documentVersionId);
         return <li key={a.id}>{item?labels[item.doc.kind]+": "+item.doc.name+" — v"+item.version.versionNumber:"Unavailable version"} — {a.current?"Currently selected":"Previously selected"} — <time dateTime={a.createdAt}>{new Date(a.createdAt).toLocaleString()}</time>
-          {item?.version.integrity==="AVAILABLE" && <> <a href={documentDownloadUrl(item.version.id)}>Download associated version</a></>}
+          {item?.version.integrity==="AVAILABLE" && <> <button type="button" disabled={disabled||pending} onClick={()=>void downloadDocumentVersion(item.version.id,item.version.originalFileName).catch(failure=>setError(failure instanceof Error?failure.message:"Unable to download this document."))}>Download associated version</button></>}
         </li>;
       })}</ol>}
     </details>

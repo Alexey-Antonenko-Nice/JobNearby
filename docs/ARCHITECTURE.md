@@ -1654,9 +1654,9 @@ M23.1 audit baseline: `d5732bea57f594c094dac32418c251a172f5c5ce`.
 | Component | Observed implementation | Distribution consequence |
 | --- | --- | --- |
 | Desktop | Electron main process (`desktop/main.cjs`) owns the backend lifecycle and one window; the single-instance lock focuses the existing window | Windows x64 per-user NSIS installer and unpacked package are built by `npm run desktop:package` |
-| API/UI | `startJobNearbyServer.ts` starts the API and serves `ui/dist` from one same-origin loopback server on an OS-assigned port | Vite is development-only; API and SPA routes are hosted together without a permanent UI/API port |
+| API/UI | `startJobNearbyServer.ts` starts the API and serves `ui/dist` from one same-origin loopback server on an OS-assigned port; every API request requires the per-process desktop session credential and exact Host/Origin checks | Vite is development-only; API and SPA routes are hosted together without a permanent UI/API port, and the renderer receives its credential from the Host-checked HTML shell |
 | Data | Desktop defaults to `%LOCALAPPDATA%/JobNearby/job-nearby.sqlite`; managed documents and Electron profile share the persistent app-data root | No cwd/install-resource writes and no automatic relocation of existing developer data; environment overrides remain available |
-| Capture | The UI/API use the assigned port; a separate capture-only server reserves `127.0.0.1:4317` for the existing extension | Capture behavior and manifest permissions remain unchanged; a port conflict fails startup instead of misrouting extension writes |
+| Capture | The UI/API use the assigned port; a separate capture-only server reserves `127.0.0.1:4317` for the existing extension and requires a separate paired extension credential | Capture behavior and manifest permissions remain compatible, with an added session-storage pairing step; a port conflict fails startup instead of misrouting extension writes |
 | Native dependency | `better-sqlite3` is loaded in the Electron main process and rebuilt for Electron with `@electron/rebuild`; packaging keeps ASAR enabled and unpacks native `.node` files | Build machines require the native build prerequisites; the installed app carries its Electron-compatible SQLite binary |
 | Shutdown | `JobNearbyServerRuntime.close()` closes HTTP listeners and SQLite; Electron awaits it before exiting | Backend runs in-process, so no child server can be orphaned |
 | Development | Vite remains on `127.0.0.1:5173` and proxies API requests to the CLI server at `127.0.0.1:4317` | Existing browser development and extension flow remain available |
@@ -2159,11 +2159,13 @@ databases, diagnostic dump and unsanitized captures are unreachable; M24.4 adds
 stay deterministic. Public source alone is not a substitute for user-data portability.
 
 M25.1 adds the public privacy and security documentation: `docs/PRIVACY.md`,
-`docs/SECURITY_MODEL.md` and `SECURITY.md`, summarized in the README. The packaged
-runtime's HTTP interfaces bind only to `127.0.0.1`, but the local API currently has no
-caller authentication and does not validate `Origin`/`Host`; the security model records
-this as an open release-blocking hardening item, so documentation must not be read as a
-claim that the loopback API is authorized.
+`docs/SECURITY_MODEL.md` and `SECURITY.md`, summarized in the README. M25.2 hardens the
+packaged runtime's HTTP interfaces: both listeners bind only to `127.0.0.1`, validate
+the exact Host and Origin, and require separate per-process desktop/extension session
+credentials; mutations require `application/json`, preflights are explicit, and capture
+is rate-limited. The desktop renderer receives its credential from the Host-checked HTML
+shell and the extension is paired through an authenticated pairing-code flow. The
+security model records the residual same-user malware limitation.
 
 ---
 

@@ -12,7 +12,7 @@ import { LocalBackupService } from "../../src/infrastructure/backup/LocalBackupS
 import { createZipArchive, readZipArchive, validateArchiveEntryPath } from "../../src/infrastructure/backup/zipArchive.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { CURRENT_SCHEMA_VERSION } from "../../src/infrastructure/database/migrateDatabase.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import { SqliteApplicationDocumentRepository } from "../../src/infrastructure/persistence/SqliteApplicationDocumentRepository.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
 import { SqliteConfirmedOrganizationRoleRepository } from "../../src/infrastructure/persistence/SqliteConfirmedOrganizationRoleRepository.js";

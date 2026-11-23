@@ -11,7 +11,17 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFileSync, statSync } from "node:fs";
 import { extname, resolve, sep } from "node:path";
 
+import {
+  createCaptureRateLimiter,
+  hostHeaderMatches,
+  isDevelopmentOrigin,
+  originAllowed,
+  sessionTokenMatches,
+  tokenHeaderName,
+  type LoopbackSecurityOptions,
+} from "./loopbackSecurity.js";
 import type { BrowserCapturePayload } from "../../application/acquisition/BrowserCapturePayload.js";
+
 import type { CaptureAndProcessBrowserVacancyResult } from "../../application/acquisition/captureAndProcessBrowserVacancy.js";
 import type { VacancyReviewWorkflow } from "../../application/user/createVacancyReviewWorkflow.js";
 import type { RecordUserVacancyInteractionInput } from "../../application/user/recordUserVacancyInteraction.js";
@@ -61,27 +71,96 @@ export interface BrowserCaptureServerDependencies {
 
 export function createBrowserCaptureServer(
   dependencies: BrowserCaptureServerDependencies,
-  options: { readonly staticUiDirectory?: string; readonly captureOnly?: boolean } = {},
+  options: {
+    readonly staticUiDirectory?: string;
+    readonly captureOnly?: boolean;
+    readonly security: LoopbackSecurityOptions;
+  },
 ): Server {
+  const security = options.security;
+  const developmentOrigins = security.developmentUiOrigins ?? [];
+  const captureLimiter = createCaptureRateLimiter(security.captureRateLimit ?? {});
   return createServer(async (request, response) => {
-    setCorsHeaders(request, response);
+    const localPort = (request.socket as { readonly localPort?: number }).localPort;
+
+    // 1. Host: only the exact loopback address and this listener's port are accepted.
+    if (!hostHeaderMatches(request.headers.host, localPort)) {
+      sendJson(response, 403, { success: false, error: "Forbidden." });
+      return;
+    }
+
+    // 2. Origin: reject foreign web origins before doing any work; OPTIONS is handled
+    //    separately so permitted extension/dev preflights can succeed.
+    const origin = request.headers.origin;
+    if (!originAllowed(origin, security.role, localPort, developmentOrigins)) {
+      sendJson(response, 403, { success: false, error: "Forbidden." });
+      return;
+    }
+    applyCorsHeaders(response, origin, security.role);
     if (request.method === "OPTIONS") {
-      response.writeHead(204).end();
+      writePreflightHeaders(response, origin, security.role);
+      response.writeHead(204, { "Cache-Control": "no-store" }).end();
       return;
     }
+
     const path = requestPath(request);
-    if (options.captureOnly && path !== BROWSER_CAPTURE_PATH) {
-      sendJson(response, 404, { success: false, error: "Not found." });
-      return;
-    }
-    if (options.staticUiDirectory) {
+
+    // 3. Static UI and the development bootstrap endpoint are the only unauthenticated
+    //    responses. They are still Host/Origin checked and never expose the token to a
+    //    foreign origin.
+    if (security.role === "desktop" && options.staticUiDirectory) {
       try {
-        if (serveProductionUi(request, response, path, options.staticUiDirectory)) return;
+        if (serveProductionUi(request, response, path, options.staticUiDirectory, security.desktopToken)) return;
       } catch (error) {
         console.error("Production UI asset could not be served.", error);
         sendJson(response, 500, { success: false, error: "Unable to serve the application UI." });
         return;
       }
+    }
+    if (
+      security.role === "desktop" &&
+      request.method === "GET" &&
+      path === "/dev/session" &&
+      isDevelopmentOrigin(origin, developmentOrigins)
+    ) {
+      sendJson(response, 200, { token: security.desktopToken });
+      return;
+    }
+
+    // 4. Listener scope: the fixed capture listener can never reach other routes.
+    if (security.role === "extension" && path !== BROWSER_CAPTURE_PATH) {
+      sendJson(response, 404, { success: false, error: "Not found." });
+      return;
+    }
+
+    // 5. Session credential. The extension credential is scoped to the capture
+    //    listener only; the desktop credential protects every desktop API route.
+    const headerName = tokenHeaderName(security.role);
+    const expected = security.role === "extension" ? security.extensionToken : security.desktopToken;
+    if (!sessionTokenMatches(expected, request.headers[headerName])) {
+      sendJson(response, 401, { success: false, error: "Unauthorized." });
+      return;
+    }
+
+    // 6. Mutating API requests must be JSON; this removes form/text simple requests.
+    if (request.method === "POST" || request.method === "PUT" || request.method === "PATCH") {
+      if (!/^application\/json(?:\s*;|$)/iu.test(request.headers["content-type"] ?? "")) {
+        sendJson(response, 415, { success: false, error: "Unsupported media type. Use application/json." });
+        return;
+      }
+    }
+
+    // 7. Capture rate limit applies only to the capture mutation route.
+    if (request.method === "POST" && path === BROWSER_CAPTURE_PATH && !captureLimiter.tryAcquire()) {
+      sendJson(response, 429, { success: false, error: "Too many captures. Try again shortly." });
+      return;
+    }
+
+    // The extension pairing credential is available only to the authorized desktop
+    // session; there is no unauthenticated token endpoint.
+    if (security.role === "desktop" && request.method === "GET" && path === "/extension/pairing") {
+      sendJson(response, 200, { token: security.extensionToken });
+      return;
     }
     let operation: "capture" | "review" | "interaction" | "route" = "route";
     try {
@@ -390,6 +469,7 @@ function serveProductionUi(
   response: ServerResponse,
   requestPath: string,
   uiDirectory: string,
+  sessionToken: string,
 ): boolean {
   if (request.method !== "GET" && request.method !== "HEAD") return false;
   const root = resolve(uiDirectory);
@@ -408,16 +488,28 @@ function serveProductionUi(
   if (!filePath) return false;
   try {
     if (!statSync(filePath).isFile()) return false;
-    const content = readFileSync(filePath);
-    const contentType = filePath.endsWith("index.html")
-      ? "text/html; charset=utf-8"
-      : staticContentType(extname(filePath));
-    response.writeHead(200, {
-      "Content-Type": contentType,
-      "Content-Length": content.byteLength,
+    const isHtml = filePath.endsWith("index.html");
+    let content = readFileSync(filePath);
+    const headers: Record<string, string | number> = {
+      "Content-Type": isHtml ? "text/html; charset=utf-8" : staticContentType(extname(filePath)),
       "X-Content-Type-Options": "nosniff",
-      "Cache-Control": filePath.endsWith("index.html") ? "no-cache" : "public, max-age=31536000, immutable",
-    });
+      "Referrer-Policy": "no-referrer",
+      "Cache-Control": isHtml ? "no-store" : "public, max-age=31536000, immutable",
+    };
+    if (isHtml) {
+      // The renderer learns its in-memory session credential from this shell only.
+      // The response is Host-checked, never cached and never readable by a foreign
+      // origin; the credential is not placed in a URL.
+      const html = content.toString("utf8");
+      const bootstrap = `<meta name="job-nearby-session" content="${sessionToken}">`;
+      content = Buffer.from(
+        html.includes("</head>") ? html.replace("</head>", `${bootstrap}</head>`) : `${bootstrap}${html}`,
+        "utf8",
+      );
+      headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY;
+    }
+    headers["Content-Length"] = content.byteLength;
+    response.writeHead(200, headers);
     response.end(request.method === "HEAD" ? undefined : content);
     return true;
   } catch (error) {
@@ -616,21 +708,42 @@ function parsePayload(value: unknown): BrowserCapturePayload {
   };
 }
 
-function setCorsHeaders(request: IncomingMessage, response: ServerResponse): void {
-  const origin = request.headers.origin;
-  if (origin !== undefined && (
-    /^(chrome|moz)-extension:\/\//u.test(origin) ||
-    origin === "http://127.0.0.1:5173"
-  )) {
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join("; ");
+
+function applyCorsHeaders(response: ServerResponse, origin: string | string[] | undefined, role: "desktop" | "extension"): void {
+  if (typeof origin !== "string" || origin.length === 0) return;
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Vary", "Origin");
+}
+
+function writePreflightHeaders(response: ServerResponse, origin: string | string[] | undefined, role: "desktop" | "extension"): void {
+  if (typeof origin === "string" && origin.length > 0) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Vary", "Origin");
   }
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  response.setHeader("Access-Control-Allow-Headers", `Content-Type, ${tokenHeaderName(role)}`);
+  response.setHeader("Access-Control-Max-Age", "600");
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
-  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  response.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+  });
   response.end(JSON.stringify(body));
 }
 

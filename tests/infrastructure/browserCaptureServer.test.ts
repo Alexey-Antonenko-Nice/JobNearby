@@ -1,10 +1,10 @@
-import type { AddressInfo } from "node:net";
+﻿import type { AddressInfo } from "node:net";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 
 const servers: ReturnType<typeof createBrowserCaptureServer>[] = [];
 const staticRoots: string[] = [];
@@ -14,11 +14,11 @@ afterEach(async () => {
   for (const root of staticRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-async function startServer() {
+async function startServer(captureOnly = false) {
   const captureAndProcessBrowserVacancy = vi.fn();
   const server = createBrowserCaptureServer({
     captureAndProcessBrowserVacancy,
-  });
+  }, { captureOnly });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
@@ -71,7 +71,7 @@ describe("local browser capture HTTP boundary", () => {
   });
 
   it("accepts a browser extension request and confirms persisted observation identity", async () => {
-    const { captureAndProcessBrowserVacancy, url } = await startServer();
+    const { captureAndProcessBrowserVacancy, url } = await startServer(true);
     captureAndProcessBrowserVacancy.mockResolvedValue({
       capture: {
         observationId: "http-observation",

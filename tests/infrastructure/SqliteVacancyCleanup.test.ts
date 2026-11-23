@@ -1,5 +1,5 @@
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import type { AddressInfo } from "node:net";
 import { versionEightDatabase } from "./legacyDatabaseFixture.js";
 import { migration009 } from "../../src/infrastructure/database/migrations/009_create_confirmed_organization_roles.js";

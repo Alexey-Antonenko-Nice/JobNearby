@@ -12,7 +12,7 @@ import { SqliteEmployerMemoryPublicDataSource } from "../../src/infrastructure/p
 import { SqliteUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/SqliteUserVacancyInteractionRepository.js";
 import { createObservationClusterAssignment } from "../../src/application/recognition/createObservationClusterAssignment.js";
 import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import { heuftVacancy } from "../vacancies/CanonicalVacancyRepository.contract.js";
 
 function workflow(db: ReturnType<typeof createDatabase>) {

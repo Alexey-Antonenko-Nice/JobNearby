@@ -1,8 +1,8 @@
-import { deriveVacancyContext } from "../../src/application/user/deriveVacancyContext.js";
+﻿import { deriveVacancyContext } from "../../src/application/user/deriveVacancyContext.js";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 
 const servers: ReturnType<typeof createBrowserCaptureServer>[] = [];
 afterEach(async () => Promise.all(servers.splice(0).map((server) =>
@@ -42,16 +42,18 @@ describe("vacancy review HTTP workflow", () => {
     expect(fixture.recordVacancyReviewAction).not.toHaveBeenCalled();
   });
 
-  it("allows only the configured local UI origin alongside extension origins", async () => {
+  it("accepts the same desktop origin and rejects unconfigured web origins", async () => {
     const fixture = await start();
     const allowed = await fetch(`${fixture.base}/vacancies/canonical-1/review`, {
-      headers: { Origin: "http://127.0.0.1:5173" },
+      headers: { Origin: fixture.base },
     });
-    const rejected = await fetch(`${fixture.base}/vacancies/canonical-1/review`, {
-      headers: { Origin: "http://127.0.0.1:5174" },
-    });
-    expect(allowed.headers.get("access-control-allow-origin")).toBe("http://127.0.0.1:5173");
-    expect(rejected.headers.get("access-control-allow-origin")).toBeNull();
+    expect(allowed.status).toBe(200);
+    expect(allowed.headers.get("access-control-allow-origin")).toBe(fixture.base);
+    for (const origin of ["http://127.0.0.1:5173", "http://127.0.0.1:5174", "https://evil.example"]) {
+      const rejected = await fetch(`${fixture.base}/vacancies/canonical-1/review`, { headers: { Origin: origin } });
+      expect(rejected.status, origin).toBe(403);
+      expect(rejected.headers.get("access-control-allow-origin")).toBeNull();
+    }
   });
 
   it.each(["REVIEWED", "APPLIED"] as const)("POST %s returns the event and refreshed review", async (type) => {

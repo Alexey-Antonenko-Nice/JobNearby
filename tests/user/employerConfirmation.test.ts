@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
 import { describe, expect, it } from "vitest";
 

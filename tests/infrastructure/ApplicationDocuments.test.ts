@@ -1,4 +1,4 @@
-import { migration015 } from "../../src/infrastructure/database/migrations/015_application_documents.js";
+﻿import { migration015 } from "../../src/infrastructure/database/migrations/015_application_documents.js";
 import { migration012 } from "../../src/infrastructure/database/migrations/012_vacancy_crm.js";
 import { migration013 } from "../../src/infrastructure/database/migrations/013_vacancy_process_state.js";
 import { migration011 } from "../../src/infrastructure/database/migrations/011_vacancy_cleanup.js";
@@ -8,7 +8,7 @@ import { SqliteEmployerClusterRepository } from "../../src/infrastructure/persis
 import { SqliteEmployerMemoryPublicDataSource } from "../../src/infrastructure/persistence/SqliteEmployerMemoryPublicDataSource.js";
 import { SqliteUserVacancyInteractionRepository } from "../../src/infrastructure/persistence/SqliteUserVacancyInteractionRepository.js";
 import { SqliteSourceObservationRepository } from "../../src/infrastructure/persistence/SqliteSourceObservationRepository.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import type { AddressInfo } from "node:net";
 import { versionEightDatabase } from "./legacyDatabaseFixture.js";
 import { migration009 } from "../../src/infrastructure/database/migrations/009_create_confirmed_organization_roles.js";
@@ -260,7 +260,7 @@ describe("Immutable application documents",()=>{
       const content=await fetch(base+"/documents/versions/"+v.id+"/content");
       expect(content.headers.get("Content-Type")).toBe("application/octet-stream");expect(content.headers.get("Content-Disposition")).toMatch(/^attachment/);
       expect(content.headers.get("X-Content-Type-Options")).toBe("nosniff");expect(await content.text()).toBe("<script>not rendered</script>");
-      expect((await post(path+"import",body,"text/plain")).status).toBe(400);
+      expect((await post(path+"import",body,"text/plain")).status).toBe(415);
       expect((await post(path+"import",{...body,requestId:"traversal",originalFileName:"../secret"})).status).toBe(400);
       expect((await post(path+"import",{...body,requestId:"bad",contentBase64:"%%%"})).status).toBe(400);
       expect((await post(path+"import",{...body,requestId:"extra",path:"/secret"})).status).toBe(400);

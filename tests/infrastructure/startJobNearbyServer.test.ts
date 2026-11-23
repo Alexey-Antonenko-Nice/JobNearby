@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+﻿import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { startJobNearbyServer, type JobNearbyServerRuntime } from "../../src/infrastructure/http/startJobNearbyServer.js";
+import { registerTokenForPort } from "../support/httpAuthorization.js";
 
 const temporaryRoots: string[] = [];
 const runtimes: JobNearbyServerRuntime[] = [];
@@ -22,6 +23,7 @@ describe("programmatic server lifecycle", () => {
     const dataRoot = join(root, "profile");
     const runtime = await startJobNearbyServer({ applicationDataRoot: dataRoot, port: 0 });
     runtimes.push(runtime);
+    registerTokenForPort(runtime.port, runtime.authorization.desktopToken);
 
     expect(runtime.host).toBe("127.0.0.1");
     expect(runtime.port).toBeGreaterThan(0);
@@ -34,6 +36,7 @@ describe("programmatic server lifecycle", () => {
     await expect(fetch(`${runtime.url}/contacts`)).rejects.toThrow();
     const reopened = await startJobNearbyServer({ applicationDataRoot: dataRoot, port: 0 });
     runtimes.push(reopened);
+    registerTokenForPort(reopened.port, reopened.authorization.desktopToken);
     expect((await fetch(`${reopened.url}/contacts`)).status).toBe(200);
   });
 

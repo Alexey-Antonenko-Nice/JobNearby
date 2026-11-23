@@ -5,14 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Job Nearby Capture</title>
     <style>
-      body { font: 14px system-ui, sans-serif; margin: 16px; min-width: 240px; }
-      button { width: 100%; padding: 8px 12px; }
+      body { font: 14px system-ui, sans-serif; margin: 16px; min-width: 260px; }
+      button { width: 100%; padding: 8px 12px; margin-top: 6px; }
+      input { width: 100%; box-sizing: border-box; padding: 6px 8px; margin-top: 4px; }
       #status { margin: 12px 0 0; overflow-wrap: anywhere; }
+      fieldset { border: 1px solid #ccc; padding: 8px; margin: 0 0 10px; }
+      label { font-weight: 600; }
     </style>
   </head>
   <body>
-    <button id="capture" type="button">Capture this page</button>
-    <p id="status" role="status">Ready</p>
+    <fieldset>
+      <legend>Connect to Job Nearby</legend>
+      <label for="pairing-code">Pairing code</label>
+      <input id="pairing-code" type="password" autocomplete="off" spellcheck="false"
+        placeholder="Open Job Nearby → Backup &amp; restore → Browser extension">
+      <button id="pair" type="button">Save pairing code</button>
+    </fieldset>
+    <button id="capture" type="button" disabled>Capture this page</button>
+    <p id="status" role="status">Pair the extension with Job Nearby first.</p>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

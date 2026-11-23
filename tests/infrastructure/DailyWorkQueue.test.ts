@@ -23,7 +23,7 @@ it("document selection counts as private activity",async()=>{
  expect(x.read().items[0]?.category).toBe("ACTIVE_WITHOUT_NEXT_ACTION");
 });
 import type {AddressInfo} from "node:net";
-import {createBrowserCaptureServer} from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 it("HTTP read validates timezone and serializes queue without mutations",async()=>{
  const x=await setup();const server=createBrowserCaptureServer({captureAndProcessBrowserVacancy:async()=>{throw Error("unused");},getDailyWorkQueue:timeZone=>new SqliteDailyWorkQueue(x.db).get({now,timeZone})});
  await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));

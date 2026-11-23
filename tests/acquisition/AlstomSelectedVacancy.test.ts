@@ -1,5 +1,5 @@
 import { SqliteEmployerIdentityDecisionStore } from "../../src/infrastructure/persistence/SqliteEmployerIdentityDecisionStore.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

@@ -88,6 +88,20 @@ documents, backups or exports, and uninstalling does not remove them. See
 [Privacy and data handling](PRIVACY.md) for what is stored and how to remove local
 data, and the [security model](SECURITY_MODEL.md) for the local-interface limitations.
 
+## Browser extension pairing
+
+The capture extension must be paired with the running desktop app:
+
+1. Load `browser-extension/` as an unpacked extension in the browser.
+2. In Job Nearby open **Backup & restore → Browser extension** and choose
+   **Show pairing code**.
+3. Paste the code into the extension popup and save it, then capture normally.
+
+The pairing code is a secret for the current desktop session and is stored in browser
+session storage. Pair again after Job Nearby restarts; if the browser uses session
+storage, a browser restart also clears it. Capture fails with a reconnect message rather
+than falling back to an unauthenticated request.
+
 ## Current limitations
 
 - Only Windows x64 is packaged; macOS, Linux, and Windows ARM64 are not qualified.
@@ -95,8 +109,9 @@ data, and the [security model](SECURITY_MODEL.md) for the local-interface limita
 - Browser capture remains optional. Install the browser extension separately; it
   connects to `127.0.0.1:4317` and is not automatically installed or bundled.
 - There is no auto-update service or public release distribution.
-- The local loopback API has no caller authentication; public release is blocked until
-  this is hardened (see the [security model](SECURITY_MODEL.md)).
+- The local loopback API requires per-session authorization and validates Host/Origin;
+  the browser extension must be paired with the running desktop session (re-pair after
+  a desktop restart).
 - No license-acceptance page is presented: the MIT license is installed as a
   resource, not offered as an end-user agreement.
 - No final Job Nearby icon is tracked; the package uses the packager's default icon.

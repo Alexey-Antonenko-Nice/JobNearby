@@ -69,41 +69,120 @@ export function captureDocumentSnapshot() {
   };
 }
 
-function initializePopup(button, status) {
-  button.addEventListener("click", async () => {
-  button.disabled = true;
-  status.textContent = "Capturing…";
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab.id === undefined) throw new Error("No active browser tab is available.");
-    const [result] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: captureDocumentSnapshot,
-    });
-    const payload = createBrowserCapturePayload(result.result, new Date().toISOString());
-    const response = await fetch("http://127.0.0.1:4317/acquisition/browser", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await response.json();
-    if (!response.ok || body.success !== true) {
-      throw new Error(body.error ?? `Capture service returned ${response.status}.`);
+const STORAGE_KEY = "job-nearby-extension-session";
+const CAPTURE_ENDPOINT = "http://127.0.0.1:4317/acquisition/browser";
+
+// Prefer per-browser-session storage; fall back only when the browser lacks it.
+function pairingStorage() {
+  return chrome.storage?.session ?? chrome.storage?.local ?? null;
+}
+
+export async function readPairingCode() {
+  const storage = pairingStorage();
+  if (storage === null) return "";
+  const values = await storage.get(STORAGE_KEY);
+  const value = values?.[STORAGE_KEY];
+  return typeof value === "string" ? value : "";
+}
+
+export async function savePairingCode(code) {
+  const storage = pairingStorage();
+  if (storage === null) throw new Error("Browser storage is unavailable.");
+  await storage.set({ [STORAGE_KEY]: code });
+}
+
+export async function clearPairingCode() {
+  const storage = pairingStorage();
+  if (storage !== null) await storage.remove(STORAGE_KEY);
+}
+
+function initializePopup(button, status, pairingInput, pairButton) {
+  let pairingCode = "";
+
+  const setConnected = (connected) => {
+    button.disabled = !connected;
+    status.textContent = connected
+      ? "Connected to Job Nearby. Capture this page when ready."
+      : "Pair the extension with Job Nearby first.";
+  };
+
+  const refresh = async () => {
+    try {
+      pairingCode = await readPairingCode();
+      setConnected(pairingCode.length > 0);
+    } catch {
+      setConnected(false);
     }
-    status.textContent = captureFeedback(body);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    status.textContent = `Capture failed: ${message}`;
-  } finally {
-    button.disabled = false;
-  }
+  };
+
+  pairButton.addEventListener("click", async () => {
+    const code = pairingInput.value.trim();
+    if (code.length < 32) {
+      status.textContent = "Paste the full pairing code shown by Job Nearby.";
+      return;
+    }
+    try {
+      await savePairingCode(code);
+      pairingInput.value = "";
+      pairingCode = code;
+      setConnected(true);
+    } catch (error) {
+      status.textContent = `Could not save pairing code: ${error instanceof Error ? error.message : String(error)}`;
+    }
   });
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    status.textContent = "Capturing…";
+    try {
+      if (pairingCode.length === 0) {
+        setConnected(false);
+        return;
+      }
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab.id === undefined) throw new Error("No active browser tab is available.");
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: captureDocumentSnapshot,
+      });
+      const payload = createBrowserCapturePayload(result.result, new Date().toISOString());
+      const response = await fetch(CAPTURE_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Job-Nearby-Extension": pairingCode,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 401 || response.status === 403) {
+        await clearPairingCode();
+        pairingCode = "";
+        setConnected(false);
+        status.textContent = "Job Nearby is not connected. Open Job Nearby and paste a new pairing code.";
+        return;
+      }
+      const body = await response.json();
+      if (!response.ok || body.success !== true) {
+        throw new Error(body.error ?? `Capture service returned ${response.status}.`);
+      }
+      status.textContent = captureFeedback(body);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      status.textContent = `Capture failed: ${message}`;
+    } finally {
+      button.disabled = pairingCode.length === 0;
+    }
+  });
+
+  void refresh();
 }
 
 if (typeof document !== "undefined") {
   const button = document.querySelector("#capture");
   const status = document.querySelector("#status");
-  if (button !== null && status !== null) {
-    initializePopup(button, status);
+  const pairingInput = document.querySelector("#pairing-code");
+  const pairButton = document.querySelector("#pair");
+  if (button !== null && status !== null && pairingInput !== null && pairButton !== null) {
+    initializePopup(button, status, pairingInput, pairButton);
   }
 }

@@ -1,6 +1,7 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import {
   createBackup,
+  getExtensionPairingToken,
   exportUserData,
   restoreBackup,
   validateBackup,
@@ -56,6 +57,17 @@ export function BackupRestorePage(): React.JSX.Element {
   const [exporting, setExporting] = useState<"json" | "csv" | null>(null);
   const [exportResult, setExportResult] = useState<ExportUserDataResult | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [pairingToken, setPairingToken] = useState<string | null>(null);
+  const [pairingError, setPairingError] = useState<string | null>(null);
+
+  async function handleShowPairingCode() {
+    setPairingError(null);
+    try {
+      setPairingToken(await getExtensionPairingToken());
+    } catch (error) {
+      setPairingError(error instanceof Error ? error.message : "Unable to read the pairing code.");
+    }
+  }
 
   async function handleExport(format: "json" | "csv") {
     setExporting(format);
@@ -335,6 +347,24 @@ export function BackupRestorePage(): React.JSX.Element {
               <li>Contacts: {exportResult.counts.contacts}</li>
               <li>Documents: {exportResult.counts.documents}</li>
             </ul>
+          </div>
+        )}
+      </section>
+      <section aria-label="Browser extension connection">
+        <h2>Browser extension</h2>
+        <p>
+          The optional capture extension must be paired with this desktop session. Open the
+          extension popup, paste the pairing code, and keep Job Nearby running.
+        </p>
+        <button type="button" onClick={() => void handleShowPairingCode()}>
+          Show pairing code
+        </button>
+        {pairingError && <p role="alert">{pairingError}</p>}
+        {pairingToken && (
+          <div role="status" aria-label="Extension pairing code">
+            <p>Pairing code for this desktop session:</p>
+            <code>{pairingToken}</code>
+            <p>This code is secret. Do not share it or put it in screenshots.</p>
           </div>
         )}
       </section>

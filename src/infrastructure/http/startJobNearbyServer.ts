@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+﻿import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { AddressInfo } from "node:net";
 
@@ -29,6 +29,7 @@ import { SqliteEmployerMemoryPublicDataSource } from "../persistence/SqliteEmplo
 import { SqliteUserVacancyInteractionRepository } from "../persistence/SqliteUserVacancyInteractionRepository.js";
 import { SqliteObservationClusterAssignmentRepository } from "../persistence/SqliteObservationClusterAssignmentRepository.js";
 import { createBrowserCaptureServer, type BrowserCaptureServerDependencies } from "./createBrowserCaptureServer.js";
+import { generateSessionToken } from "./loopbackSecurity.js";
 
 export interface StartJobNearbyServerOptions {
   readonly host?: string;
@@ -39,6 +40,11 @@ export interface StartJobNearbyServerOptions {
   readonly documentDataDir?: string;
   readonly defaultBackupDir?: string;
   readonly uiDistDirectory?: string;
+  /** Development-only Vite origin(s). The packaged desktop app never sets this. */
+  readonly developmentUiOrigins?: readonly string[];
+  /** Deterministic tokens for tests; production always generates fresh ones. */
+  readonly desktopSessionToken?: string;
+  readonly extensionSessionToken?: string;
 }
 
 export interface JobNearbyServerRuntime {
@@ -47,6 +53,8 @@ export interface JobNearbyServerRuntime {
   readonly url: string;
   readonly databasePath: string;
   readonly documentDataDir: string;
+  /** Process-internal session credentials; never exposed over HTTP. */
+  readonly authorization: { readonly desktopToken: string; readonly extensionToken: string };
   close(): Promise<void>;
 }
 
@@ -54,6 +62,8 @@ export async function startJobNearbyServer(
   options: StartJobNearbyServerOptions = {},
 ): Promise<JobNearbyServerRuntime> {
   const host = options.host ?? "127.0.0.1";
+  const desktopToken = options.desktopSessionToken ?? generateSessionToken();
+  const extensionToken = options.extensionSessionToken ?? generateSessionToken();
   if (host !== "127.0.0.1") throw new Error("Job Nearby must bind to the loopback interface.");
   const dataPaths = resolveApplicationDataPaths({
     ...(options.applicationDataRoot === undefined ? {} : { applicationDataRoot: options.applicationDataRoot }),
@@ -120,6 +130,12 @@ export async function startJobNearbyServer(
   };
   const server = createBrowserCaptureServer(dependencies, {
     ...(options.uiDistDirectory === undefined ? {} : { staticUiDirectory: resolve(options.uiDistDirectory) }),
+    security: {
+      role: "desktop",
+      desktopToken,
+      extensionToken,
+      ...(options.developmentUiOrigins === undefined ? {} : { developmentUiOrigins: options.developmentUiOrigins }),
+    },
   });
   let extensionServer: ReturnType<typeof createBrowserCaptureServer> | undefined;
   let closePromise: Promise<void> | undefined;
@@ -129,7 +145,10 @@ export async function startJobNearbyServer(
     if (address === null || typeof address === "string") throw new Error("Job Nearby HTTP server has no TCP address.");
     const port = (address as AddressInfo).port;
     if (options.extensionCapturePort !== undefined && options.extensionCapturePort !== port) {
-      extensionServer = createBrowserCaptureServer(dependencies, { captureOnly: true });
+      extensionServer = createBrowserCaptureServer(dependencies, {
+        captureOnly: true,
+        security: { role: "extension", desktopToken, extensionToken },
+      });
       try {
         await listen(extensionServer, host, options.extensionCapturePort);
       } catch (error) {
@@ -145,6 +164,7 @@ export async function startJobNearbyServer(
       url: `http://${host}:${port}`,
       databasePath: dataPaths.databasePath,
       documentDataDir: dataPaths.documentDataDir,
+      authorization: { desktopToken, extensionToken },
       close() {
         closePromise ??= (async () => {
           try {

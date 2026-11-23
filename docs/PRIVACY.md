@@ -14,7 +14,9 @@ application does not upload CRM data to a Job Nearby service.
 
 The only network interfaces created by Job Nearby itself are HTTP listeners on the
 loopback interface (`127.0.0.1`), used by the desktop window and by the optional
-browser extension. See [Security model](SECURITY_MODEL.md) for the trust boundaries.
+browser extension. They require a per-session credential generated when Job Nearby
+starts and validate the request Host and Origin; they are not open to arbitrary local
+web pages. See [Security model](SECURITY_MODEL.md) for the trust boundaries.
 
 ## What Job Nearby stores
 
@@ -62,18 +64,27 @@ application-data root or the default backup directory.
 ## Browser extension
 
 The optional Job Nearby Capture extension runs in your browser. It captures the page
-only when you open the extension and press **Capture**. It then:
+only when you open the extension and press **Capture**. Before the first capture, pair
+it with the running desktop app: open **Backup &amp; restore → Browser extension** in Job
+Nearby, choose **Show pairing code**, and paste that code into the extension popup. The
+extension stores the code in browser session storage (not in the page) and sends it on
+capture requests. The code is valid for the current desktop session; after Job Nearby
+restarts (and after a browser restart where session storage is used), pair again.
+
+When you press **Capture**, the extension:
 
 1. reads the active tab's URL, title, visible text and page HTML (including open shadow
    roots where readable),
-2. sends that payload to the fixed local endpoint `http://127.0.0.1:4317/acquisition/browser`,
+2. sends that payload with its pairing credential to the fixed local endpoint
+   `http://127.0.0.1:4317/acquisition/browser`,
 3. shows the processing result in the popup.
 
-The extension has the `activeTab` and `scripting` permissions and a host permission
-limited to `http://127.0.0.1:4317/*`. It has no access to other sites unless you invoke
-it on the active page, and it has no background worker, analytics or remote endpoints.
-It is currently installed manually as an unpacked extension; it is not distributed
-through a browser add-on store and therefore has no store-provided automatic updates.
+The extension has the `activeTab`, `scripting` and `storage` permissions and a host
+permission limited to `http://127.0.0.1:4317/*`. It has no access to other sites unless
+you invoke it on the active page, and it has no background worker, analytics or remote
+endpoints. It is currently installed manually as an unpacked extension; it is not
+distributed through a browser add-on store and therefore has no store-provided automatic
+updates.
 
 Captured page content becomes part of your local database. Treat any page you capture
 as potentially containing third-party personal data, and use it accordingly.
@@ -176,10 +187,10 @@ There is currently no "delete all my data" control.
 - Job Nearby does not encrypt its SQLite database, managed document files, backups or
   exports. Protection therefore depends on your Windows account, filesystem ACLs and
   any disk encryption you choose to enable.
-- The local HTTP interfaces do not authenticate callers. They are bound to loopback,
-  but other software and browser contexts on the same machine may be able to reach
-  them. See [Security model](SECURITY_MODEL.md), including the known loopback
-  authorization gap.
+- The local HTTP interfaces require a per-session credential and validate the request
+  Host and Origin, but they do not defend against malicious software already running
+  under your Windows account. See [Security model](SECURITY_MODEL.md) for the trust
+  boundaries and residual limitations.
 - A local attacker who already controls your Windows account can generally read your
   application data; this is outside the threat model.
 - The current Windows installer is unsigned and may trigger a SmartScreen warning.

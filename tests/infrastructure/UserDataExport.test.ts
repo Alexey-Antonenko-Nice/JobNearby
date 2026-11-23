@@ -12,7 +12,7 @@ import { createVacancyReviewWorkflow } from "../../src/application/user/createVa
 import { readZipArchive } from "../../src/infrastructure/backup/zipArchive.js";
 import { createDatabase } from "../../src/infrastructure/database/createDatabase.js";
 import { LocalUserDataExportService } from "../../src/infrastructure/export/LocalUserDataExportService.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import { SqliteApplicationDocumentRepository } from "../../src/infrastructure/persistence/SqliteApplicationDocumentRepository.js";
 import { SqliteCanonicalVacancyRepository } from "../../src/infrastructure/persistence/SqliteCanonicalVacancyRepository.js";
 import { SqliteConfirmedOrganizationRoleRepository } from "../../src/infrastructure/persistence/SqliteConfirmedOrganizationRoleRepository.js";

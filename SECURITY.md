@@ -68,10 +68,12 @@ logs and screenshots.
 ## Known limitations
 
 The application is pre-release. Current privacy and security limitations — including
-plaintext local storage and the lack of caller authentication on loopback HTTP
-interfaces — are documented in [Privacy and data handling](docs/PRIVACY.md) and the
-[Security model](docs/SECURITY_MODEL.md). The loopback authorization gap is tracked as
-a release-blocking hardening item.
+plaintext local storage and the limits of same-user protections — are documented in
+[Privacy and data handling](docs/PRIVACY.md) and the [Security model](docs/SECURITY_MODEL.md).
+Loopback HTTP access requires a per-session credential and request Host/Origin
+validation. A malicious process already running as the same Windows user can still read
+the user's files and process memory; that is outside the threat model, not a reason to
+disable the session checks.
 
 The Windows installer is currently unsigned. A SmartScreen warning on installation is
 expected and is not a product vulnerability; do not report it as one.

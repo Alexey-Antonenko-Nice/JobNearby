@@ -1,7 +1,11 @@
-import { startJobNearbyServer } from "./startJobNearbyServer.js";
+﻿import { startJobNearbyServer } from "./startJobNearbyServer.js";
 
 async function main(): Promise<void> {
-  const runtime = await startJobNearbyServer({ port: 4317 });
+  const runtime = await startJobNearbyServer({
+    port: 4317,
+    // The CLI server is the documented development backend for the Vite UI.
+    developmentUiOrigins: ["http://127.0.0.1:5173"],
+  });
   process.stdout.write(`Job Nearby browser capture listening at ${runtime.url}\n`);
   let closing = false;
   const close = () => {

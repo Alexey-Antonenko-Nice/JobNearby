@@ -11,7 +11,7 @@ import { SqliteEmployerAliasEvidenceRepository } from "../../src/infrastructure/
 import { createVacancyReviewWorkflow } from "../../src/application/user/createVacancyReviewWorkflow.js";
 import { DeterministicCanonicalVacancyCanonicalizer } from "../../src/application/vacancies/DeterministicCanonicalVacancyCanonicalizer.js";
 import { normalizeOrganizationEvidenceName } from "../../src/domain/evidence/OrganizationEvidence.js";
-import { createBrowserCaptureServer } from "../../src/infrastructure/http/createBrowserCaptureServer.js";
+import { createTestCaptureServer as createBrowserCaptureServer } from "../support/httpAuthorization.js";
 import type { UserVacancyInteractionType } from "../../src/domain/user/UserVacancyInteractionEvent.js";
 
 const date = new Date("2026-09-01T00:00:00Z");

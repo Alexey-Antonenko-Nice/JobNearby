@@ -72,17 +72,51 @@ backend, not by the renderer directly.
 
 ### Authentication and authorization
 
-The loopback interfaces **do not authenticate callers**. There is no login, session,
-shared secret, CSRF token or per-request authorization check.
+Every request to a loopback listener is evaluated before any route, body parsing or
+domain work:
 
-CORS does not change this: the server reflects `Access-Control-Allow-Origin` only for
-`chrome-extension://` / `moz-extension://` origins and the dev origin
-`http://127.0.0.1:5173`, so ordinary web origins cannot read responses. But request
-handling itself is not origin-gated, and simple cross-origin requests can still reach
-the endpoint when the browser allows a request to loopback. The ephemeral UI/API port
-raises the effort required to find the API, but it is not an authorization boundary.
+1. **Host** must equal `127.0.0.1:<the port this listener bound>`. `localhost`, other
+   ports and foreign names are rejected; `X-Forwarded-*` headers are not trusted.
+2. **Origin**, when present, must be the exact same desktop origin, a configured
+   development origin (development mode only), or an extension origin class for the
+   capture listener. `null` and foreign origins are rejected. Origin validation is
+   defense in depth, not a substitute for the credential.
+3. **Session credential.** A 256-bit per-process secret is generated at startup and
+   required in `X-Job-Nearby-Session` (desktop) or `X-Job-Nearby-Extension` (capture).
+   Comparison uses `crypto.timingSafeEqual`; missing/wrong/stale values return 401.
+   Desktop and extension credentials are separate and scoped: the extension credential
+   authorizes only `POST /acquisition/browser` on the capture listener.
+4. **Content type.** `POST`/`PUT`/`PATCH` must use `application/json`; `text/plain`,
+   form and multipart requests receive 415 before body parsing. HTML-form and simple
+   cross-origin requests therefore cannot reach a mutation handler.
+5. **Capture rate limit.** Authenticated capture requests pass through an in-memory
+   token bucket (burst 30, refill 0.5/s, i.e. 30 per minute sustained). Excess requests
+   receive 429. The limiter resets with the process.
 
-This is a **known release-blocking gap** — see [Known findings](#known-findings).
+Status model: 401 for a missing/invalid/stale credential; 403 for a disallowed
+Host/Origin (including disallowed preflight); 415 for a non-JSON mutation body; 429
+for capture rate limiting; 404 for an unknown route or method. Authentication failures
+are generic and never echo the supplied or expected credential.
+
+The desktop renderer learns its credential from a `<meta name="job-nearby-session">`
+tag injected into the HTML shell served only by the desktop listener. That response is
+Host-checked, `Cache-Control: no-store`, and carries a Content-Security-Policy; the
+credential is never placed in a URL, cookie, local storage or the database. The renderer
+keeps it in memory and attaches it through one shared request helper.
+
+The extension cannot read the desktop credential. The desktop UI displays a separate
+extension pairing code through an authenticated `GET /extension/pairing` request; the
+user pastes it into the extension popup, which stores it in `chrome.storage.session`
+(falling back to `storage.local` only where session storage is unavailable) and sends it
+on capture requests. A missing/revoked credential produces a clear reconnect message,
+never an unauthenticated fallback. Credentials rotate when the desktop process restarts;
+the extension must then be re-paired. Browser restart also clears session-scoped pairing
+storage.
+
+A development-only bootstrap (`GET /dev/session`) exists only when the server is started
+with an explicit dev origin (`http://127.0.0.1:5173` by the CLI development server). The
+packaged desktop application never configures it, and requests from that origin are
+rejected in production mode.
 
 ### API surface
 
@@ -94,23 +128,29 @@ create/validate/restore, and JSON/CSV export. Read groups include inbox, review,
 contacts, documents, work queue and employer-identity search.
 
 Backup and export accept a user-supplied destination path; restore and validate accept
-a user-supplied archive path or base64 archive. These are local-user features and are
-also reachable through the unauthenticated local API.
+a user-supplied archive path or base64 archive. Authorization happens before any path is
+read or written, and every one of these routes requires the desktop credential; the
+extension credential is rejected. Read routes, including document downloads, are
+protected too because they expose private CRM data.
 
 ## Browser extension boundary
 
 The extension (Manifest V3) has:
 
-- permissions: `activeTab`, `scripting`;
+- permissions: `activeTab`, `scripting`, `storage`;
 - host permission: `http://127.0.0.1:4317/*`;
 - no background service worker, content scripts, analytics, remote endpoints or store
   packaging metadata.
 
 When the user presses **Capture**, it injects a self-contained snapshot function into
 the active tab (granted by `activeTab`), reads the page URL/title/visible text/HTML,
-and POSTs JSON to the fixed capture endpoint. It does not read other tabs, and it does
-not run continuously. The extension is installed manually as an unpacked extension and
-has no store-provided updates.
+and POSTs JSON plus `X-Job-Nearby-Extension` to the fixed capture endpoint. It does not
+read other tabs, and it does not run continuously. The extension is installed manually
+as an unpacked extension and has no store-provided updates.
+
+The pairing credential is stored in extension storage, not page DOM or page scripts.
+Normal web pages cannot read extension storage. The extension must be paired once per
+desktop session (and again after a browser restart when session storage is used).
 
 Captured page content is untrusted input. Extraction is regex/DOM-based and bounded by
 request limits: 8 MiB request, 5 MiB HTML, 2 MiB visible text. Captured HTML is stored
@@ -137,10 +177,14 @@ not install a navigation or window-open handler, so Electron's default behavior 
 when opening such links. There is no `shell.openExternal`, `shell.openPath` or shell
 command execution in the application code.
 
-**Gap:** the application HTML response does not set a Content-Security-Policy. The
-document-download endpoint does set `Content-Security-Policy: sandbox` together with
-`Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`. Missing CSP on
-the app UI is a hardening gap, mitigated by the absence of raw-HTML rendering.
+The production HTML shell sets `Content-Security-Policy: default-src 'self';
+script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src
+'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';
+frame-ancestors 'none'` (`unsafe-inline` is limited to styles because React uses inline
+style attributes). It is served with `Cache-Control: no-store`, `nosniff` and
+`Referrer-Policy: no-referrer`, and only from the Host-checked desktop listener. The
+document-download endpoint also sets `Content-Security-Policy: sandbox` together with
+`Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`.
 
 ## File and path handling
 
@@ -210,8 +254,8 @@ ACLs and any disk encryption the user enables.
 
 | ID | Finding | Classification | Status |
 | --- | --- | --- | --- |
-| F1 | Loopback HTTP interfaces do not authenticate callers and do not validate `Origin`/`Host`; CORS only restricts response readability. Capture is on a fixed port; the UI/API port is OS-assigned but discoverable. Audit probes showed capture, backup creation, restore and export accept requests carrying an arbitrary `Origin` with a simple content type. Browser local-network policy may block some web-page requests, but is not a server-side control. | **C — release blocker** | Open; requires a hardening milestone (Origin/Host allowlist, per-session token or required custom header, JSON/preflight enforcement, capture rate limits) |
-| F2 | No Content-Security-Policy on the application UI HTML response | B — warning | Open; low risk while no raw HTML is rendered |
+| F1 | Loopback HTTP authorization | **A — resolved in M25.2** | Every request requires an exact Host, an allowed Origin when present, and a per-process 256-bit session credential (separate desktop/extension secrets); mutations require `application/json`; capture is rate-limited. Covered by `tests/security/loopbackAuthorization.test.ts`. Residual: a process already running as the same Windows user is out of scope. |
+| F2 | Content-Security-Policy on the application HTML response | **A — resolved in M25.2** | Production HTML sets a restrictive CSP; document downloads additionally use `CSP: sandbox`. |
 | F3 | Unsigned installer / SmartScreen reputation | A — documented limitation | Open; signing is a separate milestone |
 | F4 | Plaintext database, document store, backups and exports | A — documented limitation | By design for now; relies on OS protections |
 | F5 | Provider links open via Electron's default window-open behavior; no explicit external-link policy | B — warning | Open; no node integration in child windows by default |
