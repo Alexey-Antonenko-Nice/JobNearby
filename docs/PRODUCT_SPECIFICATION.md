@@ -297,7 +297,7 @@ Audited from code at the baseline above, without opening the live database:
 | Daily work queue | Future work |
 | CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
 | Backup/restore/export and desktop runtime | Backup/restore/export implemented; M23.1 desktop runtime foundation implemented, installer still missing |
-| Public open-source release readiness | MIT license selected (M24.1); M24.2 minimized fixtures and removed captured contact data; M24.3 removed sensitive content from published history; contribution, public distribution, release automation and signing remain |
+| Public open-source release readiness | MIT license selected (M24.1); M24.2 minimized fixtures and removed captured contact data; M24.3 removed sensitive content from published history; M25.1 adds privacy/data-handling, security-policy and threat-model documentation. Remaining: a loopback-API authorization hardening blocker, contribution guidance, release automation and signing |
 
 See [DATA_MODEL.md section 78](DATA_MODEL.md#78-crm-core-gap-analysis-m181) for
 model boundaries and implementation evidence. The Electron runtime does not change
@@ -311,7 +311,10 @@ A opportunity/application core; B documents; C contacts/activity; D follow-ups a
 reminders; E CRM usability; F portability; G desktop distribution; H public release.
 Licensing/dependency and packaging feasibility investigations start early; their
 release gates cannot wait until public distribution. Storage and portability
-requirements must shape document design before files are accumulated.
+requirements must shape document design before files are accumulated. Public release
+also requires closing the loopback-API authorization gap recorded in
+[SECURITY_MODEL.md](SECURITY_MODEL.md), plus contribution guidance and release
+automation.
 
 ## 17. Out of scope and foundational invariants
 

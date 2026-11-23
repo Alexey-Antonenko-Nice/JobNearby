@@ -2158,6 +2158,13 @@ databases, diagnostic dump and unsanitized captures are unreachable; M24.4 adds
 `npm run check:history` and a root `.gitattributes` LF policy so fresh Windows clones
 stay deterministic. Public source alone is not a substitute for user-data portability.
 
+M25.1 adds the public privacy and security documentation: `docs/PRIVACY.md`,
+`docs/SECURITY_MODEL.md` and `SECURITY.md`, summarized in the README. The packaged
+runtime's HTTP interfaces bind only to `127.0.0.1`, but the local API currently has no
+caller authentication and does not validate `Origin`/`Host`; the security model records
+this as an open release-blocking hardening item, so documentation must not be read as a
+claim that the loopback API is authorized.
+
 ---
 
 # 91. CRM implementation roadmap

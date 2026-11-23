@@ -63,13 +63,32 @@ Auto-update, code signing, and public release distribution are not included.
 See [Windows desktop distribution](docs/DESKTOP_DISTRIBUTION.md) for build
 prerequisites, exact outputs, install/data behavior, and current limitations.
 
+## Privacy and security
+
+Job Nearby is local-first. The CRM database, managed documents and default backups are
+stored on your computer (`%LOCALAPPDATA%\JobNearby` and the sibling
+`%LOCALAPPDATA%\JobNearby-Backups`). There is no Job Nearby account, cloud backend or
+application telemetry, and the desktop application does not upload CRM data to a Job
+Nearby service. The optional browser extension captures the active page only when you
+invoke it and sends the capture to the local `127.0.0.1:4317` listener.
+
+Backups and exports contain private CRM data, and backups also contain imported
+documents. They are not encrypted by Job Nearby, so treat them as sensitive files.
+Uninstalling preserves the data directories; deleting local data is a manual step.
+
+Read [Privacy and data handling](docs/PRIVACY.md) for what is stored and how deletion
+works, the [security model](docs/SECURITY_MODEL.md) for trust boundaries and known
+limitations, and [SECURITY.md](SECURITY.md) for vulnerability reporting. The current
+pre-release has a known loopback-API authorization gap that blocks public release; see
+the security model.
+
 Many independent installations do not imply multi-tenant SaaS or a shared database.
 
-Current data is stored in local SQLite. Private CRM use must not require a central
-Job Nearby cloud service. Public source does not make CVs, letters, contacts, notes,
-application history or captured personal material public. Do not contribute personal
-databases, backups or application documents. Backup/restore and portable export are
-required future product workflows; no cloud sync is assumed.
+Current data is stored in local SQLite; there is no central Job Nearby service. Public
+source does not make your CVs, letters, contacts, notes, application history or captured
+personal material public. Do not contribute personal databases, backups or application
+documents. Backup/restore and portable export are implemented; no cloud sync is
+included. See [privacy and data handling](docs/PRIVACY.md).
 
 Document imports are limited to 5 MiB. Managed files live under the per-user
 application-data directory (`%LOCALAPPDATA%/JobNearby` on Windows), independently
@@ -86,6 +105,9 @@ for platform defaults, integrity checks and crash-recovery limitations.
 - [Data model and CRM gaps](docs/DATA_MODEL.md#78-crm-core-gap-analysis-m181)
 - [Architecture, packaging gaps and roadmap](docs/ARCHITECTURE.md)
 - [Windows desktop distribution](docs/DESKTOP_DISTRIBUTION.md)
+- [Privacy and data handling](docs/PRIVACY.md)
+- [Security model](docs/SECURITY_MODEL.md)
+- [Security policy](SECURITY.md)
 - [Licensing policy and dependency audit](docs/LICENSING.md)
 - [Recognition model](docs/RECOGNITION_MODEL.md)
 

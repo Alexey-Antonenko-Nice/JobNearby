@@ -83,6 +83,11 @@ The `JOB_NEARBY_APP_DATA_DIR`, `JOB_NEARBY_DATABASE_PATH`,
 `JOB_NEARBY_DOCUMENT_DATA_DIR`, and `JOB_NEARBY_BACKUP_DIR` overrides remain
 available for controlled testing and explicit configuration.
 
+These files are plaintext. Job Nearby does not encrypt its database, managed
+documents, backups or exports, and uninstalling does not remove them. See
+[Privacy and data handling](PRIVACY.md) for what is stored and how to remove local
+data, and the [security model](SECURITY_MODEL.md) for the local-interface limitations.
+
 ## Current limitations
 
 - Only Windows x64 is packaged; macOS, Linux, and Windows ARM64 are not qualified.
@@ -90,6 +95,8 @@ available for controlled testing and explicit configuration.
 - Browser capture remains optional. Install the browser extension separately; it
   connects to `127.0.0.1:4317` and is not automatically installed or bundled.
 - There is no auto-update service or public release distribution.
+- The local loopback API has no caller authentication; public release is blocked until
+  this is hardened (see the [security model](SECURITY_MODEL.md)).
 - No license-acceptance page is presented: the MIT license is installed as a
   resource, not offered as an end-user agreement.
 - No final Job Nearby icon is tracked; the package uses the packager's default icon.
