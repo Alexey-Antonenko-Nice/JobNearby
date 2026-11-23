@@ -9,6 +9,7 @@
     "check:repo": "git ls-files | node tools/checkRepositoryHygiene.cjs",
     "check:fixtures": "node tools/checkFixtures.cjs",
     "check:history": "node tools/checkHistory.cjs",
+    "check:contributor": "npm run check:repo && npm run check:fixtures && npm run check:history && npm run audit:licenses && npm run typecheck && npm run build && npm run ui:build",
     "capture:server": "npm run build && node dist/infrastructure/http/runBrowserCaptureServer.js",
     "copilot:mcp": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/infrastructure/mcp/runCopilotMcpServer.ts",
     "desktop:build": "npm run build && npm run ui:build",

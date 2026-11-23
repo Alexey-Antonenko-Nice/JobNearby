@@ -2111,25 +2111,28 @@ The detailed product/architecture reasoning belongs in `docs/`.
 
 # 89. CONTRIBUTING.md
 
-Before actively inviting external contributors, create:
+M25.3 adds the contributor-facing guide and GitHub project hygiene:
 
 ```text
 CONTRIBUTING.md
+.github/ISSUE_TEMPLATE/bug_report.yml
+.github/ISSUE_TEMPLATE/feature_request.yml
+.github/ISSUE_TEMPLATE/config.yml
+.github/pull_request_template.md
 ```
 
-It should explain:
+`CONTRIBUTING.md` covers development setup, tests, data safety, fixture and privacy
+rules, dependency/licensing rules, database and migration rules, domain and security
+invariants, extension pairing, and pull-request expectations. It points to
+`docs/ARCHITECTURE.md`, `docs/PRODUCT_SPECIFICATION.md`, `docs/SECURITY_MODEL.md`,
+`docs/PRIVACY.md`, `tests/fixtures/README.md`, and `SECURITY.md` rather than
+duplicating them. Ordinary bug/feature templates collect a minimal reproduction and
+explicitly warn against attaching private data; security reports are routed to
+`SECURITY.md` and the repository security policy. A composed `npm run check:contributor`
+runs the existing hygiene, license, typecheck, and build checks.
 
-```text
-development setup
-tests
-coding conventions
-architecture boundaries
-how to add source adapters
-how to add recognition algorithms
-how to submit fixture scenarios
-```
-
-This remains a public-release prerequisite; the implementation baseline already exists.
+No CLA or DCO is introduced, and no Code of Conduct, CODEOWNERS, funding metadata, or
+CI/release workflow is added in this milestone.
 
 ---
 
@@ -2147,16 +2150,16 @@ acceptance policy, known warnings (the NSIS LZMA/CPL exception, the nsis7z LGPL
 component, and dev-only CC-BY/Python-2.0/WTFPL packages) and the release-readiness
 invariant.
 
-No `CONTRIBUTING.md` is tracked, and there are still no ordinary-user
-installer/download or upgrade instructions or a tracked `.github` release workflow.
-Release readiness also requires contribution guidance, reproducible build
-instructions and supported-platform documentation. M24.2 completed the tracked-content
-review: provider fixtures were reduced to minimal regression evidence, the diagnostic
-database dump was removed, and `npm run check:fixtures` plus `npm run check:repo`
-enforce the content policy. M24.3 rewrote the published history so the former
-databases, diagnostic dump and unsanitized captures are unreachable; M24.4 adds
-`npm run check:history` and a root `.gitattributes` LF policy so fresh Windows clones
-stay deterministic. Public source alone is not a substitute for user-data portability.
+No ordinary-user installer/download or upgrade instructions or a tracked `.github`
+release workflow exist yet. Release readiness also requires reproducible build
+instructions and supported-platform documentation; those are separate from the
+contribution guide added in M25.3. M24.2 completed the tracked-content review: provider
+fixtures were reduced to minimal regression evidence, the diagnostic database dump was
+removed, and `npm run check:fixtures` plus `npm run check:repo` enforce the content
+policy. M24.3 rewrote the published history so the former databases, diagnostic dump
+and unsanitized captures are unreachable; M24.4 adds `npm run check:history` and a root
+`.gitattributes` LF policy so fresh Windows clones stay deterministic. Public source
+alone is not a substitute for user-data portability.
 
 M25.1 adds the public privacy and security documentation: `docs/PRIVACY.md`,
 `docs/SECURITY_MODEL.md` and `SECURITY.md`, summarized in the README. M25.2 hardens the
@@ -2165,7 +2168,10 @@ the exact Host and Origin, and require separate per-process desktop/extension se
 credentials; mutations require `application/json`, preflights are explicit, and capture
 is rate-limited. The desktop renderer receives its credential from the Host-checked HTML
 shell and the extension is paired through an authenticated pairing-code flow. The
-security model records the residual same-user malware limitation.
+security model records the residual same-user malware limitation. M25.3 adds the
+contributor guide, issue/feature templates, pull-request checklist, fixture/privacy
+routing, and the composed `check:contributor` command without changing runtime
+behavior, schema, backup/export formats, or security architecture.
 
 ---
 

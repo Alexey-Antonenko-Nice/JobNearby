@@ -12,8 +12,9 @@ a free desktop utility; no distributed component requires a different project
 license.
 
 Contributors keep copyright in their own contributions and submit them under the
-project license. M24.1 introduces no CLA or DCO; contribution guidelines are a later
-milestone.
+project license. M24.1 introduces no CLA or DCO. M25.3 adds `CONTRIBUTING.md`, which
+documents the contribution process and states that submitted contributions are
+licensed under the project's MIT license.
 
 ## What is distributed
 

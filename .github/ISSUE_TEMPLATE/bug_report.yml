@@ -1,0 +1,90 @@
+name: Bug report
+description: Report a reproducible functional problem in Job Nearby.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Privacy warning:** do not attach or paste private job-search data. This
+        includes `job-nearby.sqlite`, backups, exports, managed documents, CVs,
+        motivation letters, real contact details, browser cookies, tokens, or pairing
+        codes. Use a synthetic or redacted reproduction.
+
+        **Security vulnerability?** Do not post exploit details, credentials, or private
+        data here. Follow the repository security policy (`SECURITY.md`) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Job Nearby version or commit
+      description: The version shown by the app, the commit hash, or the installer filename.
+      placeholder: "0.1.0 or a commit hash"
+    validations:
+      required: true
+
+  - type: input
+    id: windows_version
+    attributes:
+      label: Windows version
+      description: For example Windows 11 24H2, Windows 10 22H2, or Windows Server.
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: How are you running Job Nearby?
+      options:
+        - Installed desktop package
+        - Development desktop build
+        - Browser UI against the development API
+        - Browser extension capture
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use a minimal, synthetic sequence. Do not include private vacancy or contact data.
+      placeholder: |
+        1. Start Job Nearby with a disposable data root.
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant errors or logs
+      description: Redact local usernames, paths, employer/recruiter details, IDs, tokens, and private vacancy data before pasting.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I have not attached a database, backup, export, CV, managed document, real contact data, token, or pairing code.
+          required: true
+        - label: The reproduction uses synthetic or redacted data.
+          required: true

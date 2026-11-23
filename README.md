@@ -109,6 +109,7 @@ for platform defaults, integrity checks and crash-recovery limitations.
 - [Data model and CRM gaps](docs/DATA_MODEL.md#78-crm-core-gap-analysis-m181)
 - [Architecture, packaging gaps and roadmap](docs/ARCHITECTURE.md)
 - [Windows desktop distribution](docs/DESKTOP_DISTRIBUTION.md)
+- [Contributing](CONTRIBUTING.md)
 - [Privacy and data handling](docs/PRIVACY.md)
 - [Security model](docs/SECURITY_MODEL.md)
 - [Security policy](SECURITY.md)
@@ -122,10 +123,11 @@ Zod validation, and Vitest/jsdom for testing. Browser capture uses the repositor
 as a client of the local API. No Python service is part of the application runtime.
 
 The commands below describe developer operation of an existing checkout with Node/npm
-and dependencies installed. They are not an ordinary-user installation guide. Supported
-runtime/platform versions, native dependency setup and contribution instructions still
-need a tested development guide. Starting the API applies migrations to its configured
-local database; use a disposable working directory/data store for development checks.
+and dependencies installed. They are not an ordinary-user installation guide. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the tested fresh-clone setup, development data
+safety, extension pairing, test commands, and required checks. Starting the API applies
+migrations to its configured local database; use a disposable working directory/data
+store for development checks.
 
 Repository text files are stored and checked out with LF line endings. The root
 `.gitattributes` (`* text=auto eol=lf`) enforces this, so a normal Windows clone works
@@ -159,7 +161,7 @@ verification used isolated databases and did not start it against the live datab
 
 ## GitHub Copilot integration (VS Code)
 
-`.vscode/mcp.json` registers a local Model Context Protocol server
+The repository includes a local Model Context Protocol server
 (`src/infrastructure/mcp/runCopilotMcpServer.ts`) that GitHub Copilot Chat can start
 over stdio. It exposes three **read-only** repository tools — `search_workspace`,
 `read_workspace_file` and `list_workspace_files` — so Copilot inspects this checkout the
@@ -167,19 +169,24 @@ way the repository agent does instead of guessing at file contents. No edit, del
 command-execution or database tool is exposed, and all paths are confined to the
 workspace root.
 
-Enable it once in VS Code: Command Palette → **MCP: List Servers** →
-`job-nearby-repository` → **Start**, then use Copilot Chat agent mode. The server is
-launched with Node's type stripping (`node --experimental-strip-types`, Node 22.6+), so
-no build step is required; `npm run copilot:mcp` starts the same server in a terminal and
+Register it in your VS Code MCP configuration (`servers.job-nearby-repository`) if you
+want to use it. The server is launched with Node's type stripping
+(`node --experimental-strip-types`, Node 22.6+), so no build step is required;
+`npm run copilot:mcp` starts the same server in a terminal and
 `node dist/infrastructure/mcp/runCopilotMcpServer.js` runs the compiled build instead.
-Repository-wide Copilot conventions live in `.github/copilot-instructions.md`.
-`.vscode/` stays local (it holds machine-specific editor state), so `.gitignore` re-includes
-only `.vscode/mcp.json`; put the same `servers.job-nearby-repository` block in your user-level
-`mcp.json` instead if you prefer not to share it.
+`.vscode/` stays local (it holds machine-specific editor state); do not commit your
+editor configuration.
 
 This bridge gives Copilot repository context tools. It does not move the repository
 agent, its model or its reasoning into Copilot, and it does not send workspace content
 anywhere itself: the local server only answers the tools Copilot Chat asks for.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for prerequisites, fresh-clone setup, backend/UI
+and desktop/extension workflows, test commands, fixture and privacy rules, and pull
+request expectations. Normal bugs are reported through GitHub issues. Do not report a
+vulnerability publicly; follow [SECURITY.md](SECURITY.md).
 
 ## License and public release
 
@@ -196,12 +203,15 @@ local data and high-confidence secrets in tracked files; `npm run check:history`
 rejects private database or diagnostic paths and oversized blobs in reachable
 history.
 
-Public release still requires contribution guidance, installer/download and upgrade
-instructions, supported platforms and reproducible build/release procedures. M24.2
-reduced the tracked provider fixtures to minimal regression evidence and removed the
-diagnostic dump; M24.3 rewrote the published history so the former databases,
-diagnostic dump and unsanitized captures are no longer reachable; M24.4 adds a
-canonical LF line-ending policy and `npm run check:history` to keep it that way. See
-architecture sections 68, 90 and 91, and the known warnings in the licensing policy.
+Public release still requires installer/download and upgrade instructions, supported
+platform documentation, and reproducible build/release procedures. Contribution
+guidance is now tracked in [CONTRIBUTING.md](CONTRIBUTING.md), issue and pull-request
+templates are under `.github/`, and the contributor checks compose the existing
+repository guards. M24.2 reduced the tracked provider fixtures to minimal regression
+evidence and removed the diagnostic dump; M24.3 rewrote the published history so the
+former databases, diagnostic dump and unsanitized captures are no longer reachable;
+M24.4 adds a canonical LF line-ending policy and `npm run check:history` to keep it
+that way. See architecture sections 68, 90 and 91, and the known warnings in the
+licensing policy.
 
 The **Today** page (`/today`) provides a derived daily CRM work queue: overdue actions, due reminders, today/upcoming work and opportunities needing a next action. It uses the browser timezone and refreshes on demand. Complete/cancel actions or dismiss due reminders directly in Today using the existing CRM commands; the entire queue refreshes afterward. Open Review for other changes. This is not a background scheduler or notification service.

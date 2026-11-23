@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a focused improvement to Job Nearby.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem and the smallest behavior change that would solve it.
+        Do not include private job-search data, credentials, or pairing codes.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is difficult today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the behavior you would like, including any important boundaries.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and workarounds
+      description: What have you tried, and what else could solve the problem?
+    validations:
+      required: false
+
+  - type: textarea
+    id: local_first
+    attributes:
+      label: Local-first and privacy impact
+      description: Does this require new network access, cloud storage, telemetry, accounts, or a change to local data handling? If not, say so.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This request does not include private data, credentials, or an exploitable security report.
+          required: true

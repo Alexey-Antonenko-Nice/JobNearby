@@ -294,10 +294,10 @@ Audited from code at the baseline above, without opening the live database:
 | Application preparation and richer activity timeline | Future workflows; notes remain distinct from interaction events |
 | CV/letter library, versioning and usage associations | M19.1: managed immutable versions and Review selection/history; actual sending/submission tracking deferred |
 | Next actions/reminders | Implemented in Review (M18.4): multiple actions, due times, completion/cancellation and reminder history; due signals calculated on read, no background notifications |
-| Daily work queue | Future work |
-| CRM search/filtering | Partial: inbox filtering; no full CRM query/work queue |
-| Backup/restore/export and desktop runtime | Backup/restore/export implemented; M23.1 desktop runtime foundation implemented, installer still missing |
-| Public open-source release readiness | MIT license selected (M24.1); M24.2 minimized fixtures and removed captured contact data; M24.3 removed sensitive content from published history; M25.1 adds privacy/data-handling, security-policy and threat-model documentation; M25.2 hardens loopback API authorization (per-session credentials, Host/Origin validation, JSON enforcement, capture rate limiting). Remaining: contribution guidance, release automation and signing |
+| Daily work queue | Implemented: the Today page derives overdue actions, due reminders, today/upcoming work and opportunities needing an action; no background notification service |
+| CRM search/filtering | Partial: inbox filtering; no full CRM query/search beyond the derived work queue |
+| Backup/restore/export and desktop runtime | Backup/restore/export implemented; M23.1 desktop runtime and M23.2 Windows x64 installer/unpacked package implemented; public release distribution remains separate |
+| Public open-source release readiness | MIT license selected (M24.1); M24.2 minimized fixtures and removed captured contact data; M24.3 removed sensitive content from published history; M25.1 adds privacy/data-handling, security-policy and threat-model documentation; M25.2 hardens loopback API authorization (per-session credentials, Host/Origin validation, JSON enforcement, capture rate limiting); M25.3 adds contributor guidance, issue/PR templates and contributor checks. Remaining: installer/download and upgrade guidance, release automation and signing |
 
 See [DATA_MODEL.md section 78](DATA_MODEL.md#78-crm-core-gap-analysis-m181) for
 model boundaries and implementation evidence. The Electron runtime does not change
@@ -312,8 +312,10 @@ reminders; E CRM usability; F portability; G desktop distribution; H public rele
 Licensing/dependency and packaging feasibility investigations start early; their
 release gates cannot wait until public distribution. Storage and portability
 requirements must shape document design before files are accumulated. Public release
-also requires contribution guidance and release automation; loopback API authorization
-is hardened and documented in [SECURITY_MODEL.md](SECURITY_MODEL.md).
+also requires installer/download and upgrade guidance, release automation, and signing;
+loopback API authorization is hardened and documented in
+[SECURITY_MODEL.md](SECURITY_MODEL.md). Contribution guidance and issue/PR templates are
+tracked in [CONTRIBUTING.md](../CONTRIBUTING.md) and `.github/`.
 
 ## 17. Out of scope and foundational invariants
 
